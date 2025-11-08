@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>The Camping Planner – Trips</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; }
+    h1 { margin-bottom: 1rem; }
+    .trip {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+    }
+    form {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+    label { display: block; margin-top: .5rem; }
+    input { width: 100%; padding: .4rem; }
+    button { margin-top: 1rem; padding: .5rem 1rem; }
+  </style>
+</head>
+<body>
+  <h1>The Camping Planner – Trips</h1>
+
+  <form id="new-trip-form">
+    <h2>Create a New Trip</h2>
+    <label>Trip Name
+      <input type="text" name="name" required />
+    </label>
+    <label>Location
+      <input type="text" name="location" placeholder="e.g. Goldstream Provincial Park" />
+    </label>
+    <label>Start Date
+      <input type="date" name="startDate" />
+    </label>
+    <label>End Date
+      <input type="date" name="endDate" />
+    </label>
+    <button type="submit">Create Trip</button>
+  </form>
+
+  <h2>Your Trips</h2>
+  <div id="trip-list">
+    <!-- trips will be inserted here -->
+  </div>
+
+  <script>
+    const tripList = document.getElementById("trip-list");
+    const form = document.getElementById("new-trip-form");
+
+    // 1. load trips from backend
+    async function loadTrips() {
+      tripList.innerHTML = "Loading trips...";
+      try {
+        // assuming your backend exposes GET /trips as HTML AND we also have /api/trips (adjust if needed)
+        const res = await fetch("/api/trips");
+        const data = await res.json();
+        renderTrips(data);
+      } catch (err) {
+        tripList.innerHTML = "Error loading trips.";
+        console.error(err);
+      }
+    }
+
+    function renderTrips(trips) {
+      if (!trips || trips.length === 0) {
+        tripList.innerHTML = "<p>No trips yet. Create one above.</p>";
+        return;
+      }
+      tripList.innerHTML = "";
+      trips.forEach(t => {
+        const div = document.createElement("div");
+        div.className = "trip";
+        div.innerHTML = `
+          <h3>${t.name}</h3>
+          <p><strong>Location:</strong> ${t.location || "—"}</p>
+          <p><strong>Dates:</strong> ${t.startDate || "—"} to ${t.endDate || "—"}</p>
+          <p><strong>Collaborators:</strong> ${(t.collaborators && t.collaborators.length) ? t.collaborators.join(", ") : "None yet"}</p>
+          <button onclick="window.location.href='/trips/${t.id}'">View Trip</button>
+        `;
+        tripList.appendChild(div);
+      });
+    }
+
+    // 2. handle create trip
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const payload = {
+        name: formData.get("name"),
+        location: formData.get("location"),
+        startDate: formData.get("startDate"),
+        endDate: formData.get("endDate"),
+      };
+      // send to backend – adjust to match your POST route
+      const res = await fetch("/trips/new", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      // after creating, reload list
+      await loadTrips();
+      form.reset();
+    });
+
+    loadTrips();
+  </script>
+</body>
+</html>
