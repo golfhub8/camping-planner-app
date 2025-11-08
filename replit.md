@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Camping Planner is a full-stack web application designed to help campers organize and discover camping recipes. The application features a warm, rustic outdoor aesthetic inspired by the family-friendly camping lifestyle. Users can create, browse, and search for camping recipes with ingredients and preparation steps optimized for outdoor cooking.
+The Camping Planner is a full-stack web application designed to help campers organize and discover camping recipes. The application features a clean, modern outdoor aesthetic matching The Camping Planner brand identity with teal accents and bold typography. Users can create, browse, and search for camping recipes with ingredients and preparation steps optimized for outdoor cooking.
 
 The application is built as a modern single-page application (SPA) with a REST API backend, featuring a recipe management system with full CRUD capabilities and search functionality.
 
@@ -28,12 +28,14 @@ Preferred communication style: Simple, everyday language.
 **UI Component System**
 - Shadcn/ui component library (New York style) with Radix UI primitives
 - Tailwind CSS for utility-first styling with custom design tokens
-- Custom color palette implementing warm, earthy tones (terracotta, forest green, warm browns)
-- Typography system using Merriweather (serif headings) and Open Sans (body text)
+- Custom color palette implementing teal primary color (#4DB4AC) with clean grays and black/white
+- Typography system using modern sans-serif fonts with bold headings
 - Responsive design with mobile-first approach
+- Actual logo image displayed in header
 
 **Design Philosophy**
-- Warm, rustic outdoor aesthetic with generous spacing for comfortable reading
+- Clean, modern outdoor aesthetic matching The Camping Planner brand
+- Teal accent color throughout for badges, buttons, and interactive elements
 - Custom elevation system with hover and active states for interactive elements
 - Card-based layout for recipe display with visual hierarchy
 - Focus on readability and family-friendly interaction patterns
