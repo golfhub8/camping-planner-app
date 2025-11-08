@@ -2,161 +2,127 @@
 
 ## Design Approach
 
-**Selected Approach**: Clean Design System with outdoor warmth
+**Selected Approach**: Warm, Rustic Outdoor Aesthetic
 
-This is a utility-focused planning tool where readability and functionality are paramount. Drawing inspiration from **Notion's** clean information architecture combined with **Airbnb's** warm, approachable aesthetic. The design balances practical recipe management with the outdoor/camping lifestyle context.
+Inspired by the actual thecampingplanner.com website, this design embraces a warm, welcoming, and family-friendly aesthetic. The focus is on creating a cozy, campfire-gathering feeling with earthy tones, approachable typography, and natural warmth that makes users feel like they're planning around a campfire with friends.
 
 ---
 
 ## Core Design Elements
 
+### Color Palette
+
+**Primary Colors (Warm Earth Tones)**:
+- **Primary Accent**: Warm terracotta/burnt orange (#D97757) - evokes campfire warmth
+- **Secondary Green**: Forest green (#4A7C59) - natural, outdoorsy
+- **Warm Brown**: Rich brown (#8B6F47) for accents
+
+**Neutral Base**:
+- **Background**: Warm off-white (#FAF8F5) - not stark white, warmer feel
+- **Text**: Warm dark brown (#2D2416) - easier on eyes than black
+- **Muted text**: Warm gray-brown (#6B5D52)
+
+**Supporting Colors**:
+- **Card backgrounds**: Soft cream (#F5F2ED)
+- **Borders**: Light tan (#E8E3DB)
+
 ### Typography
-- **Primary Font**: Inter or Work Sans (via Google Fonts CDN) - clean, highly legible
-- **Headings**: 
-  - H1: 2.5rem (40px), font-weight 700
-  - H2: 1.875rem (30px), font-weight 600
-  - H3: 1.5rem (24px), font-weight 600
-- **Body Text**: 1rem (16px), font-weight 400, line-height 1.6 for readability
-- **Small Text**: 0.875rem (14px) for metadata, labels
+- **Primary Font**: Merriweather (serif) - warm, readable, traditional feel for headings
+- **Body Font**: Open Sans (sans-serif) - clean, friendly for body text
+- **Accent Font**: Architects Daughter (handwriting) - for special touches, playful elements
+
+**Font Sizes**:
+- H1: 2.5rem (40px), Merriweather, weight 700
+- H2: 2rem (32px), Merriweather, weight 600
+- H3: 1.5rem (24px), Merriweather, weight 600
+- Body: 1rem (16px), Open Sans, weight 400, line-height 1.6
+- Small: 0.875rem (14px)
 
 ### Layout System
 
-**Spacing Units**: Use Tailwind units of **2, 4, 6, 8, 12, 16, 20** (e.g., p-4, gap-6, mb-8)
+**Spacing**: Generous, comfortable spacing (more relaxed than tech apps)
+- Use units: 3, 4, 6, 8, 12, 16, 20, 24
 
 **Container Strategy**:
-- Main content: `max-w-6xl mx-auto px-4 md:px-8`
-- Recipe cards: `max-w-4xl` for optimal reading width
-- Form inputs: `max-w-2xl` to prevent overly wide text fields
-
-**Grid Layouts**:
-- Recipe list: 2-column on tablet (md:grid-cols-2), 3-column on desktop (lg:grid-cols-3)
-- Single column on mobile for easy reading
+- Main content: `max-w-6xl mx-auto px-6 md:px-10` - more breathing room
+- Comfortable padding throughout
 
 ---
 
 ## Component Library
 
 ### Navigation Header
-- Fixed top navigation with subtle shadow
-- App title "The Camping Planner" with tent/campfire icon (Heroicons)
-- Navigation links: Recipes (active), Trips, Printables, Grocery (greyed for future)
-- Search bar integrated in header on desktop, collapsible on mobile
-- Height: 16 units (h-16)
+- Warm background with subtle texture feel
+- Logo with tent icon, warm terracotta color
+- Generous padding (py-5)
+- Soft shadow beneath
+- Navigation links in warm brown, terracotta when active
 
-### Recipe Cards (List View)
-- Clean white cards with subtle border and shadow on hover
-- Card structure:
-  - Recipe title (H3) with truncation after 2 lines
-  - Ingredient count badge: "8 ingredients" with cooking icon
-  - Preview of first 3 ingredients as bullet list
-  - Metadata footer: Created date with calendar icon
-  - "View Recipe" link with arrow icon
-- Spacing: p-6, gap-4 between elements
-- Rounded corners: rounded-lg
+### Recipe Cards
+- Soft cream background
+- Warm border
+- Rounded corners (slightly more rounded than default)
+- Hover: gentle lift with warm shadow
+- Ingredient count badge in terracotta
+- Created date with warm brown icon
 
 ### Create Recipe Form
-- Prominent placement at top of page or as expandable section
-- Card container with clear visual hierarchy
-- Form structure:
-  - Title input: Full-width, large text input (h-12)
-  - Ingredients textarea: 6 rows minimum, placeholder: "Enter each ingredient on a new line"
-  - Steps textarea: 10 rows minimum, monospace font option for better formatting
-  - Helper text below each field explaining format
-  - Submit button: Primary action, full-width on mobile, auto-width on desktop
-- Spacing: p-8, gap-6 between fields
+- Expandable design with warm call-to-action
+- Cream card background
+- Terracotta accent for create button
+- Comfortable input spacing
+- Helper text in warm muted tones
 
 ### Recipe Detail Page
-- Hero section with recipe title (H1) and metadata row
-- Two-column layout on desktop:
-  - Left column (60%): Ingredients with checkboxes for tracking
-  - Right column (40%): Step-by-step instructions numbered
-- Single column stack on mobile
-- Print button with printer icon
-- Back to recipes link at top
+- Two-column layout on desktop
+- Checkable ingredients with terracotta checkboxes
+- Numbered steps with warm circular badges
+- Print button prominent
+- Warm, inviting spacing
 
-### Search Interface
-- Search input in header: rounded-full, with search icon prefix
-- Search results page: Same card layout as recipe list
-- Empty state: Friendly message with illustration placeholder "No recipes found"
-- Result count: "Found 5 recipes for 'mac'"
-
-### Buttons & Interactive Elements
+### Buttons
 **Primary Button**: 
-- Height: h-12, padding: px-8
-- Rounded: rounded-lg
-- Icon + text combination where appropriate
-- Loading state: Spinner icon during submission
+- Terracotta background (#D97757)
+- Cream text
+- Rounded-lg
+- Comfortable padding (px-6 py-3)
 
-**Secondary Button/Link**:
-- Height: h-10, padding: px-6
-- Transparent with border
-- Icon prefix for context (arrow, external link, etc.)
-
-### Icons
-Use **Heroicons** (via CDN):
-- Navigation: home, map, document, shopping-cart
-- Recipe actions: eye, plus-circle, printer, magnifying-glass
-- Content: check-circle (steps), beaker (ingredients), calendar, clock
+**Secondary Button**:
+- Transparent with terracotta border
+- Terracotta text
+- Hover: light terracotta background
 
 ### Empty States
-- Center-aligned with icon (from Heroicons)
-- Message: "No recipes yet. Create your first camping recipe!"
-- Call-to-action button below message
-- Spacing: py-20
+- Warm, friendly messaging
+- Soft icon in muted terracotta
+- Encouraging call-to-action
 
-### Input Fields
-- Consistent height: h-12 for text inputs
-- Border: 1px solid, increased on focus
-- Rounded: rounded-lg
-- Placeholder text with helpful examples
-- Labels: font-weight 500, mb-2
+### Icons
+Use Lucide React:
+- Tent, Flame, ChefHat for branding
+- Calendar, Eye, Search for actions
+- All in warm earth tones
 
 ---
 
-## Page-Specific Layouts
+## Visual Style
 
-### Home Page Structure
-1. **Header Navigation** (fixed)
-2. **Page Title Section**: "My Camp Recipes" with recipe count, centered, py-8
-3. **Create Recipe Form**: Expandable card with "New Recipe" button toggle
-4. **Recipe Grid**: 3-column responsive grid with gap-6
-5. **Footer**: Simple centered text with app version
+**Overall Feel**: Cozy campfire gathering, family-friendly, warm and inviting
 
-### Individual Recipe Page
-1. **Header Navigation** (fixed)
-2. **Recipe Hero**: Title, created date, edit icon (placeholder)
-3. **Content Area**: Two-column ingredients/steps layout
-4. **Action Bar**: Print, Share (placeholder), Delete buttons
+**Textures**: Subtle (no heavy textures, but warmth through color)
 
-### Search Results Page
-1. **Header Navigation** with active search query
-2. **Results Header**: Query and count
-3. **Recipe Grid**: Same as home page
-4. **No Results**: Empty state if query returns nothing
+**Shadows**: Soft, warm shadows (slight brown tint rather than pure gray)
+
+**Borders**: Warm tan/brown rather than cold gray
+
+**Interactions**: Gentle, warm hover states with terracotta accents
 
 ---
 
-## Images
+## Accessibility
 
-**Hero Image**: Not needed for this utility-focused app. The emphasis is on content clarity and quick access to recipe information.
-
-**Placeholder Images**: For future enhancement, recipe cards could include optional thumbnail images (square format, 200x200px), but start without images to keep the MVP clean and fast.
-
----
-
-## Animations
-
-**Minimal Motion**:
-- Hover states: Subtle scale (scale-[1.02]) on recipe cards
-- Form submission: Button loading spinner only
-- Page transitions: None (instant navigation for speed)
-
----
-
-## Accessibility Notes
-
-- All form inputs have associated labels (not just placeholders)
-- Recipe cards are keyboard navigable
-- Color contrast meets WCAG AA standards minimum
-- Focus states are visible and clear on all interactive elements
-- Checkboxes in ingredient lists are proper input elements, not just styled divs
+- Warm color contrast still meets WCAG AA standards
+- All interactive elements clearly defined
+- Focus states visible with terracotta outline
+- Comfortable touch targets (min 44px)
+- Readable font sizes throughout

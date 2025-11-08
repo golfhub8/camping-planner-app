@@ -84,8 +84,8 @@ export default function RecipeDetail() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-4 md:px-8 py-8">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <main className="container mx-auto px-6 md:px-10 py-12">
+        <div className="max-w-5xl mx-auto space-y-8">
           <div className="flex items-center gap-4">
             <Link href="/" data-testid="link-back">
               <Button variant="outline" size="sm" className="gap-2">
@@ -100,7 +100,7 @@ export default function RecipeDetail() {
           </div>
 
           <div className="space-y-4">
-            <h1 className="text-4xl font-bold" data-testid="text-recipe-title">
+            <h1 className="text-5xl font-serif font-bold text-foreground" data-testid="text-recipe-title">
               {recipe.title}
             </h1>
             <div className="flex items-center gap-4 flex-wrap">
@@ -118,7 +118,7 @@ export default function RecipeDetail() {
           <div className="grid gap-6 md:grid-cols-5">
             <Card className="md:col-span-2">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 font-serif">
                   <ChefHat className="h-5 w-5 text-primary" />
                   Ingredients
                 </CardTitle>
@@ -150,7 +150,7 @@ export default function RecipeDetail() {
 
             <Card className="md:col-span-3">
               <CardHeader>
-                <CardTitle>Steps</CardTitle>
+                <CardTitle className="font-serif">Steps</CardTitle>
               </CardHeader>
               <CardContent>
                 <ol className="space-y-4">

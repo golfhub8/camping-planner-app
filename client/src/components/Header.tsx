@@ -17,11 +17,11 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-4 md:px-8">
-        <div className="flex h-16 items-center justify-between gap-4">
+      <div className="container mx-auto px-6 md:px-10">
+        <div className="flex h-20 items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 hover-elevate rounded-lg px-2 py-1" data-testid="link-home">
-            <Tent className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold">The Camping Planner</span>
+            <Tent className="h-7 w-7 text-primary" />
+            <span className="text-2xl font-serif font-bold text-foreground">The Camping Planner</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">

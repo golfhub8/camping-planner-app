@@ -65,11 +65,11 @@ export default function SearchResults() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-4 md:px-8 py-8 space-y-8">
-        <div className="space-y-2">
+      <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
+        <div className="space-y-3">
           <div className="flex items-center gap-3">
             <Search className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold" data-testid="text-search-title">
+            <h1 className="text-4xl font-serif font-bold text-foreground" data-testid="text-search-title">
               Search Results
             </h1>
           </div>

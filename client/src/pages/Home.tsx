@@ -70,9 +70,9 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-4 md:px-8 py-8 space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold" data-testid="text-page-title">
+      <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
+        <div className="text-center space-y-3">
+          <h1 className="text-5xl font-serif font-bold text-foreground" data-testid="text-page-title">
             My Camp Recipes
           </h1>
           <p className="text-muted-foreground" data-testid="text-recipe-count">

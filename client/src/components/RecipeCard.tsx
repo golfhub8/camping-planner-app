@@ -18,8 +18,8 @@ export default function RecipeCard({ id, title, ingredients, createdAt }: Recipe
 
   return (
     <Card className="hover-elevate transition-all" data-testid={`card-recipe-${id}`}>
-      <CardHeader className="space-y-2">
-        <CardTitle className="line-clamp-2 text-xl" data-testid={`text-recipe-title-${id}`}>
+      <CardHeader className="space-y-3">
+        <CardTitle className="line-clamp-2 text-xl font-serif" data-testid={`text-recipe-title-${id}`}>
           {title}
         </CardTitle>
         <Badge variant="secondary" className="w-fit gap-1" data-testid={`badge-ingredient-count-${id}`}>
