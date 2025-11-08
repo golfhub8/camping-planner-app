@@ -19,9 +19,9 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-6 md:px-10">
-        <div className="flex h-20 items-center justify-between gap-4">
+        <div className="flex h-24 items-center justify-between gap-4">
           <Link href="/" className="flex items-center hover-elevate rounded-lg px-2 py-1" data-testid="link-home">
-            <img src={logoImage} alt="The Camping Planner" className="h-10" />
+            <img src={logoImage} alt="The Camping Planner" className="h-16" />
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
