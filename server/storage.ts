@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Recipe, type InsertRecipe } from "@shared/schema";
+import { type User, type InsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // Storage interface definition

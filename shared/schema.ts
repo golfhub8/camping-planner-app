@@ -68,3 +68,50 @@ export const generateGroceryListSchema = z.object({
 });
 
 export type GenerateGroceryListRequest = z.infer<typeof generateGroceryListSchema>;
+
+// Trip table schema
+// Stores camping trips with dates, location, meals, and collaborators
+export const trips = pgTable("trips", {
+  // Auto-generated unique identifier for each trip
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  
+  // Trip name (e.g., "Goldstream Weekend")
+  name: text("name").notNull(),
+  
+  // Trip location (e.g., "Goldstream Provincial Park")
+  location: text("location").notNull(),
+  
+  // Start date of the trip
+  startDate: timestamp("start_date").notNull(),
+  
+  // End date of the trip
+  endDate: timestamp("end_date").notNull(),
+  
+  // Array of recipe IDs attached to this trip as meals
+  meals: integer("meals").array().notNull().default(sql`'{}'::integer[]`),
+  
+  // Array of collaborator emails/names (strings)
+  // Example: ["mom@example.com", "uncle@family.com"]
+  collaborators: text("collaborators").array().notNull().default(sql`'{}'::text[]`),
+  
+  // When the trip was created
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Schema for inserting a new trip (excludes auto-generated fields and defaults)
+export const insertTripSchema = createInsertSchema(trips).pick({
+  name: true,
+  location: true,
+  startDate: true,
+  endDate: true,
+});
+
+// Schema for adding a collaborator to a trip
+export const addCollaboratorSchema = z.object({
+  collaborator: z.string().trim().min(1, "Collaborator email or name is required"),
+});
+
+// TypeScript types for working with trips
+export type InsertTrip = z.infer<typeof insertTripSchema>;
+export type Trip = typeof trips.$inferSelect;
+export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;

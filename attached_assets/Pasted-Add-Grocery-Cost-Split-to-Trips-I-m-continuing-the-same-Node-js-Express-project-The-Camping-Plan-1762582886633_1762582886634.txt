@@ -1,0 +1,89 @@
+Add Grocery Cost Split to Trips
+
+I’m continuing the same Node.js + Express project (The Camping Planner) with these modules already in place:
+
+recipes
+
+grocery (build list from recipes)
+
+trips (create/view trips, attach recipes)
+
+collaborators on trips (each trip has collaborators: [])
+
+Now I want to add a simple “cost split” feature to a trip so that if one person buys all the groceries, they can enter the total amount and the app will show how much everyone owes.
+
+What to build
+
+On the Trip Detail page (GET /trips/:id), add a new section called “Trip Costs / Grocery Split.”
+
+In that section, show a small form:
+
+“Total grocery cost” (number or text input, e.g. 142.75)
+
+(optional) “Paid by” (text input to note who paid — e.g. “John” or an email)
+
+submit button: “Save cost”
+
+When the form is submitted, send it to a new route:
+
+POST /trips/:id/cost
+
+This route should:
+
+load the existing trip from @replit/database
+
+store the total cost on the trip as trip.cost = { total: <number>, paidBy: <string> }
+
+save the trip back
+
+redirect back to /trips/:id
+
+After saving, on the Trip Detail page, if the trip has:
+
+a cost.total
+
+and one or more collaborators
+then display a breakdown table:
+
+total cost
+
+number of people to split between
+
+this can be collaborators.length + 1 to include the trip owner
+
+amount per person = total / numberOfPeople
+
+If there are no collaborators yet, just show the total with a message: “Add collaborators to split this cost.”
+
+Keep the math simple (2 decimal places).
+
+Add comments in the code because I am learning.
+
+Example
+
+total = 150
+
+collaborators = ["mom@example.com
+", "uncle@example.com
+"]
+
+assume the trip creator is a person too → total people = 3
+
+per person = 150 / 3 = 50
+Show it like:
+
+Total: $150.00
+
+People: 3
+
+Each owes: $50.00
+
+Paid by: John
+
+Files to update
+
+update routes/trips.js to add the POST route for /trips/:id/cost
+
+update the trip detail view (GET /trips/:id) to render the new section
+
+Make the HTML simple — just use basic <form> and <table>.
