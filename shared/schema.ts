@@ -106,14 +106,20 @@ export const trips = pgTable("trips", {
 });
 
 // Schema for inserting a new trip (excludes auto-generated fields and defaults)
+// Coerces ISO date strings to Date objects for API compatibility
 export const insertTripSchema = createInsertSchema(trips).pick({
   name: true,
   location: true,
   startDate: true,
   endDate: true,
+}).extend({
+  // Coerce ISO date strings to Date objects
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
 });
 
 // Schema for adding a collaborator to a trip
+// The collaborator string will be trimmed and normalized to lowercase
 export const addCollaboratorSchema = z.object({
   collaborator: z.string().trim().min(1, "Collaborator email or name is required"),
 });
