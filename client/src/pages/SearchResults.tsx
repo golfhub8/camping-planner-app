@@ -46,7 +46,7 @@ export default function SearchResults() {
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <Search className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-serif font-bold text-foreground" data-testid="text-search-title">
+            <h1 className="text-4xl font-bold text-foreground" data-testid="text-search-title">
               Search Results
             </h1>
           </div>

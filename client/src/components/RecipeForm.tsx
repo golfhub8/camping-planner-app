@@ -46,7 +46,7 @@ export default function RecipeForm({ onSubmit }: RecipeFormProps) {
           >
             <div className="flex items-center gap-2">
               <PlusCircle className="h-5 w-5 text-primary" />
-              <span className="text-lg font-serif font-semibold">Create New Recipe</span>
+              <span className="text-lg font-bold">Create New Recipe</span>
             </div>
             <ChevronDown className="h-5 w-5 text-muted-foreground" />
           </Button>
@@ -60,7 +60,7 @@ export default function RecipeForm({ onSubmit }: RecipeFormProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 font-serif">
+            <CardTitle className="flex items-center gap-2 font-bold">
               <PlusCircle className="h-5 w-5 text-primary" />
               Create New Recipe
             </CardTitle>

@@ -56,7 +56,7 @@ export default function Home() {
       
       <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
         <div className="text-center space-y-3">
-          <h1 className="text-5xl font-serif font-bold text-foreground" data-testid="text-page-title">
+          <h1 className="text-5xl font-bold text-foreground" data-testid="text-page-title">
             My Camp Recipes
           </h1>
           <p className="text-muted-foreground" data-testid="text-recipe-count">

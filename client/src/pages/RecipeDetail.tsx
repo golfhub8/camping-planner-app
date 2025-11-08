@@ -59,7 +59,7 @@ export default function RecipeDetail() {
         <Header />
         <main className="container mx-auto px-6 md:px-10 py-12">
           <div className="text-center">
-            <h1 className="text-2xl font-serif font-bold mb-4">Recipe Not Found</h1>
+            <h1 className="text-2xl font-bold mb-4">Recipe Not Found</h1>
             <Link href="/">
               <Button>Back to Recipes</Button>
             </Link>
@@ -91,11 +91,11 @@ export default function RecipeDetail() {
           </div>
 
           <div className="space-y-4">
-            <h1 className="text-5xl font-serif font-bold text-foreground" data-testid="text-recipe-title">
+            <h1 className="text-5xl font-bold text-foreground" data-testid="text-recipe-title">
               {recipe.title}
             </h1>
             <div className="flex items-center gap-4 flex-wrap">
-              <Badge variant="secondary" className="gap-1" data-testid="badge-ingredient-count">
+              <Badge variant="default" className="gap-1" data-testid="badge-ingredient-count">
                 <ChefHat className="h-3 w-3" />
                 {recipe.ingredients.length} ingredients
               </Badge>
@@ -109,7 +109,7 @@ export default function RecipeDetail() {
           <div className="grid gap-6 md:grid-cols-5">
             <Card className="md:col-span-2">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-serif">
+                <CardTitle className="flex items-center gap-2 font-bold">
                   <ChefHat className="h-5 w-5 text-primary" />
                   Ingredients
                 </CardTitle>
@@ -141,7 +141,7 @@ export default function RecipeDetail() {
 
             <Card className="md:col-span-3">
               <CardHeader>
-                <CardTitle className="font-serif">Steps</CardTitle>
+                <CardTitle className="font-bold">Steps</CardTitle>
               </CardHeader>
               <CardContent>
                 <ol className="space-y-4">
