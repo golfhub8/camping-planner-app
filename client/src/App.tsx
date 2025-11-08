@@ -7,6 +7,9 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import RecipeDetail from "@/pages/RecipeDetail";
 import SearchResults from "@/pages/SearchResults";
+import GrocerySelection from "@/pages/GrocerySelection";
+import GroceryList from "@/pages/GroceryList";
+import GroceryShare from "@/pages/GroceryShare";
 
 function Router() {
   return (
@@ -14,6 +17,9 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/recipe/:id" component={RecipeDetail} />
       <Route path="/search" component={SearchResults} />
+      <Route path="/grocery" component={GrocerySelection} />
+      <Route path="/grocery/list" component={GroceryList} />
+      <Route path="/grocery/share" component={GroceryShare} />
       <Route component={NotFound} />
     </Switch>
   );
