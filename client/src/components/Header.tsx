@@ -1,0 +1,65 @@
+import { Link, useLocation } from "wouter";
+import { Search, Tent } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+
+export default function Header() {
+  const [location, setLocation] = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setLocation(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4 md:px-8">
+        <div className="flex h-16 items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2 hover-elevate rounded-lg px-2 py-1" data-testid="link-home">
+            <Tent className="h-6 w-6 text-primary" />
+            <span className="text-xl font-semibold">The Camping Planner</span>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-1">
+            <Link href="/" data-testid="link-recipes">
+              <Button
+                variant={location === "/" ? "secondary" : "ghost"}
+                size="default"
+                data-testid="button-nav-recipes"
+              >
+                Recipes
+              </Button>
+            </Link>
+            <Button variant="ghost" size="default" disabled data-testid="button-nav-trips">
+              Trips
+            </Button>
+            <Button variant="ghost" size="default" disabled data-testid="button-nav-printables">
+              Printables
+            </Button>
+            <Button variant="ghost" size="default" disabled data-testid="button-nav-grocery">
+              Grocery
+            </Button>
+          </nav>
+
+          <form onSubmit={handleSearch} className="flex-1 max-w-md">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search recipes..."
+                className="pl-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                data-testid="input-search"
+              />
+            </div>
+          </form>
+        </div>
+      </div>
+    </header>
+  );
+}
