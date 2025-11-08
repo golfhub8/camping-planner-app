@@ -70,7 +70,7 @@ export const generateGroceryListSchema = z.object({
 export type GenerateGroceryListRequest = z.infer<typeof generateGroceryListSchema>;
 
 // Trip table schema
-// Stores camping trips with dates, location, meals, and collaborators
+// Stores camping trips with dates, location, meals, collaborators, and cost info
 export const trips = pgTable("trips", {
   // Auto-generated unique identifier for each trip
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -94,6 +94,12 @@ export const trips = pgTable("trips", {
   // Example: ["mom@example.com", "uncle@family.com"]
   collaborators: text("collaborators").array().notNull().default(sql`'{}'::text[]`),
   
+  // Total grocery cost for the trip (nullable - may not be set yet)
+  costTotal: text("cost_total"),
+  
+  // Who paid for the groceries (nullable - optional field)
+  costPaidBy: text("cost_paid_by"),
+  
   // When the trip was created
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -111,7 +117,14 @@ export const addCollaboratorSchema = z.object({
   collaborator: z.string().trim().min(1, "Collaborator email or name is required"),
 });
 
+// Schema for adding cost information to a trip
+export const addTripCostSchema = z.object({
+  total: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid cost format (use numbers like 142.75)"),
+  paidBy: z.string().trim().optional(),
+});
+
 // TypeScript types for working with trips
 export type InsertTrip = z.infer<typeof insertTripSchema>;
 export type Trip = typeof trips.$inferSelect;
 export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;
+export type AddTripCost = z.infer<typeof addTripCostSchema>;

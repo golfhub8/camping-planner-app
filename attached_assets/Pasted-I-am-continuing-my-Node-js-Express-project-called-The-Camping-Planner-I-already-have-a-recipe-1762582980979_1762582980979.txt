@@ -1,0 +1,77 @@
+I am continuing my Node.js + Express project called “The Camping Planner.”
+I already have:
+
+a recipes feature (create, list, view recipes, stored in @replit/database), and
+
+a grocery feature (build a grocery list from selected recipes).
+
+Now I want to add a Trip Planner module so I can organize trips and attach meals to a specific trip.
+
+What to build
+
+Create a new route file called routes/trips.js and mount it in index.js at /trips.
+
+Create a Trips Home page at GET /trips that:
+
+lists all saved trips (trip name, destination/location, start date, end date),
+
+has a button/form to “Create New Trip.”
+
+Create a New Trip form at POST /trips/new that saves a trip to @replit/database.
+Each trip should have at least:
+
+id
+
+name (e.g. “Goldstream Weekend”)
+
+location (text, e.g. “Goldstream Provincial Park”)
+
+startDate
+
+endDate
+
+meals (an array – can be empty at first)
+
+createdAt
+
+Create a Trip Detail page at GET /trips/:id that shows:
+
+the trip name, dates, and location
+
+a section called “Planned Meals for this Trip”
+
+a button “Add a Recipe to this Trip”
+
+When the user clicks “Add a Recipe to this Trip,” show a page at GET /trips/:id/add-meal that lists all existing recipes (reuse from the recipes DB) with “Add” buttons. When a recipe is added, push it into that trip’s meals array and save the trip back to the database.
+
+On the Trip Detail page, show the list of attached recipes (by title) and include a button “Generate Grocery List for This Trip.” For now, this button can just link to /grocery with a note like: “(future) preselect recipes from this trip.”
+
+Data / DB
+
+Use the same @replit/database instance as the other modules.
+
+Store trips under the key trips as an array, similar to how recipes were stored.
+
+Code style
+
+Please add comments because I am still learning.
+
+Keep HTML simple (inline strings are OK).
+
+Make navigation easy: on every trips page, include links back to / and /trips.
+
+Prepare the routes so later I can add more sections to a trip (Packing List, Activities, Printables).
+
+Summary of routes
+
+GET /trips – list all trips + create form
+
+POST /trips/new – create a trip
+
+GET /trips/:id – view a single trip
+
+GET /trips/:id/add-meal – list recipes to attach to this trip
+
+POST /trips/:id/add-meal – actually attach the selected recipe
+
+After generating the code, tell me which files were created or edited so I know where to look in Replit.

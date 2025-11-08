@@ -21,6 +21,22 @@ export interface IStorage {
   
   // Search recipes by title (case-insensitive)
   searchRecipes(query: string): Promise<Recipe[]>;
+  
+  // Trip methods
+  // Get all trips (returns newest first)
+  getAllTrips(): Promise<Trip[]>;
+  
+  // Get a single trip by its ID
+  getTripById(id: number): Promise<Trip | undefined>;
+  
+  // Create a new trip
+  createTrip(trip: InsertTrip): Promise<Trip>;
+  
+  // Add a collaborator to a trip
+  addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined>;
+  
+  // Update cost information for a trip
+  updateTripCost(tripId: number, total: string, paidBy?: string): Promise<Trip | undefined>;
 }
 
 // In-memory storage implementation
@@ -29,12 +45,16 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private recipes: Map<number, Recipe>;
+  private trips: Map<number, Trip>;
   private nextRecipeId: number;
+  private nextTripId: number;
 
   constructor() {
     this.users = new Map();
     this.recipes = new Map();
+    this.trips = new Map();
     this.nextRecipeId = 1;
+    this.nextTripId = 1;
   }
 
   // User methods
@@ -84,6 +104,68 @@ export class MemStorage implements IStorage {
     return Array.from(this.recipes.values())
       .filter((recipe) => recipe.title.toLowerCase().includes(lowerQuery))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  // Trip methods
+  async getAllTrips(): Promise<Trip[]> {
+    // Return all trips, sorted by start date (newest first)
+    return Array.from(this.trips.values()).sort(
+      (a, b) => b.startDate.getTime() - a.startDate.getTime()
+    );
+  }
+
+  async getTripById(id: number): Promise<Trip | undefined> {
+    return this.trips.get(id);
+  }
+
+  async createTrip(insertTrip: InsertTrip): Promise<Trip> {
+    // Create a new trip with auto-generated ID, timestamp, and empty arrays
+    const trip: Trip = {
+      ...insertTrip,
+      id: this.nextTripId++,
+      meals: [],
+      collaborators: [],
+      costTotal: null,
+      costPaidBy: null,
+      createdAt: new Date(),
+    };
+    this.trips.set(trip.id, trip);
+    return trip;
+  }
+
+  async addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined> {
+    // Find the trip
+    const trip = this.trips.get(tripId);
+    if (!trip) {
+      return undefined;
+    }
+
+    // Don't add if already exists (case-insensitive check)
+    const lowerCollaborator = collaborator.toLowerCase();
+    const exists = trip.collaborators.some(
+      c => c.toLowerCase() === lowerCollaborator
+    );
+
+    if (!exists) {
+      // Add the collaborator to the array
+      trip.collaborators.push(collaborator);
+    }
+
+    return trip;
+  }
+
+  async updateTripCost(tripId: number, total: string, paidBy?: string): Promise<Trip | undefined> {
+    // Find the trip
+    const trip = this.trips.get(tripId);
+    if (!trip) {
+      return undefined;
+    }
+
+    // Update the cost fields
+    trip.costTotal = total;
+    trip.costPaidBy = paidBy || null;
+
+    return trip;
   }
 }
 
