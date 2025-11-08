@@ -1,0 +1,71 @@
+Prompt: Add Collaborators to Trips in “The Camping Planner”
+
+I am continuing my Node.js + Express project called “The Camping Planner.”
+I already have a trips module (/trips) where I can:
+
+list all trips
+
+create a new trip
+
+view a single trip at /trips/:id
+
+attach recipes/meals to that trip
+
+Now I want to add a simple collaborator/invite feature to trips.
+
+What I want
+
+Each trip object in the database should have a new field called collaborators, which is an array of strings (usually emails or names).
+Example:
+
+{
+  "id": "123",
+  "name": "Goldstream Weekend",
+  "location": "Goldstream Provincial Park",
+  "startDate": "2025-05-01",
+  "endDate": "2025-05-03",
+  "meals": [],
+  "collaborators": ["mom@example.com", "uncle@family.com"]
+}
+
+
+On the Trip Detail page (GET /trips/:id), show a new section:
+
+“Collaborators on this trip”
+
+list all current collaborators
+
+a small form: “Add collaborator (email or name)”
+
+When the form is submitted, it should send a POST request to something like:
+POST /trips/:id/collaborators
+
+This route should:
+
+read the existing trip from @replit/database
+
+push the new collaborator value into the collaborators array (only if not empty)
+
+save the trip back
+
+redirect back to /trips/:id
+
+Please update the trip-creation logic so that new trips start with collaborators: [] to avoid undefined errors.
+
+Add basic validation so if the input is blank, it does not crash — just redirect back.
+
+Add comments in the code because I am still learning.
+
+On the Trip Detail page, under the collaborators list, show a little helper text like:
+
+“Share this trip with family members so they can see meals, grocery lists, and printable games.”
+
+I don’t have real user authentication yet, so this can just store the emails/names as strings. No login needed right now. Just make it future-friendly so I can later check “if current user is in collaborators.”
+
+Summary of routes to add
+
+POST /trips/:id/collaborators → add a collaborator to that trip
+
+update GET /trips/:id view to display collaborators and the add form
+
+After generating the code, tell me which files you edited (likely routes/trips.js and maybe index.js) so I know where to look.
