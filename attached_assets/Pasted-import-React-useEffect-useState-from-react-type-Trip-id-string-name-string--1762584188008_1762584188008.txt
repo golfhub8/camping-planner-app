@@ -1,0 +1,230 @@
+import React, { useEffect, useState } from "react";
+
+type Trip = {
+  id: string;
+  name: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  collaborators?: string[];
+  cost?: {
+    total: number;
+    paidBy?: string;
+  };
+};
+
+const Trips: React.FC = () => {
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [formData, setFormData] = useState({
+    name: "",
+    location: "",
+    startDate: "",
+    endDate: "",
+  });
+
+  const loadTrips = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/trips");
+      if (!res.ok) {
+        throw new Error("Failed to load trips");
+      }
+      const data = await res.json();
+      setTrips(data);
+    } catch (err: any) {
+      setError(err.message || "Error loading trips");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTrips();
+  }, []);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/trips/new", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to create trip");
+      }
+      // reload trips
+      await loadTrips();
+      setFormData({
+        name: "",
+        location: "",
+        startDate: "",
+        endDate: "",
+      });
+    } catch (err: any) {
+      alert(err.message || "Error creating trip");
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-3xl font-bold text-teal-700">
+          Trips
+        </h1>
+        <p className="text-slate-600">
+          Create camping trips, add collaborators, and tie in meals.
+        </p>
+      </header>
+
+      {/* Create Trip */}
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white border rounded-xl p-4 space-y-3 shadow-sm"
+      >
+        <h2 className="text-lg font-semibold text-slate-800">
+          Create a new trip
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Trip name
+            </label>
+            <input
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="Goldstream weekend"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Location
+            </label>
+            <input
+              name="location"
+              value={formData.location}
+              onChange={handleChange}
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="Goldstream Provincial Park"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Start date
+            </label>
+            <input
+              type="date"
+              name="startDate"
+              value={formData.startDate}
+              onChange={handleChange}
+              className="w-full border rounded-md px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              End date
+            </label>
+            <input
+              type="date"
+              name="endDate"
+              value={formData.endDate}
+              onChange={handleChange}
+              className="w-full border rounded-md px-3 py-2"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          className="bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700"
+        >
+          Create Trip
+        </button>
+      </form>
+
+      {/* Trips list */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-800">
+          Your trips
+        </h2>
+        {loading && <p>Loading trips…</p>}
+        {error && (
+          <p className="text-red-600 text-sm">{error}</p>
+        )}
+        {!loading && !error && trips.length === 0 && (
+          <p className="text-slate-500">
+            No trips yet. Create one above.
+          </p>
+        )}
+        <div className="space-y-3">
+          {trips.map((trip) => {
+            const peopleCount =
+              (trip.collaborators?.length || 0) + 1; // +1 for creator
+            return (
+              <div
+                key={trip.id}
+                className="bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-2"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-800">
+                      {trip.name}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {trip.location || "No location set"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      (window.location.href = `/trips/${trip.id}`)
+                    }
+                    className="text-teal-700 hover:underline text-sm"
+                  >
+                    View trip →
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500">
+                  {trip.startDate
+                    ? `${trip.startDate} → ${trip.endDate || ""}`
+                    : "No dates set"}
+                </p>
+                <p className="text-sm text-slate-500">
+                  Collaborators:{" "}
+                  {trip.collaborators &&
+                  trip.collaborators.length > 0
+                    ? trip.collaborators.join(", ")
+                    : "None yet"}
+                </p>
+                {trip.cost?.total ? (
+                  <p className="text-sm text-slate-500">
+                    Grocery total: ${trip.cost.total.toFixed(2)}{" "}
+                    {peopleCount > 0 &&
+                      `(≈ $${(trip.cost.total / peopleCount).toFixed(
+                        2
+                      )} each)`}
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default Trips;
