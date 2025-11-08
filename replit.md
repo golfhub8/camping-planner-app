@@ -7,8 +7,9 @@ The Camping Planner is a full-stack web application designed to help camping fam
 **Current Features:**
 - **Recipes Module**: Create, browse, and search for camping recipes with ingredients and preparation steps optimized for outdoor cooking
 - **Grocery List Builder**: Generate combined shopping lists from selected recipes with automatic categorization, deduplication, and sharing capabilities
+- **Trips Backend** (API ready, UI pending): Manage camping trips with dates, location, collaborators, and cost-splitting functionality
 
-The application is built as a modern single-page application (SPA) with a REST API backend, featuring full CRUD capabilities and intelligent data processing.
+The application is built as a modern single-page application (SPA) with a REST API backend, featuring full CRUD capabilities, intelligent data processing, and persistent PostgreSQL storage.
 
 ## User Preferences
 
@@ -67,13 +68,29 @@ Preferred communication style: Simple, everyday language.
   - Categories: Produce, Dairy, Meat, Pantry, Camping Gear
   - Uses keyword-based categorization with intelligent pattern matching
 
+*Trip Endpoints:*
+- GET `/api/trips` - Fetch all trips (sorted by start date, newest first)
+- GET `/api/trips/:id` - Fetch single trip by ID with all details
+- POST `/api/trips` - Create new trip
+  - Accepts: `{ name: string, location: string, startDate: ISO string, endDate: ISO string }`
+  - Dates are coerced from ISO strings to Date objects
+- POST `/api/trips/:id/collaborators` - Add collaborator to trip
+  - Accepts: `{ collaborator: string }`
+  - Collaborators are normalized (trimmed, lowercased) for case-insensitive matching
+  - Deduplicates automatically
+- POST `/api/trips/:id/cost` - Update trip cost information
+  - Accepts: `{ total: number, paidBy?: string }`
+  - Cost stored with 2 decimal places for accurate calculations
+
 - JSON request/response format with Zod schema validation
 
 **Data Layer**
 - Abstract storage interface (`IStorage`) for flexibility in data persistence
-- In-memory implementation (`MemStorage`) for development/prototyping
-- Data structures support future migration to database (Drizzle ORM configured)
-- Auto-incrementing IDs and timestamp tracking for recipes
+- PostgreSQL database using Neon serverless driver (migrated from in-memory storage)
+- Database implementation (`DatabaseStorage`) for persistent data storage
+- In-memory implementation (`MemStorage`) still available as fallback
+- Auto-incrementing IDs and timestamp tracking for all entities
+- Database schema synced via `npm run db:push` command
 
 **Type Safety**
 - Shared schema definitions between frontend and backend using Zod
@@ -84,9 +101,10 @@ Preferred communication style: Simple, everyday language.
 
 **Database & ORM**
 - Drizzle ORM configured for PostgreSQL with Neon serverless driver
-- Migration system set up via `drizzle-kit` (migrations directory configured)
-- Schema defined in `shared/schema.ts` with recipes and users tables
-- Currently using in-memory storage; Postgres connection ready for production deployment
+- Migration system set up via `drizzle-kit` (schema push command: `npm run db:push`)
+- Schema defined in `shared/schema.ts` with recipes, trips, and users tables
+- **Active**: Using PostgreSQL database for persistent storage (recipes and trips)
+- Database connection managed via environment variable `DATABASE_URL`
 
 **Third-Party Services**
 - Google Fonts: Architects Daughter, DM Sans, Fira Code, Geist Mono for typography
@@ -137,3 +155,38 @@ The grocery list feature helps families prepare for camping trips by combining i
 - Keyword-based categorization uses regex patterns for intelligent grouping
 - Session storage temporarily holds list data for sharing workflow
 - Category icons use Lucide React components (no emojis per design guidelines)
+
+### Trips Module (Backend Complete, UI Pending)
+The trips backend provides full API support for managing camping trips with collaborative planning and cost-splitting:
+
+**Backend Features:**
+- Create trips with name, location, start date, and end date
+- Store trips persistently in PostgreSQL database
+- Add collaborators to trips (emails or names)
+- Collaborator normalization: all stored in lowercase for case-insensitive matching
+- Automatic deduplication prevents adding the same collaborator twice
+- Track total grocery cost for the trip
+- Record who paid for groceries (for cost-splitting calculations)
+- Cost stored as numeric with 2 decimal places for accuracy
+
+**Database Schema:**
+- `id`: Auto-incrementing primary key
+- `name`: Trip name (e.g., "Goldstream Weekend")
+- `location`: Trip location (e.g., "Goldstream Provincial Park")
+- `startDate`: Trip start timestamp
+- `endDate`: Trip end timestamp
+- `meals`: Array of recipe IDs attached to trip (defaults to empty)
+- `collaborators`: Array of collaborator emails/names (normalized to lowercase)
+- `costTotal`: Numeric(10,2) total grocery cost (nullable)
+- `costPaidBy`: Text field for who paid (nullable)
+- `createdAt`: Trip creation timestamp
+
+**Data Normalization:**
+- Collaborators: Trimmed and lowercased for consistent storage
+- Costs: Stored with exactly 2 decimal places (e.g., "245.50", "300.00")
+- Dates: Coerced from ISO strings to Date objects via Zod schema
+
+**Frontend Status:**
+- Backend API fully implemented and tested
+- UI implementation pending (user will build themselves)
+- All endpoints validated via comprehensive E2E testing
