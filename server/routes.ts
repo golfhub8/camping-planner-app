@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, type GroceryItem, type GroceryCategory } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -138,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Filter out any null recipes (in case some IDs don't exist)
-      const validRecipes = recipes.filter(r => r !== null);
+      const validRecipes = recipes.filter((r): r is Recipe => r !== null && r !== undefined);
       
       if (validRecipes.length === 0) {
         return res.status(404).json({ error: "No valid recipes found" });
@@ -189,6 +189,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.error("Error generating grocery list:", error);
       res.status(500).json({ error: "Failed to generate grocery list" });
+    }
+  });
+
+  // Trip Routes
+  
+  // GET /api/trips
+  // Returns all trips, sorted by start date (newest first)
+  app.get("/api/trips", async (req, res) => {
+    try {
+      const trips = await storage.getAllTrips();
+      res.json(trips);
+    } catch (error) {
+      console.error("Error fetching trips:", error);
+      res.status(500).json({ error: "Failed to fetch trips" });
+    }
+  });
+
+  // GET /api/trips/:id
+  // Returns a single trip by ID with all details (meals, collaborators, cost info)
+  app.get("/api/trips/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Validate that ID is a valid number
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      const trip = await storage.getTripById(id);
+      
+      if (!trip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      res.json(trip);
+    } catch (error) {
+      console.error("Error fetching trip:", error);
+      res.status(500).json({ error: "Failed to fetch trip" });
+    }
+  });
+
+  // POST /api/trips
+  // Creates a new trip
+  // Body: { name: string, location: string, startDate: Date, endDate: Date }
+  app.post("/api/trips", async (req, res) => {
+    try {
+      // Validate the request body against our schema
+      const validatedData = insertTripSchema.parse(req.body);
+      
+      // Create the trip in storage
+      const trip = await storage.createTrip(validatedData);
+      
+      // Return the created trip with 201 status
+      res.status(201).json(trip);
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid trip data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error creating trip:", error);
+      res.status(500).json({ error: "Failed to create trip" });
+    }
+  });
+
+  // POST /api/trips/:id/collaborators
+  // Add a collaborator to a trip
+  // Body: { collaborator: string }
+  // The collaborator string will be normalized (trimmed, lowercased) before storing
+  app.post("/api/trips/:id/collaborators", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Validate trip ID
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Validate the request body
+      const { collaborator } = addCollaboratorSchema.parse(req.body);
+      
+      // Add the collaborator to the trip
+      const updatedTrip = await storage.addCollaborator(id, collaborator);
+      
+      if (!updatedTrip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      res.json(updatedTrip);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid collaborator data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error adding collaborator:", error);
+      res.status(500).json({ error: "Failed to add collaborator" });
+    }
+  });
+
+  // POST /api/trips/:id/cost
+  // Update cost information for a trip
+  // Body: { total: number, paidBy?: string }
+  // The total will be stored with 2 decimal places
+  app.post("/api/trips/:id/cost", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Validate trip ID
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Validate the request body
+      const validatedData = addTripCostSchema.parse(req.body);
+      
+      // Convert to number if it was a string
+      const total = typeof validatedData.total === 'string' 
+        ? parseFloat(validatedData.total) 
+        : validatedData.total;
+      
+      // Update the trip cost
+      const updatedTrip = await storage.updateTripCost(id, total, validatedData.paidBy);
+      
+      if (!updatedTrip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      res.json(updatedTrip);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid cost data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error updating trip cost:", error);
+      res.status(500).json({ error: "Failed to update trip cost" });
     }
   });
 

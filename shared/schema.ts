@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -90,12 +90,13 @@ export const trips = pgTable("trips", {
   // Array of recipe IDs attached to this trip as meals
   meals: integer("meals").array().notNull().default(sql`'{}'::integer[]`),
   
-  // Array of collaborator emails/names (strings)
+  // Array of collaborator emails/names (strings, stored in lowercase for consistency)
   // Example: ["mom@example.com", "uncle@family.com"]
   collaborators: text("collaborators").array().notNull().default(sql`'{}'::text[]`),
   
-  // Total grocery cost for the trip (nullable - may not be set yet)
-  costTotal: text("cost_total"),
+  // Total grocery cost for the trip (decimal with 2 decimal places, nullable)
+  // Stored as numeric for accurate calculations
+  costTotal: numeric("cost_total", { precision: 10, scale: 2 }),
   
   // Who paid for the groceries (nullable - optional field)
   costPaidBy: text("cost_paid_by"),
@@ -119,7 +120,9 @@ export const addCollaboratorSchema = z.object({
 
 // Schema for adding cost information to a trip
 export const addTripCostSchema = z.object({
-  total: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid cost format (use numbers like 142.75)"),
+  total: z.number().positive("Cost must be positive").or(
+    z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid cost format").transform(Number)
+  ),
   paidBy: z.string().trim().optional(),
 });
 

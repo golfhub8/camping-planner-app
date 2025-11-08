@@ -1,5 +1,7 @@
-import { type User, type InsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip } from "@shared/schema";
+import { type User, type InsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, users, recipes, trips } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc, sql } from "drizzle-orm";
 
 // Storage interface definition
 // This defines all the methods we need to store and retrieve data
@@ -36,7 +38,7 @@ export interface IStorage {
   addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined>;
   
   // Update cost information for a trip
-  updateTripCost(tripId: number, total: string, paidBy?: string): Promise<Trip | undefined>;
+  updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined>;
 }
 
 // In-memory storage implementation
@@ -154,19 +156,126 @@ export class MemStorage implements IStorage {
     return trip;
   }
 
-  async updateTripCost(tripId: number, total: string, paidBy?: string): Promise<Trip | undefined> {
+  async updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined> {
     // Find the trip
     const trip = this.trips.get(tripId);
     if (!trip) {
       return undefined;
     }
 
-    // Update the cost fields
-    trip.costTotal = total;
+    // Update the cost fields (store as string with 2 decimal places)
+    trip.costTotal = total.toFixed(2);
     trip.costPaidBy = paidBy || null;
 
     return trip;
   }
 }
 
-export const storage = new MemStorage();
+// Database storage implementation
+// Uses PostgreSQL database for persistent storage
+// Data survives server restarts
+export class DatabaseStorage implements IStorage {
+  // User methods
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  // Recipe methods
+  async getAllRecipes(): Promise<Recipe[]> {
+    return await db.select().from(recipes).orderBy(desc(recipes.createdAt));
+  }
+
+  async getRecipeById(id: number): Promise<Recipe | undefined> {
+    const [recipe] = await db.select().from(recipes).where(eq(recipes.id, id));
+    return recipe || undefined;
+  }
+
+  async createRecipe(insertRecipe: InsertRecipe): Promise<Recipe> {
+    const [recipe] = await db.insert(recipes).values(insertRecipe).returning();
+    return recipe;
+  }
+
+  async searchRecipes(query: string): Promise<Recipe[]> {
+    // Search for recipes where title contains the query (case-insensitive)
+    return await db
+      .select()
+      .from(recipes)
+      .where(sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + query + '%'})`)
+      .orderBy(desc(recipes.createdAt));
+  }
+
+  // Trip methods
+  async getAllTrips(): Promise<Trip[]> {
+    return await db.select().from(trips).orderBy(desc(trips.startDate));
+  }
+
+  async getTripById(id: number): Promise<Trip | undefined> {
+    const [trip] = await db.select().from(trips).where(eq(trips.id, id));
+    return trip || undefined;
+  }
+
+  async createTrip(insertTrip: InsertTrip): Promise<Trip> {
+    const [trip] = await db.insert(trips).values(insertTrip).returning();
+    return trip;
+  }
+
+  async addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined> {
+    // Get the current trip
+    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId));
+    if (!trip) {
+      return undefined;
+    }
+
+    // Normalize collaborator: trim and lowercase for consistent storage and matching
+    const normalizedCollaborator = collaborator.trim().toLowerCase();
+    
+    // Check if collaborator already exists (already normalized in storage)
+    const exists = trip.collaborators.some(
+      c => c === normalizedCollaborator
+    );
+
+    if (!exists) {
+      // Add the normalized collaborator to the array
+      const updatedCollaborators = [...trip.collaborators, normalizedCollaborator];
+      
+      // Update the trip in the database
+      const [updatedTrip] = await db
+        .update(trips)
+        .set({ collaborators: updatedCollaborators })
+        .where(eq(trips.id, tripId))
+        .returning();
+      
+      return updatedTrip;
+    }
+
+    return trip;
+  }
+
+  async updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined> {
+    // Convert number to string for numeric column (Drizzle handles the conversion)
+    const [trip] = await db
+      .update(trips)
+      .set({
+        costTotal: total.toFixed(2), // Store as string with 2 decimal places
+        costPaidBy: paidBy || null,
+      })
+      .where(eq(trips.id, tripId))
+      .returning();
+    
+    return trip || undefined;
+  }
+}
+
+// Use database storage for persistent data
+export const storage = new DatabaseStorage();
