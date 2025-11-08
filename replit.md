@@ -173,7 +173,14 @@ The trips module provides full functionality for managing camping trips with col
 - Trips page (`/trips`) accessible via header navigation
 - Create trip form with React Hook Form and Zod validation
 - Trip list view displaying all trips as interactive cards
-- Date formatting with date-fns (displays as "MMM d - MMM d, yyyy")
+- Trip detail page (`/trips/:id`) for viewing and editing individual trips
+  - View trip name, location, and dates
+  - Add/view collaborators
+  - Update grocery costs with automatic cost-splitting calculation
+  - View meals (recipes) planned for the trip
+  - Forms use React Hook Form with Zod validation
+  - Custom queryFn to fetch individual trip data
+- Date formatting with date-fns (displays as "MMM d - MMM d, yyyy" on list, "MMMM d, yyyy" on detail)
 - Responsive card layout with hover effects
 - Shows collaborator count, cost information, and meal planning
 - TanStack Query for data fetching and cache management
@@ -198,6 +205,8 @@ The trips module provides full functionality for managing camping trips with col
 
 **Implementation Status:**
 - Backend API fully implemented and tested ✓
-- Frontend UI fully implemented and tested ✓
+- Frontend Trips list page fully implemented and tested ✓
+- Frontend Trip detail page fully implemented and tested ✓
 - All endpoints validated via comprehensive E2E testing ✓
-- Trip detail page (view/edit single trip) - not yet implemented
+- Cost splitting calculation working correctly (total / people count)
+- Collaborator normalization and deduplication working correctly
