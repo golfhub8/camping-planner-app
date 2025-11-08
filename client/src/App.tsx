@@ -10,6 +10,7 @@ import SearchResults from "@/pages/SearchResults";
 import GrocerySelection from "@/pages/GrocerySelection";
 import GroceryList from "@/pages/GroceryList";
 import GroceryShare from "@/pages/GroceryShare";
+import Trips from "@/pages/Trips";
 
 function Router() {
   return (
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/grocery" component={GrocerySelection} />
       <Route path="/grocery/list" component={GroceryList} />
       <Route path="/grocery/share" component={GroceryShare} />
+      <Route path="/trips" component={Trips} />
       <Route component={NotFound} />
     </Switch>
   );

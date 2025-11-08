@@ -43,9 +43,15 @@ export default function Header() {
                 Grocery
               </Button>
             </Link>
-            <Button variant="ghost" size="default" disabled data-testid="button-nav-trips">
-              Trips
-            </Button>
+            <Link href="/trips" data-testid="link-trips">
+              <Button
+                variant={location.startsWith("/trips") ? "secondary" : "ghost"}
+                size="default"
+                data-testid="button-nav-trips"
+              >
+                Trips
+              </Button>
+            </Link>
             <Button variant="ghost" size="default" disabled data-testid="button-nav-printables">
               Printables
             </Button>

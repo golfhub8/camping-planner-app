@@ -35,16 +35,14 @@ export default function Trips() {
   // Mutation for creating a new trip
   const createTripMutation = useMutation({
     mutationFn: async (newTrip: InsertTrip) => {
-      return await apiRequest("/api/trips", {
-        method: "POST",
-        body: JSON.stringify({
-          name: newTrip.name,
-          location: newTrip.location,
-          // Convert Date objects to ISO strings for the API
-          startDate: newTrip.startDate.toISOString(),
-          endDate: newTrip.endDate.toISOString(),
-        }),
+      const response = await apiRequest("POST", "/api/trips", {
+        name: newTrip.name,
+        location: newTrip.location,
+        // Convert Date objects to ISO strings for the API
+        startDate: newTrip.startDate.toISOString(),
+        endDate: newTrip.endDate.toISOString(),
       });
+      return response.json();
     },
     onSuccess: () => {
       // Invalidate and refetch trips after creating a new one
