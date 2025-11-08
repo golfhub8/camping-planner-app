@@ -1,0 +1,57 @@
+Grocery List Builder for The Camping Planner
+
+I’m continuing the same Node.js + Express project called The Camping Planner.
+The recipes module is already working (recipes can be created, stored in @replit/database, listed, and viewed at /recipe/:id).
+
+Now I want to build the Grocery List feature that connects to those recipes.
+
+Functional requirements
+
+Create a new route file called /routes/grocery.js and mount it in index.js at /grocery.
+
+Add a simple HTML page with a list of all saved recipes (title + checkbox).
+
+When the user selects one or more recipes and clicks “Generate Grocery List,” the server should:
+
+Collect all the ingredients from the selected recipes.
+
+Merge duplicates (e.g., if “milk” appears twice, keep one).
+
+Group ingredients by type: Produce, Dairy, Meat, Pantry, Camping Gear (misc).
+
+Show them on a new page /grocery/list with checkboxes next to each item.
+
+Each item should have a checkbox. When checked, it means “already have it.”
+
+Add a “Show Only Needed Items” toggle that hides the checked ones.
+
+Add a “Share List” button that opens a new page /grocery/share which displays only unchecked items in a clean copyable list format (so the user can text or email it).
+
+Include a “Back to Recipes” and “Back to Grocery List” button for easy navigation.
+
+Technical notes
+
+Use the same @replit/database to fetch recipes (you can reuse the database object).
+
+The grocery list can be built dynamically; you don’t need to store it permanently yet.
+
+Keep the code organized and commented because I’m still learning.
+
+Use simple HTML templates or inline strings for now, no frameworks needed.
+
+At the top of each grocery-related page, show a small header:
+“The Camping Planner – Grocery List Builder” with a link back to /.
+
+Example flow
+
+Go to /grocery
+
+Select recipes → click “Generate Grocery List”
+
+See combined ingredients, grouped by type, each with a checkbox
+
+Click “Show Only Needed Items” to hide checked ones
+
+Click “Share List” → show a clean copyable list of only unchecked items
+
+Once done, explain what files were created or modified and how to run it inside Replit.

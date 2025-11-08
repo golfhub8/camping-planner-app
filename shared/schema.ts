@@ -47,3 +47,24 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Grocery List schemas
+// Categories for grouping grocery items
+export const groceryCategories = ["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"] as const;
+export type GroceryCategory = typeof groceryCategories[number];
+
+// Individual grocery item
+export const groceryItemSchema = z.object({
+  name: z.string(),
+  category: z.enum(groceryCategories),
+  checked: z.boolean().default(false),
+});
+
+export type GroceryItem = z.infer<typeof groceryItemSchema>;
+
+// Request to generate grocery list from selected recipes
+export const generateGroceryListSchema = z.object({
+  recipeIds: z.array(z.number()).min(1, "Select at least one recipe"),
+});
+
+export type GenerateGroceryListRequest = z.infer<typeof generateGroceryListSchema>;
