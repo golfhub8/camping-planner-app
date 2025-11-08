@@ -1,0 +1,60 @@
+I already have a React + TypeScript frontend and a Node/Express backend for The Camping Planner.
+The backend now supports:
+
+GET /api/trips → list all trips
+
+GET /trips/:id → server-side view of one trip
+
+POST /trips/new → create a trip
+
+POST /trips/:id/collaborators → add a collaborator (email/name)
+
+POST /trips/:id/cost → save total grocery cost for trip
+
+trips also have meals (array of recipe ids)
+
+I want to add a React Trip Detail page so I can view and edit ONE trip from the frontend.
+
+Please create a new React + TS component/page, for example src/pages/TripDetail.tsx, that:
+
+Reads a tripId from the URL (e.g. /trips-ui/:id).
+
+On mount, fetches the trip JSON from a new API endpoint like GET /api/trips/:id (please also show me the small Express/Node change needed to expose this JSON endpoint if it doesn’t exist yet).
+
+Displays:
+
+trip name, location, dates
+
+list of collaborators
+
+list of meals (just show titles or IDs for now)
+
+cost section (total + per-person split if collaborators exist)
+
+Add a small form to add a collaborator right on this page. On submit, POST to /trips/:id/collaborators and then re-fetch the trip.
+
+Add a small form to update/set the grocery total for the trip (number input). On submit, POST to /trips/:id/cost and re-fetch the trip.
+
+If the trip has collaborators and a total cost, display the split like:
+
+Total: $X
+
+People: collaborators.length + 1 (include trip owner)
+
+Each: total / people (2 decimal places)
+
+Include a section “Meals for this trip.” For now, just list what is in trip.meals. If you can, also fetch /api/recipes and map the recipe IDs to recipe titles.
+
+Add basic loading and error states.
+
+Style it to match the previous Trips page (teal header, cards, simple div layout).
+
+Finally, update the router (e.g. in App.tsx) to add a route like <Route path="/trips-ui/:id" element={<TripDetail />} /> so that when I click a trip in the list page I can go to this detail view.
+
+Please show:
+
+the React component code
+
+the small Express route to add: GET /api/trips/:id
+
+and where to add the new route in the React router.
