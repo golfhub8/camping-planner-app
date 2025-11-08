@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import logoImage from "@assets/The Camping Planner LOGO (1) (1)_1762579978004.jpg";
+import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
 export default function Header() {
   const [location, setLocation] = useLocation();
@@ -21,7 +21,7 @@ export default function Header() {
       <div className="container mx-auto px-6 md:px-10">
         <div className="flex h-28 items-center justify-between gap-4">
           <Link href="/" className="flex items-center hover-elevate rounded-lg px-2 py-1" data-testid="link-home">
-            <img src={logoImage} alt="The Camping Planner" className="h-20" />
+            <img src={bannerImage} alt="The Camping Planner" className="h-20" />
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
