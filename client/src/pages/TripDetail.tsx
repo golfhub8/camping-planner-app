@@ -23,6 +23,13 @@ export default function TripDetail() {
   // Fetch trip data
   const { data: trip, isLoading: tripLoading, error: tripError } = useQuery<Trip>({
     queryKey: ["/api/trips", tripId],
+    queryFn: async () => {
+      const response = await fetch(`/api/trips/${tripId}`);
+      if (!response.ok) {
+        throw new Error("Trip not found");
+      }
+      return response.json();
+    },
     enabled: tripId !== null,
   });
 
