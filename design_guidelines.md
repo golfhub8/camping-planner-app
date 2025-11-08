@@ -2,9 +2,9 @@
 
 ## Design Approach
 
-**Selected Approach**: Warm, Rustic Outdoor Aesthetic
+**Selected Approach**: Clean, Modern Outdoor Aesthetic
 
-Inspired by the actual thecampingplanner.com website, this design embraces a warm, welcoming, and family-friendly aesthetic. The focus is on creating a cozy, campfire-gathering feeling with earthy tones, approachable typography, and natural warmth that makes users feel like they're planning around a campfire with friends.
+Inspired by The Camping Planner logo, this design embraces a clean, modern, and family-friendly aesthetic. The focus is on creating a fresh, contemporary feeling with teal accent colors, clean typography, and a minimalist approach that makes the brand feel professional and approachable.
 
 ---
 
@@ -12,117 +12,115 @@ Inspired by the actual thecampingplanner.com website, this design embraces a war
 
 ### Color Palette
 
-**Primary Colors (Warm Earth Tones)**:
-- **Primary Accent**: Warm terracotta/burnt orange (#D97757) - evokes campfire warmth
-- **Secondary Green**: Forest green (#4A7C59) - natural, outdoorsy
-- **Warm Brown**: Rich brown (#8B6F47) for accents
+**Primary Colors (From Logo)**:
+- **Primary Teal**: Vibrant teal (#4DB4AC) - fresh, modern, outdoor feel
+- **Black**: Pure black (#000000) - clean, professional for text
+- **White**: Pure white (#FFFFFF) - clean, spacious backgrounds
 
 **Neutral Base**:
-- **Background**: Warm off-white (#FAF8F5) - not stark white, warmer feel
-- **Text**: Warm dark brown (#2D2416) - easier on eyes than black
-- **Muted text**: Warm gray-brown (#6B5D52)
+- **Background**: Pure white (#FFFFFF) - clean, modern
+- **Text**: Near-black (#1A1A1A) - strong contrast, readable
+- **Muted text**: Medium gray (#737373)
 
 **Supporting Colors**:
-- **Card backgrounds**: Soft cream (#F5F2ED)
-- **Borders**: Light tan (#E8E3DB)
+- **Card backgrounds**: Very light gray (#FAFAFA)
+- **Borders**: Light gray (#E6E6E6)
 
 ### Typography
-- **Primary Font**: Merriweather (serif) - warm, readable, traditional feel for headings
-- **Body Font**: Open Sans (sans-serif) - clean, friendly for body text
-- **Accent Font**: Architects Daughter (handwriting) - for special touches, playful elements
+- **Primary Font**: System UI sans-serif stack - clean, modern, readable
+- **Body Font**: Same as primary - consistent, professional
+- **Font Weight**: Bold for headings to match logo's bold aesthetic
 
 **Font Sizes**:
-- H1: 2.5rem (40px), Merriweather, weight 700
-- H2: 2rem (32px), Merriweather, weight 600
-- H3: 1.5rem (24px), Merriweather, weight 600
-- Body: 1rem (16px), Open Sans, weight 400, line-height 1.6
+- H1: 2.5rem (40px), Bold
+- H2: 2rem (32px), Semi-bold
+- H3: 1.5rem (24px), Semi-bold
+- Body: 1rem (16px), Regular, line-height 1.6
 - Small: 0.875rem (14px)
 
 ### Layout System
 
-**Spacing**: Generous, comfortable spacing (more relaxed than tech apps)
-- Use units: 3, 4, 6, 8, 12, 16, 20, 24
+**Spacing**: Clean, modern spacing (balanced and professional)
+- Use units: 2, 4, 6, 8, 12, 16, 20, 24
 
 **Container Strategy**:
-- Main content: `max-w-6xl mx-auto px-6 md:px-10` - more breathing room
-- Comfortable padding throughout
+- Main content: `max-w-6xl mx-auto px-6 md:px-10` - comfortable width
+- Consistent padding throughout
 
 ---
 
 ## Component Library
 
 ### Navigation Header
-- Warm background with subtle texture feel
-- Logo with tent icon, warm terracotta color
-- Generous padding (py-5)
-- Soft shadow beneath
-- Navigation links in warm brown, terracotta when active
+- White background with subtle border
+- Logo image (actual branding) on left
+- Clean navigation links
+- Search bar on right
+- Teal accent for active states
 
 ### Recipe Cards
-- Soft cream background
-- Warm border
-- Rounded corners (slightly more rounded than default)
-- Hover: gentle lift with warm shadow
-- Ingredient count badge in terracotta
-- Created date with warm brown icon
+- Light gray background
+- Clean borders
+- Rounded corners
+- Hover: subtle elevation
+- Teal accents for badges and icons
 
 ### Create Recipe Form
-- Expandable design with warm call-to-action
-- Cream card background
-- Terracotta accent for create button
-- Comfortable input spacing
-- Helper text in warm muted tones
+- Expandable design
+- Light card background
+- Teal accent for create button
+- Clean input fields
+- Clear helper text
 
 ### Recipe Detail Page
 - Two-column layout on desktop
-- Checkable ingredients with terracotta checkboxes
-- Numbered steps with warm circular badges
-- Print button prominent
-- Warm, inviting spacing
+- Checkable ingredients with teal checkboxes
+- Numbered steps with clean badges
+- Back button with teal accent
+- Modern, spacious design
 
 ### Buttons
 **Primary Button**: 
-- Terracotta background (#D97757)
-- Cream text
-- Rounded-lg
-- Comfortable padding (px-6 py-3)
+- Teal background (#4DB4AC)
+- White text
+- Rounded-md
+- Comfortable padding (px-4 py-2)
 
 **Secondary Button**:
-- Transparent with terracotta border
-- Terracotta text
-- Hover: light terracotta background
+- Light gray background
+- Black text
+- Clean borders
 
 ### Empty States
-- Warm, friendly messaging
-- Soft icon in muted terracotta
-- Encouraging call-to-action
+- Clean, friendly messaging
+- Simple icon in muted teal
+- Clear call-to-action
 
 ### Icons
 Use Lucide React:
-- Tent, Flame, ChefHat for branding
-- Calendar, Eye, Search for actions
-- All in warm earth tones
+- Tent, Search, Plus for common actions
+- All in teal or black depending on context
 
 ---
 
 ## Visual Style
 
-**Overall Feel**: Cozy campfire gathering, family-friendly, warm and inviting
+**Overall Feel**: Clean, modern, professional with outdoor appeal
 
-**Textures**: Subtle (no heavy textures, but warmth through color)
+**Textures**: Minimal - focus on clean design
 
-**Shadows**: Soft, warm shadows (slight brown tint rather than pure gray)
+**Shadows**: Subtle, clean shadows
 
-**Borders**: Warm tan/brown rather than cold gray
+**Borders**: Light gray, clean lines
 
-**Interactions**: Gentle, warm hover states with terracotta accents
+**Interactions**: Subtle hover states with teal accents
 
 ---
 
 ## Accessibility
 
-- Warm color contrast still meets WCAG AA standards
+- High contrast between teal and white/black
 - All interactive elements clearly defined
-- Focus states visible with terracotta outline
+- Focus states visible with teal outline
 - Comfortable touch targets (min 44px)
 - Readable font sizes throughout
