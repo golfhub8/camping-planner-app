@@ -27,10 +27,18 @@ export default function Trips() {
     defaultValues: {
       name: "",
       location: "",
-      startDate: new Date(),
-      endDate: new Date(),
+      startDate: undefined as any,
+      endDate: undefined as any,
     },
   });
+
+  // Helper function to safely format date for input
+  const formatDateForInput = (date: Date | undefined): string => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      return '';
+    }
+    return format(date, 'yyyy-MM-dd');
+  };
 
   // Mutation for creating a new trip
   const createTripMutation = useMutation({
@@ -142,8 +150,11 @@ export default function Trips() {
                           <Input 
                             type="date"
                             data-testid="input-trip-start-date"
-                            value={field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : ''}
-                            onChange={(e) => field.onChange(new Date(e.target.value))}
+                            value={formatDateForInput(field.value)}
+                            onChange={(e) => {
+                              const date = e.target.value ? new Date(e.target.value) : undefined;
+                              field.onChange(date);
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
@@ -162,8 +173,11 @@ export default function Trips() {
                           <Input 
                             type="date"
                             data-testid="input-trip-end-date"
-                            value={field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : ''}
-                            onChange={(e) => field.onChange(new Date(e.target.value))}
+                            value={formatDateForInput(field.value)}
+                            onChange={(e) => {
+                              const date = e.target.value ? new Date(e.target.value) : undefined;
+                              field.onChange(date);
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
