@@ -1,70 +1,54 @@
-import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import RecipeCard from "@/components/RecipeCard";
 import RecipeForm from "@/components/RecipeForm";
 import EmptyState from "@/components/EmptyState";
 import Header from "@/components/Header";
-
-// TODO: Remove mock data - this will be replaced with real data from the backend
-const initialMockRecipes = [
-  {
-    id: 1,
-    title: "Campfire Chili",
-    ingredients: [
-      "1 lb ground beef",
-      "2 cans kidney beans",
-      "1 can diced tomatoes",
-      "1 onion, diced",
-      "2 tbsp chili powder",
-      "1 tsp cumin",
-      "Salt and pepper to taste"
-    ],
-    steps: "1. Brown the ground beef in a pot over the campfire.\n2. Add diced onions and cook until soft.\n3. Add beans, tomatoes, and spices.\n4. Simmer for 30 minutes, stirring occasionally.\n5. Serve hot with cornbread.",
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
-  },
-  {
-    id: 2,
-    title: "Trail Mix Energy Bars",
-    ingredients: [
-      "2 cups rolled oats",
-      "1 cup mixed nuts",
-      "1/2 cup honey",
-      "1/2 cup peanut butter",
-      "1/2 cup dried cranberries",
-      "1/4 cup chocolate chips"
-    ],
-    steps: "1. Mix oats, nuts, and cranberries in a bowl.\n2. Heat honey and peanut butter until smooth.\n3. Pour over dry ingredients and mix well.\n4. Press into a baking pan.\n5. Refrigerate for 2 hours before cutting into bars.",
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
-  },
-  {
-    id: 3,
-    title: "Foil Packet Fish",
-    ingredients: [
-      "4 fish fillets",
-      "2 lemons, sliced",
-      "4 tbsp butter",
-      "Fresh dill",
-      "Garlic powder",
-      "Salt and pepper"
-    ],
-    steps: "1. Place each fillet on a sheet of foil.\n2. Top with lemon slices, butter, and seasonings.\n3. Fold foil to create sealed packets.\n4. Place on campfire grill for 15-20 minutes.\n5. Open carefully and serve.",
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  }
-];
+import type { Recipe } from "@shared/schema";
 
 export default function Home() {
-  // TODO: Remove mock state - this will be replaced with React Query
-  const [recipes, setRecipes] = useState(initialMockRecipes);
+  // Fetch all recipes from the API
+  const { data: recipes = [], isLoading } = useQuery<Recipe[]>({
+    queryKey: ["/api/recipes"],
+  });
+
+  // Mutation for creating a new recipe
+  const createRecipeMutation = useMutation({
+    mutationFn: async (newRecipe: { title: string; ingredients: string[]; steps: string }) => {
+      const response = await fetch("/api/recipes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newRecipe),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to create recipe");
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch recipes after creating a new one
+      queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
+    },
+  });
 
   const handleCreateRecipe = (newRecipe: { title: string; ingredients: string[]; steps: string }) => {
-    // TODO: Remove mock functionality - this will make an API call
-    const recipe = {
-      id: recipes.length + 1,
-      ...newRecipe,
-      createdAt: new Date()
-    };
-    setRecipes([recipe, ...recipes]);
-    console.log('Recipe created:', recipe);
+    createRecipeMutation.mutate(newRecipe);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 md:px-10 py-12">
+          <div className="text-center text-muted-foreground">Loading recipes...</div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -88,7 +72,7 @@ export default function Home() {
           <EmptyState
             message="No recipes yet. Create your first camping recipe!"
             actionLabel="Get Started"
-            onAction={() => console.log('Scroll to form')}
+            onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -98,7 +82,7 @@ export default function Home() {
                 id={recipe.id}
                 title={recipe.title}
                 ingredients={recipe.ingredients}
-                createdAt={recipe.createdAt}
+                createdAt={new Date(recipe.createdAt)}
               />
             ))}
           </div>
