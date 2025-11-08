@@ -7,8 +7,8 @@ import { Search } from "lucide-react";
 import type { Recipe } from "@shared/schema";
 
 export default function SearchResults() {
-  const [location] = useLocation();
-  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  // Get query parameter from URL
+  const searchParams = new URLSearchParams(window.location.search);
   const query = searchParams.get('q') || '';
 
   // Fetch search results from the API
