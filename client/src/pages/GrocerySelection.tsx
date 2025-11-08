@@ -15,8 +15,10 @@ export default function GrocerySelection() {
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<number[]>([]);
 
   // Fetch all available recipes
+  // Always refetch on mount to ensure we have the latest recipes
   const { data: recipes, isLoading } = useQuery<Recipe[]>({
     queryKey: ["/api/recipes"],
+    refetchOnMount: true,
   });
 
   // Toggle recipe selection

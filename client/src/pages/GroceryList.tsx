@@ -7,17 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Share2, ArrowLeft, Loader2 } from "lucide-react";
+import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { GroceryItem, GroceryCategory } from "@shared/schema";
+import type { LucideIcon } from "lucide-react";
 
 // Category icon and color mapping
-const categoryConfig: Record<GroceryCategory, { icon: string; color: string }> = {
-  "Produce": { icon: "🥕", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-  "Dairy": { icon: "🥛", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  "Meat": { icon: "🥩", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
-  "Pantry": { icon: "🥫", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-  "Camping Gear": { icon: "⛺", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
+const categoryConfig: Record<GroceryCategory, { Icon: LucideIcon; color: string }> = {
+  "Produce": { Icon: Carrot, color: "text-green-600 dark:text-green-400" },
+  "Dairy": { Icon: Milk, color: "text-blue-600 dark:text-blue-400" },
+  "Meat": { Icon: Beef, color: "text-red-600 dark:text-red-400" },
+  "Pantry": { Icon: Package, color: "text-yellow-600 dark:text-yellow-400" },
+  "Camping Gear": { Icon: Tent, color: "text-purple-600 dark:text-purple-400" },
 };
 
 // Page for displaying the generated grocery list
@@ -169,11 +170,13 @@ export default function GroceryList() {
 
           const config = categoryConfig[category];
 
+          const { Icon, color } = config;
+          
           return (
             <Card key={category} data-testid={`category-${category.toLowerCase().replace(/\s+/g, "-")}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">{config.icon}</span>
+                  <Icon className={`h-5 w-5 ${color}`} />
                   <span>{category}</span>
                   <Badge variant="outline" className="ml-2">
                     {visibleItems.length}

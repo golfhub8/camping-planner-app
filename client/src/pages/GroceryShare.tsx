@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { ArrowLeft, Copy, Check, Tent } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { GroceryItem, GroceryCategory } from "@shared/schema";
 
@@ -37,7 +37,7 @@ export default function GroceryShare() {
 
   // Generate plain text list for copying
   function generatePlainText(): string {
-    let text = "🏕️ THE CAMPING PLANNER - GROCERY LIST\n\n";
+    let text = "THE CAMPING PLANNER - GROCERY LIST\n\n";
     
     (Object.keys(groupedItems) as GroceryCategory[]).forEach(category => {
       const items = groupedItems[category];
