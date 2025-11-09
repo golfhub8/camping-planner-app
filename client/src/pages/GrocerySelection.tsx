@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, Loader2 } from "lucide-react";
+import Header from "@/components/Header";
 import type { Recipe } from "@shared/schema";
 
 // Page for selecting recipes to generate a grocery list
@@ -42,31 +43,41 @@ export default function GrocerySelection() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 md:px-10 py-12">
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
       </div>
     );
   }
 
   if (!recipes || recipes.length === 0) {
     return (
-      <div className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
-        <div className="text-center">
-          <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-          <h2 className="text-2xl font-bold mb-2">No Recipes Yet</h2>
-          <p className="text-muted-foreground mb-6">
-            Create some recipes first, then come back to build your grocery list!
-          </p>
-          <Button onClick={() => setLocation("/new")} data-testid="button-create-recipe">
-            Create Your First Recipe
-          </Button>
-        </div>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+          <div className="text-center">
+            <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <h2 className="text-2xl font-bold mb-2">No Recipes Yet</h2>
+            <p className="text-muted-foreground mb-6">
+              Create some recipes first, then come back to build your grocery list!
+            </p>
+            <Button onClick={() => setLocation("/new")} data-testid="button-create-recipe">
+              Create Your First Recipe
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
       {/* Header Section */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Build Your Grocery List</h1>
@@ -130,6 +141,7 @@ export default function GrocerySelection() {
           Generate Grocery List ({selectedRecipeIds.length})
         </Button>
       </div>
+      </main>
     </div>
   );
 }

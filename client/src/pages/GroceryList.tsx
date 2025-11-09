@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent } from "lucide-react";
+import Header from "@/components/Header";
 import { apiRequest } from "@/lib/queryClient";
 import type { GroceryItem, GroceryCategory } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
@@ -88,24 +89,32 @@ export default function GroceryList() {
 
   if (recipeIds.length === 0) {
     return (
-      <div className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">No Recipes Selected</h2>
-          <p className="text-muted-foreground mb-6">
-            Please select some recipes first to generate a grocery list.
-          </p>
-          <Button onClick={() => setLocation("/grocery")} data-testid="button-select-recipes">
-            Select Recipes
-          </Button>
-        </div>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">No Recipes Selected</h2>
+            <p className="text-muted-foreground mb-6">
+              Please select some recipes first to generate a grocery list.
+            </p>
+            <Button onClick={() => setLocation("/grocery")} data-testid="button-select-recipes">
+              Select Recipes
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }
 
   if (generateListMutation.isPending) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 md:px-10 py-12">
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
       </div>
     );
   }
@@ -113,7 +122,9 @@ export default function GroceryList() {
   const neededCount = groceryItems.filter(item => !item.checked).length;
 
   return (
-    <div className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
       {/* Header Section */}
       <div className="mb-8">
         <Button
@@ -235,6 +246,7 @@ export default function GroceryList() {
           Share List ({neededCount} items)
         </Button>
       </div>
+      </main>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Copy, Check, Tent } from "lucide-react";
+import Header from "@/components/Header";
 import { useToast } from "@/hooks/use-toast";
 import type { GroceryItem, GroceryCategory } from "@shared/schema";
 
@@ -78,22 +79,27 @@ export default function GroceryShare() {
 
   if (groceryItems.length === 0) {
     return (
-      <div className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">No Items to Share</h2>
-          <p className="text-muted-foreground mb-6">
-            All items are checked off, or you haven't created a grocery list yet.
-          </p>
-          <Button onClick={() => setLocation("/grocery")} data-testid="button-create-list">
-            Create Grocery List
-          </Button>
-        </div>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">No Items to Share</h2>
+            <p className="text-muted-foreground mb-6">
+              All items are checked off, or you haven't created a grocery list yet.
+            </p>
+            <Button onClick={() => setLocation("/grocery")} data-testid="button-create-list">
+              Create Grocery List
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
       {/* Header Section */}
       <div className="mb-8">
         <Button
@@ -186,6 +192,7 @@ export default function GroceryShare() {
           Back to Grocery List
         </Button>
       </div>
+      </main>
     </div>
   );
 }
