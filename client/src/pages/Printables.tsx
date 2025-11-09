@@ -10,19 +10,19 @@ export default function Printables() {
       title: "The Camping Planner",
       description: "Plan your perfect camping trip with our comprehensive planner. Includes meal planning, packing lists, itinerary templates, and more to help you stay organized on your outdoor adventures.",
       icon: FileTextIcon,
-      url: "https://thecampingplanner.com/",
+      url: "https://thecampingplanner.com/shop/",
     },
     {
       title: "Camping Activity Book",
       description: "Keep the kids entertained with fun camping-themed activities! Features coloring pages, puzzles, nature scavenger hunts, and interactive games perfect for young campers.",
       icon: BookOpenIcon,
-      url: "https://thecampingplanner.com/",
+      url: "https://thecampingplanner.com/shop/",
     },
     {
       title: "Camping Games Bundle",
       description: "Make your camping trip unforgettable with our complete games bundle! Includes camping charades, nature scavenger hunts, campfire bingo, and other fun activities for the whole family.",
       icon: GamepadIcon,
-      url: "https://thecampingplanner.com/",
+      url: "https://thecampingplanner.com/shop/",
     },
   ];
 
