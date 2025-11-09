@@ -2,15 +2,7 @@
 
 ## Overview
 
-The Camping Planner is a full-stack web application designed to help camping families organize their outdoor adventures. The application features a clean, modern outdoor aesthetic matching The Camping Planner brand identity with teal accents and bold typography.
-
-**Current Features:**
-- **Recipes Module**: Create, browse, and search for camping recipes with ingredients and preparation steps optimized for outdoor cooking
-- **Grocery List Builder**: Generate combined shopping lists from selected recipes with automatic categorization, deduplication, and sharing capabilities
-- **Trips Module**: Full trip management with UI for creating trips, viewing trip lists, dates, locations, collaborators, and cost tracking
-- **Meal Planning**: Add recipes to trips to plan meals, remove meals from trips, and generate trip-specific grocery lists from all planned meals
-
-The application is built as a modern single-page application (SPA) with a REST API backend, featuring full CRUD capabilities, intelligent data processing, and persistent PostgreSQL storage.
+The Camping Planner is a full-stack web application designed to help camping families organize their outdoor adventures. It features a modern, outdoor aesthetic with teal accents and bold typography. The application offers secure user authentication, user-owned data, and robust modules for managing recipes, grocery lists, and camping trips. Key capabilities include creating and searching recipes, generating categorized shopping lists from selected recipes or entire trip meal plans, and comprehensive trip management with collaboration and cost tracking. The project aims to provide a seamless planning experience for outdoor enthusiasts, with ambitions to integrate subscription-based printable resources. It is built as a single-page application with a REST API, PostgreSQL storage, and session-based authentication.
 
 ## User Preferences
 
@@ -18,259 +10,23 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 
-**Framework & Build System**
-- React 18 with TypeScript for type-safe component development
-- Vite as the build tool and development server, providing fast hot module replacement (HMR)
-- Wouter for lightweight client-side routing instead of React Router
-- Path aliases configured for clean imports (`@/` for client code, `@shared/` for shared types)
+The frontend is a React 18 application with TypeScript, utilizing Vite for fast development and Wouter for lightweight routing. State management and data fetching are handled by TanStack Query, incorporating optimistic updates for a responsive UI. The UI is built with Shadcn/ui (New York style) on Radix UI primitives, styled with Tailwind CSS, and features a custom teal-centric color palette and modern typography. The design emphasizes a clean, outdoor aesthetic, responsiveness, and user-friendly interaction patterns. Authentication leverages Replit Auth for seamless OIDC login and protects routes, redirecting unauthenticated users to a landing page.
 
-**State Management & Data Fetching**
-- TanStack Query (React Query) for server state management and caching
-- Custom query client with 5-minute stale time to balance performance and freshness
-- Optimistic updates via mutation callbacks to keep UI responsive
+### Backend
 
-**UI Component System**
-- Shadcn/ui component library (New York style) with Radix UI primitives
-- Tailwind CSS for utility-first styling with custom design tokens
-- Custom color palette implementing teal primary color (#4DB4AC) with clean grays and black/white
-- Typography system using modern sans-serif fonts with bold headings
-- Responsive design with mobile-first approach
-- Actual logo image displayed in header
+The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. All API routes are protected by `isAuthenticated` middleware, and user ownership is strictly verified for all data access and mutations. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation, and comprehensive trip management including creation, collaborator management, cost tracking, meal planning, and trip-specific grocery list generation. Zod is used for schema validation on all request and response payloads, ensuring type safety across the application.
 
-**Design Philosophy**
-- Clean, modern outdoor aesthetic matching The Camping Planner brand
-- Teal accent color throughout for badges, buttons, and interactive elements
-- Custom elevation system with hover and active states for interactive elements
-- Card-based layout for recipe display with visual hierarchy
-- Focus on readability and family-friendly interaction patterns
+### Data Layer
 
-### Backend Architecture
+Data persistence is managed using PostgreSQL with the Neon serverless driver, accessed via Drizzle ORM. A robust database schema defines tables for users, sessions, recipes, and trips, with `userId` foreign keys enforcing user ownership. Drizzle-Zod integration ensures schema validation, and `drizzle-kit` manages database migrations.
 
-**Server Framework**
-- Express.js with TypeScript for REST API endpoints
-- Custom middleware for request logging and JSON body parsing
-- Error handling with appropriate HTTP status codes
+## External Dependencies
 
-**API Design**
-- RESTful endpoints under `/api` prefix
-
-*Recipe Endpoints:*
-- GET `/api/recipes` - Fetch all recipes (sorted by newest first)
-- GET `/api/recipes/:id` - Fetch single recipe by ID
-- POST `/api/recipes` - Create new recipe
-- GET `/api/search?q=query` - Search recipes by title (case-insensitive)
-
-*Grocery List Endpoints:*
-- POST `/api/grocery/generate` - Generate grocery list from selected recipe IDs
-  - Accepts: `{ recipeIds: number[] }`
-  - Returns: Categorized and deduplicated ingredient list
-  - Categories: Produce, Dairy, Meat, Pantry, Camping Gear
-  - Uses keyword-based categorization with intelligent pattern matching
-
-*Trip Endpoints:*
-- GET `/api/trips` - Fetch all trips (sorted by start date, newest first)
-- GET `/api/trips/:id` - Fetch single trip by ID with all details
-- POST `/api/trips` - Create new trip
-  - Accepts: `{ name: string, location: string, startDate: ISO string, endDate: ISO string }`
-  - Dates are coerced from ISO strings to Date objects
-- POST `/api/trips/:id/collaborators` - Add collaborator to trip
-  - Accepts: `{ collaborator: string }`
-  - Collaborators are normalized (trimmed, lowercased) for case-insensitive matching
-  - Deduplicates automatically
-- POST `/api/trips/:id/cost` - Update trip cost information
-  - Accepts: `{ total: number, paidBy?: string }`
-  - Cost stored with 2 decimal places for accurate calculations
-- POST `/api/trips/:id/meals` - Add a meal (recipe) to trip
-  - Accepts: `{ recipeId: number }`
-  - Validates with `addMealSchema` from Zod
-  - Prevents duplicate additions
-- DELETE `/api/trips/:id/meals/:recipeId` - Remove a meal from trip
-  - Returns updated trip
-- GET `/api/trips/:id/grocery` - Generate grocery list from all trip meals
-  - Combines ingredients from all recipes in trip.meals
-  - Returns same format as `/api/grocery/generate`
-
-- JSON request/response format with Zod schema validation
-
-**Data Layer**
-- Abstract storage interface (`IStorage`) for flexibility in data persistence
-- PostgreSQL database using Neon serverless driver (migrated from in-memory storage)
-- Database implementation (`DatabaseStorage`) for persistent data storage
-- In-memory implementation (`MemStorage`) still available as fallback
-- Auto-incrementing IDs and timestamp tracking for all entities
-- Database schema synced via `npm run db:push` command
-
-**Type Safety**
-- Shared schema definitions between frontend and backend using Zod
-- Drizzle-Zod integration for database schema validation
-- TypeScript strict mode enabled across the entire codebase
-
-### External Dependencies
-
-**Database & ORM**
-- Drizzle ORM configured for PostgreSQL with Neon serverless driver
-- Migration system set up via `drizzle-kit` (schema push command: `npm run db:push`)
-- Schema defined in `shared/schema.ts` with recipes, trips, and users tables
-- **Active**: Using PostgreSQL database for persistent storage (recipes and trips)
-- Database connection managed via environment variable `DATABASE_URL`
-
-**Third-Party Services**
-- Google Fonts: Architects Daughter, DM Sans, Fira Code, Geist Mono for typography
-- No external APIs or authentication services currently integrated
-- User authentication schema prepared but not yet implemented
-
-**Development Tools**
-- Replit-specific plugins for development (cartographer, dev-banner, runtime error overlay)
-- ESBuild for production server bundling
-- PostCSS with Autoprefixer for CSS processing
-
-**Key npm Packages**
-- `@tanstack/react-query` - Server state management
-- `wouter` - Lightweight routing
-- `date-fns` - Date formatting and manipulation
-- `zod` - Runtime type validation
-- `class-variance-authority` & `clsx` - Conditional styling utilities
-- `lucide-react` - Icon system
-- Multiple Radix UI packages for accessible component primitives
-
-## Feature Details
-
-### Recipes Module
-Users can create camping recipes with titles, ingredient lists, and preparation steps. The recipe system includes:
-- Full CRUD operations (Create, Read, Update would require additional implementation, Delete would require additional implementation)
-- Search functionality by recipe title
-- Recipe detail pages with complete ingredient and step information
-- Responsive card-based layout for browsing
-
-### Grocery List Builder (NEW)
-The grocery list feature helps families prepare for camping trips by combining ingredients from multiple recipes:
-
-**Workflow:**
-1. **Selection** (`/grocery`) - Users select one or more recipes from their collection
-2. **List View** (`/grocery/list`) - System generates a categorized, deduplicated shopping list
-   - Ingredients automatically grouped by category (Produce, Dairy, Meat, Pantry, Camping Gear)
-   - Checkboxes allow marking items already owned
-   - "Show Only Needed" toggle filters to unchecked items
-   - Real-time count of needed items
-3. **Share** (`/grocery/share`) - Clean, copyable format for texting/emailing
-   - One-click clipboard copy
-   - Plain text format optimized for mobile messaging
-   - Categorized display with visual icons
-
-**Technical Implementation:**
-- Grocery lists are generated dynamically (not persisted to database)
-- Case-insensitive deduplication ensures "Milk" and "milk" are treated as one item
-- Keyword-based categorization uses regex patterns for intelligent grouping
-- Session storage temporarily holds list data for sharing workflow
-- Category icons use Lucide React components (no emojis per design guidelines)
-
-### Trips Module (Complete)
-The trips module provides full functionality for managing camping trips with collaborative planning and cost-splitting:
-
-**Backend Features:**
-- Create trips with name, location, start date, and end date
-- Store trips persistently in PostgreSQL database
-- Add collaborators to trips (emails or names)
-- Collaborator normalization: all stored in lowercase for case-insensitive matching
-- Automatic deduplication prevents adding the same collaborator twice
-- Track total grocery cost for the trip
-- Record who paid for groceries (for cost-splitting calculations)
-- Cost stored as numeric with 2 decimal places for accuracy
-
-**Frontend Features:**
-- Trips page (`/trips`) accessible via header navigation
-- Create trip form with React Hook Form and Zod validation
-- Trip list view displaying all trips as interactive cards
-- Trip detail page (`/trips/:id`) for viewing and editing individual trips
-  - View trip name, location, and dates
-  - Add/view collaborators
-  - Update grocery costs with automatic cost-splitting calculation
-  - View meals (recipes) planned for the trip
-  - Forms use React Hook Form with Zod validation
-  - Custom queryFn to fetch individual trip data
-- Date formatting with date-fns (displays as "MMM d - MMM d, yyyy" on list, "MMMM d, yyyy" on detail)
-- Responsive card layout with hover effects
-- Shows collaborator count, cost information, and meal planning
-- TanStack Query for data fetching and cache management
-- Real-time updates after creating trips
-
-**Database Schema:**
-- `id`: Auto-incrementing primary key
-- `name`: Trip name (e.g., "Goldstream Weekend")
-- `location`: Trip location (e.g., "Goldstream Provincial Park")
-- `startDate`: Trip start timestamp
-- `endDate`: Trip end timestamp
-- `meals`: Array of recipe IDs attached to trip (defaults to empty)
-- `collaborators`: Array of collaborator emails/names (normalized to lowercase)
-- `costTotal`: Numeric(10,2) total grocery cost (nullable)
-- `costPaidBy`: Text field for who paid (nullable)
-- `createdAt`: Trip creation timestamp
-
-**Data Normalization:**
-- Collaborators: Trimmed and lowercased for consistent storage
-- Costs: Stored with exactly 2 decimal places (e.g., "245.50", "300.00")
-- Dates: Coerced from ISO strings to Date objects via Zod schema
-
-**Implementation Status:**
-- Backend API fully implemented and tested ✓
-- Frontend Trips list page fully implemented and tested ✓
-- Frontend Trip detail page fully implemented and tested ✓
-- All endpoints validated via comprehensive E2E testing ✓
-- Cost splitting calculation working correctly (total / people count)
-- Collaborator normalization and deduplication working correctly
-
-### Meal Planning (NEW)
-The meal planning feature allows families to organize which recipes they'll cook on each camping trip:
-
-**Workflow:**
-1. **Add Meals** - From trip detail page, users click "Add Meal" to open a searchable dialog
-   - Command component provides instant recipe search
-   - Only shows recipes not already added to trip
-   - Button disabled when all recipes are already added
-   - One-click selection adds recipe to trip
-
-2. **Manage Meals** - View and remove planned meals
-   - Each meal displays recipe title with remove button (X icon)
-   - Instant removal with confirmation toast
-   - Meal count updates in real-time
-
-3. **Generate Grocery List** - Combine ingredients from all trip meals
-   - "Grocery List" button in meals section (disabled when no meals)
-   - Opens dialog with categorized ingredients from all recipes
-   - Copy to clipboard for easy sharing
-   - Same categorization as standalone grocery list feature
-
-**Backend Features:**
-- `addMealToTrip(tripId, recipeId)` storage method prevents duplicates
-- `removeMealFromTrip(tripId, recipeId)` storage method updates meals array
-- POST `/api/trips/:id/meals` endpoint with Zod validation
-- DELETE `/api/trips/:id/meals/:recipeId` endpoint
-- GET `/api/trips/:id/grocery` combines ingredients from all trip recipes
-- Persistent storage in PostgreSQL (meals array in trips table)
-
-**Frontend Features:**
-- Add Meal Dialog with Command component for searchable selection
-- Remove buttons with icon on each meal card
-- Grocery List Dialog shows categorized ingredients
-- Copy to clipboard functionality
-- TanStack Query mutations with cache invalidation
-- Toast notifications for user feedback
-- Filters available recipes to prevent duplicates
-
-**Technical Implementation:**
-- Meals stored as array of recipe IDs in trip.meals field
-- Frontend fetches full recipe objects to display titles
-- Grocery list generated on-demand (not cached)
-- Uses same categorization logic as standalone grocery feature
-- Command component provides instant search/filter
-- Button states managed with disabled prop based on data
-
-**Implementation Status:**
-- Backend storage methods implemented and tested ✓
-- API endpoints implemented with validation ✓
-- Frontend UI with dialogs and mutations ✓
-- E2E testing passed all scenarios ✓
-- Duplicate prevention working correctly ✓
-- Grocery list generation from trips working ✓
+*   **Authentication:** Replit Auth (OpenID Connect) for Google, GitHub, and email/password logins.
+*   **Database:** PostgreSQL (via Neon serverless driver) for persistent data storage.
+*   **ORM:** Drizzle ORM and Drizzle-Kit for database interaction and migrations.
+*   **Payment Processing (In Progress):** Stripe for subscription management.
+*   **Fonts:** Google Fonts (Architects Daughter, DM Sans, Fira Code, Geist Mono).
+*   **Icons:** Lucide React.
