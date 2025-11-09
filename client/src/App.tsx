@@ -12,6 +12,7 @@ import GroceryList from "@/pages/GroceryList";
 import GroceryShare from "@/pages/GroceryShare";
 import Trips from "@/pages/Trips";
 import TripDetail from "@/pages/TripDetail";
+import Printables from "@/pages/Printables";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/grocery/share" component={GroceryShare} />
       <Route path="/trips/:id" component={TripDetail} />
       <Route path="/trips" component={Trips} />
+      <Route path="/printables" component={Printables} />
       <Route component={NotFound} />
     </Switch>
   );

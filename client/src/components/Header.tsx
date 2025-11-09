@@ -52,9 +52,15 @@ export default function Header() {
                 Trips
               </Button>
             </Link>
-            <Button variant="ghost" size="default" disabled data-testid="button-nav-printables">
-              Printables
-            </Button>
+            <Link href="/printables" data-testid="link-printables">
+              <Button
+                variant={location.startsWith("/printables") ? "secondary" : "ghost"}
+                size="default"
+                data-testid="button-nav-printables"
+              >
+                Printables
+              </Button>
+            </Link>
           </nav>
 
           <form onSubmit={handleSearch} className="flex-1 max-w-md">
