@@ -4,6 +4,16 @@ import { storage } from "./storage";
 import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import Stripe from "stripe";
+
+// Initialize Stripe client
+// Reference: blueprint:javascript_stripe
+let stripe: Stripe | null = null;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: "2025-10-29.clover",
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication middleware (Replit Auth integration)
@@ -542,6 +552,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating trip grocery list:", error);
       res.status(500).json({ error: "Failed to generate grocery list" });
+    }
+  });
+
+  // Stripe Payment Routes
+  // Reference: blueprint:javascript_stripe
+
+  // POST /api/create-payment-intent
+  // Create a one-time payment for lifetime printable access
+  // SECURITY: Amount is hard-coded server-side to prevent client tampering
+  // Protected route - requires authentication
+  app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
+    }
+
+    try {
+      // SECURITY: Hard-code the price server-side - never trust client amount
+      const LIFETIME_ACCESS_PRICE = 2999; // $29.99 in cents
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: LIFETIME_ACCESS_PRICE,
+        currency: "usd",
+        metadata: {
+          userId: req.user.claims.sub,
+          purchaseType: "lifetime_printables",
+        },
+      });
+
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error: any) {
+      console.error("Error creating payment intent:", error);
+      res.status(500).json({ error: "Failed to create payment intent: " + error.message });
+    }
+  });
+
+  // POST /api/create-subscription
+  // Create or retrieve a subscription for monthly access
+  // Protected route - requires authentication
+  app.post("/api/create-subscription", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
+    }
+
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // If user already has a subscription, retrieve it
+      if (user.stripeSubscriptionId) {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
+          expand: ['latest_invoice.payment_intent'],
+        });
+        
+        // Check if subscription has a pending payment
+        if (subscription.latest_invoice && typeof subscription.latest_invoice === 'object') {
+          const invoice = subscription.latest_invoice as Stripe.Invoice;
+          // @ts-ignore - payment_intent exists when expanded
+          if (invoice.payment_intent && typeof invoice.payment_intent === 'object') {
+            // @ts-ignore - payment_intent exists when expanded
+            const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+            return res.json({
+              subscriptionId: subscription.id,
+              clientSecret: paymentIntent.client_secret,
+            });
+          }
+        }
+
+        return res.json({
+          subscriptionId: subscription.id,
+          clientSecret: null,
+        });
+      }
+
+      // Create or get Stripe customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          name: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : undefined,
+          metadata: {
+            userId: userId,
+          },
+        });
+        customerId = customer.id;
+        await storage.updateStripeCustomerId(userId, customerId);
+      }
+
+      // Create subscription
+      // Note: STRIPE_PRICE_ID must be set in environment for monthly subscription
+      const priceId = process.env.STRIPE_PRICE_ID;
+      if (!priceId) {
+        return res.status(503).json({ 
+          error: "Subscription not configured. Please contact support." 
+        });
+      }
+
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{
+          price: priceId,
+        }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+        },
+        expand: ['latest_invoice.payment_intent'],
+      });
+
+      // Save subscription ID to user
+      await storage.updateStripeSubscriptionId(userId, subscription.id);
+
+      // Extract client secret
+      let clientSecret = null;
+      if (subscription.latest_invoice && typeof subscription.latest_invoice === 'object') {
+        const invoice = subscription.latest_invoice as Stripe.Invoice;
+        // @ts-ignore - payment_intent exists when expanded
+        if (invoice.payment_intent && typeof invoice.payment_intent === 'object') {
+          // @ts-ignore - payment_intent exists when expanded
+          const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+          clientSecret = paymentIntent.client_secret;
+        }
+      }
+
+      res.json({
+        subscriptionId: subscription.id,
+        clientSecret: clientSecret,
+      });
+    } catch (error: any) {
+      console.error("Error creating subscription:", error);
+      res.status(500).json({ error: "Failed to create subscription: " + error.message });
     }
   });
 

@@ -13,6 +13,8 @@ import GroceryShare from "@/pages/GroceryShare";
 import Trips from "@/pages/Trips";
 import TripDetail from "@/pages/TripDetail";
 import Printables from "@/pages/Printables";
+import Checkout from "@/pages/Checkout";
+import Subscribe from "@/pages/Subscribe";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,6 +106,8 @@ function Router() {
       <Route path="/trips/:id" component={TripDetail} />
       <Route path="/trips" component={Trips} />
       <Route path="/printables" component={Printables} />
+      <Route path="/checkout" component={Checkout} />
+      <Route path="/subscribe" component={Subscribe} />
       <Route component={NotFound} />
     </Switch>
   );

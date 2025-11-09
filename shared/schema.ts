@@ -73,6 +73,9 @@ export const users = pgTable("users", {
   // Stripe customer ID for managing payments and subscriptions
   stripeCustomerId: varchar("stripe_customer_id"),
   
+  // Stripe subscription ID for tracking active subscriptions
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

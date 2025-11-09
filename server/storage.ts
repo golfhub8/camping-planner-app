@@ -10,6 +10,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
+  // Stripe methods for payment integration
+  updateStripeCustomerId(userId: string, customerId: string): Promise<User>;
+  updateStripeSubscriptionId(userId: string, subscriptionId: string): Promise<User>;
+  
   // Recipe methods
   // Get all recipes for a user (returns newest first)
   getAllRecipes(userId: string): Promise<Recipe[]>;
@@ -81,10 +85,34 @@ export class MemStorage implements IStorage {
       isSubscriber: existingUser?.isSubscriber ?? false,
       subscriptionEndDate: existingUser?.subscriptionEndDate ?? null,
       stripeCustomerId: existingUser?.stripeCustomerId ?? null,
+      stripeSubscriptionId: existingUser?.stripeSubscriptionId ?? null,
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date(),
     };
     this.users.set(user.id, user);
+    return user;
+  }
+
+  // Stripe payment integration methods
+  async updateStripeCustomerId(userId: string, customerId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.stripeCustomerId = customerId;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async updateStripeSubscriptionId(userId: string, subscriptionId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.stripeSubscriptionId = subscriptionId;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
     return user;
   }
 
@@ -248,6 +276,39 @@ export class DatabaseStorage implements IStorage {
         },
       })
       .returning();
+    return user;
+  }
+
+  // Stripe payment integration methods
+  async updateStripeCustomerId(userId: string, customerId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        stripeCustomerId: customerId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async updateStripeSubscriptionId(userId: string, subscriptionId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        stripeSubscriptionId: subscriptionId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
     return user;
   }
 
