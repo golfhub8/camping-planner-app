@@ -8,6 +8,7 @@ The Camping Planner is a full-stack web application designed to help camping fam
 - **Recipes Module**: Create, browse, and search for camping recipes with ingredients and preparation steps optimized for outdoor cooking
 - **Grocery List Builder**: Generate combined shopping lists from selected recipes with automatic categorization, deduplication, and sharing capabilities
 - **Trips Module**: Full trip management with UI for creating trips, viewing trip lists, dates, locations, collaborators, and cost tracking
+- **Meal Planning**: Add recipes to trips to plan meals, remove meals from trips, and generate trip-specific grocery lists from all planned meals
 
 The application is built as a modern single-page application (SPA) with a REST API backend, featuring full CRUD capabilities, intelligent data processing, and persistent PostgreSQL storage.
 
@@ -81,6 +82,15 @@ Preferred communication style: Simple, everyday language.
 - POST `/api/trips/:id/cost` - Update trip cost information
   - Accepts: `{ total: number, paidBy?: string }`
   - Cost stored with 2 decimal places for accurate calculations
+- POST `/api/trips/:id/meals` - Add a meal (recipe) to trip
+  - Accepts: `{ recipeId: number }`
+  - Validates with `addMealSchema` from Zod
+  - Prevents duplicate additions
+- DELETE `/api/trips/:id/meals/:recipeId` - Remove a meal from trip
+  - Returns updated trip
+- GET `/api/trips/:id/grocery` - Generate grocery list from all trip meals
+  - Combines ingredients from all recipes in trip.meals
+  - Returns same format as `/api/grocery/generate`
 
 - JSON request/response format with Zod schema validation
 
@@ -210,3 +220,57 @@ The trips module provides full functionality for managing camping trips with col
 - All endpoints validated via comprehensive E2E testing ✓
 - Cost splitting calculation working correctly (total / people count)
 - Collaborator normalization and deduplication working correctly
+
+### Meal Planning (NEW)
+The meal planning feature allows families to organize which recipes they'll cook on each camping trip:
+
+**Workflow:**
+1. **Add Meals** - From trip detail page, users click "Add Meal" to open a searchable dialog
+   - Command component provides instant recipe search
+   - Only shows recipes not already added to trip
+   - Button disabled when all recipes are already added
+   - One-click selection adds recipe to trip
+
+2. **Manage Meals** - View and remove planned meals
+   - Each meal displays recipe title with remove button (X icon)
+   - Instant removal with confirmation toast
+   - Meal count updates in real-time
+
+3. **Generate Grocery List** - Combine ingredients from all trip meals
+   - "Grocery List" button in meals section (disabled when no meals)
+   - Opens dialog with categorized ingredients from all recipes
+   - Copy to clipboard for easy sharing
+   - Same categorization as standalone grocery list feature
+
+**Backend Features:**
+- `addMealToTrip(tripId, recipeId)` storage method prevents duplicates
+- `removeMealFromTrip(tripId, recipeId)` storage method updates meals array
+- POST `/api/trips/:id/meals` endpoint with Zod validation
+- DELETE `/api/trips/:id/meals/:recipeId` endpoint
+- GET `/api/trips/:id/grocery` combines ingredients from all trip recipes
+- Persistent storage in PostgreSQL (meals array in trips table)
+
+**Frontend Features:**
+- Add Meal Dialog with Command component for searchable selection
+- Remove buttons with icon on each meal card
+- Grocery List Dialog shows categorized ingredients
+- Copy to clipboard functionality
+- TanStack Query mutations with cache invalidation
+- Toast notifications for user feedback
+- Filters available recipes to prevent duplicates
+
+**Technical Implementation:**
+- Meals stored as array of recipe IDs in trip.meals field
+- Frontend fetches full recipe objects to display titles
+- Grocery list generated on-demand (not cached)
+- Uses same categorization logic as standalone grocery feature
+- Command component provides instant search/filter
+- Button states managed with disabled prop based on data
+
+**Implementation Status:**
+- Backend storage methods implemented and tested ✓
+- API endpoints implemented with validation ✓
+- Frontend UI with dialogs and mutations ✓
+- E2E testing passed all scenarios ✓
+- Duplicate prevention working correctly ✓
+- Grocery list generation from trips working ✓
