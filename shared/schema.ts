@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, numeric, boolean, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -18,6 +18,9 @@ export const recipes = pgTable("recipes", {
   // Preparation steps as a single text block
   steps: text("steps").notNull(),
   
+  // User who created this recipe (foreign key to users table)
+  userId: varchar("user_id").notNull().references(() => users.id),
+  
   // When the recipe was created
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -33,19 +36,49 @@ export const insertRecipeSchema = createInsertSchema(recipes).pick({
 export type InsertRecipe = z.infer<typeof insertRecipeSchema>;
 export type Recipe = typeof recipes.$inferSelect;
 
-// Keep existing user schema for future use
+// Session storage table for Replit Auth
+// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
+// User storage table for Replit Auth with subscription fields
+// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const users = pgTable("users", {
+  // Keep default config for id column per Replit Auth requirements
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  
+  // Replit Auth fields
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  
+  // Subscription fields for printables download access
+  // True if user purchased lifetime access to printables
+  hasPrintableLifetime: boolean("has_printable_lifetime").notNull().default(false),
+  
+  // True if user has an active subscription
+  isSubscriber: boolean("is_subscriber").notNull().default(false),
+  
+  // When the subscription ends (nullable - only set if isSubscriber is true)
+  subscriptionEndDate: timestamp("subscription_end_date"),
+  
+  // Stripe customer ID for managing payments and subscriptions
+  stripeCustomerId: varchar("stripe_customer_id"),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
+// Schema for upserting a user (used by Replit Auth)
+export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
 // Grocery List schemas
@@ -100,6 +133,9 @@ export const trips = pgTable("trips", {
   
   // Who paid for the groceries (nullable - optional field)
   costPaidBy: text("cost_paid_by"),
+  
+  // User who created this trip (foreign key to users table)
+  userId: varchar("user_id").notNull().references(() => users.id),
   
   // When the trip was created
   createdAt: timestamp("created_at").notNull().defaultNow(),

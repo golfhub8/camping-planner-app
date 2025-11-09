@@ -3,16 +3,39 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication middleware (Replit Auth integration)
+  await setupAuth(app);
+
+  // Authentication Routes
+  
+  // GET /api/auth/user
+  // Returns the currently logged in user
+  // Protected route - requires authentication
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
   // Recipe Routes
   // All routes are prefixed with /api
+  // All recipe routes require authentication
   
   // GET /api/recipes
-  // Returns all recipes, sorted by newest first
-  app.get("/api/recipes", async (req, res) => {
+  // Returns all recipes for the logged in user, sorted by newest first
+  // Protected route - requires authentication
+  app.get("/api/recipes", isAuthenticated, async (req: any, res) => {
     try {
-      const recipes = await storage.getAllRecipes();
+      const userId = req.user.claims.sub;
+      const recipes = await storage.getAllRecipes(userId);
       res.json(recipes);
     } catch (error) {
       console.error("Error fetching recipes:", error);
@@ -21,17 +44,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/recipes/:id
-  // Returns a single recipe by ID
-  app.get("/api/recipes/:id", async (req, res) => {
+  // Returns a single recipe by ID (only if user owns it)
+  // Protected route - requires authentication
+  app.get("/api/recipes/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
       
       // Validate that ID is a valid number
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      const recipe = await storage.getRecipeById(id);
+      const recipe = await storage.getRecipeById(id, userId);
       
       if (!recipe) {
         return res.status(404).json({ error: "Recipe not found" });
@@ -45,15 +70,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/recipes
-  // Creates a new recipe
+  // Creates a new recipe for the logged in user
   // Body: { title: string, ingredients: string[], steps: string }
-  app.post("/api/recipes", async (req, res) => {
+  // Protected route - requires authentication
+  app.post("/api/recipes", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      
       // Validate the request body against our schema
       const validatedData = insertRecipeSchema.parse(req.body);
       
-      // Create the recipe in storage
-      const recipe = await storage.createRecipe(validatedData);
+      // Create the recipe in storage (with userId)
+      const recipe = await storage.createRecipe(validatedData, userId);
       
       // Return the created recipe with 201 status
       res.status(201).json(recipe);
@@ -72,19 +100,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/search
-  // Searches recipes by title
+  // Searches recipes by title for the logged in user
   // Query parameter: q (the search query)
   // Example: /api/search?q=chili
-  app.get("/api/search", async (req, res) => {
+  // Protected route - requires authentication
+  app.get("/api/search", isAuthenticated, async (req: any, res) => {
     try {
       const query = req.query.q as string;
+      const userId = req.user.claims.sub;
       
       // Validate that query exists
       if (!query || query.trim() === "") {
         return res.status(400).json({ error: "Search query is required" });
       }
 
-      const recipes = await storage.searchRecipes(query);
+      const recipes = await storage.searchRecipes(query, userId);
       res.json(recipes);
     } catch (error) {
       console.error("Error searching recipes:", error);
@@ -127,14 +157,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generates a grocery list from selected recipes
   // Body: { recipeIds: number[] }
   // Returns: { items: GroceryItem[] } grouped by category
-  app.post("/api/grocery/generate", async (req, res) => {
+  // Protected route - requires authentication
+  app.post("/api/grocery/generate", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      
       // Validate the request body
       const { recipeIds } = generateGroceryListSchema.parse(req.body);
       
-      // Fetch all selected recipes
+      // Fetch all selected recipes (user can only access their own recipes)
       const recipes = await Promise.all(
-        recipeIds.map(id => storage.getRecipeById(id))
+        recipeIds.map(id => storage.getRecipeById(id, userId))
       );
       
       // Filter out any null recipes (in case some IDs don't exist)
@@ -195,10 +228,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trip Routes
   
   // GET /api/trips
-  // Returns all trips, sorted by start date (newest first)
-  app.get("/api/trips", async (req, res) => {
+  // Returns all trips for the logged in user, sorted by start date (newest first)
+  // Protected route - requires authentication
+  app.get("/api/trips", isAuthenticated, async (req: any, res) => {
     try {
-      const trips = await storage.getAllTrips();
+      const userId = req.user.claims.sub;
+      const trips = await storage.getAllTrips(userId);
       res.json(trips);
     } catch (error) {
       console.error("Error fetching trips:", error);
@@ -207,17 +242,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/trips/:id
-  // Returns a single trip by ID with all details (meals, collaborators, cost info)
-  app.get("/api/trips/:id", async (req, res) => {
+  // Returns a single trip by ID with all details (only if user owns it)
+  // Protected route - requires authentication
+  app.get("/api/trips/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
       
       // Validate that ID is a valid number
       if (isNaN(id)) {
         return res.status(400).json({ error: "Invalid trip ID" });
       }
 
-      const trip = await storage.getTripById(id);
+      const trip = await storage.getTripById(id, userId);
       
       if (!trip) {
         return res.status(404).json({ error: "Trip not found" });
@@ -231,15 +268,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/trips
-  // Creates a new trip
+  // Creates a new trip for the logged in user
   // Body: { name: string, location: string, startDate: Date, endDate: Date }
-  app.post("/api/trips", async (req, res) => {
+  // Protected route - requires authentication
+  app.post("/api/trips", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
+      
       // Validate the request body against our schema
       const validatedData = insertTripSchema.parse(req.body);
       
-      // Create the trip in storage
-      const trip = await storage.createTrip(validatedData);
+      // Create the trip in storage (with userId)
+      const trip = await storage.createTrip(validatedData, userId);
       
       // Return the created trip with 201 status
       res.status(201).json(trip);
@@ -261,9 +301,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add a collaborator to a trip
   // Body: { collaborator: string }
   // The collaborator string will be normalized (trimmed, lowercased) before storing
-  app.post("/api/trips/:id/collaborators", async (req, res) => {
+  // Protected route - requires authentication
+  app.post("/api/trips/:id/collaborators", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
       
       // Validate trip ID
       if (isNaN(id)) {
@@ -273,8 +315,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate the request body
       const { collaborator } = addCollaboratorSchema.parse(req.body);
       
-      // Add the collaborator to the trip
-      const updatedTrip = await storage.addCollaborator(id, collaborator);
+      // Add the collaborator to the trip (with ownership check)
+      const updatedTrip = await storage.addCollaborator(id, collaborator, userId);
       
       if (!updatedTrip) {
         return res.status(404).json({ error: "Trip not found" });
@@ -298,9 +340,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update cost information for a trip
   // Body: { total: number, paidBy?: string }
   // The total will be stored with 2 decimal places
-  app.post("/api/trips/:id/cost", async (req, res) => {
+  // Protected route - requires authentication
+  app.post("/api/trips/:id/cost", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
       
       // Validate trip ID
       if (isNaN(id)) {
@@ -315,8 +359,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? parseFloat(validatedData.total) 
         : validatedData.total;
       
-      // Update the trip cost
-      const updatedTrip = await storage.updateTripCost(id, total, validatedData.paidBy);
+      // Update the trip cost (with ownership check)
+      const updatedTrip = await storage.updateTripCost(id, total, userId, validatedData.paidBy);
       
       if (!updatedTrip) {
         return res.status(404).json({ error: "Trip not found" });
@@ -339,9 +383,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/trips/:id/meals
   // Add a recipe (meal) to a trip
   // Body: { recipeId: number }
-  app.post("/api/trips/:id/meals", async (req, res) => {
+  // Protected route - requires authentication
+  app.post("/api/trips/:id/meals", isAuthenticated, async (req: any, res) => {
     try {
       const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
       
       // Validate trip ID
       if (isNaN(tripId)) {
@@ -351,14 +397,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate the request body
       const { recipeId } = addMealSchema.parse(req.body);
 
-      // Check if recipe exists
-      const recipe = await storage.getRecipeById(recipeId);
+      // Check if recipe exists and user owns it
+      const recipe = await storage.getRecipeById(recipeId, userId);
       if (!recipe) {
         return res.status(404).json({ error: "Recipe not found" });
       }
 
-      // Add the meal to the trip
-      const updatedTrip = await storage.addMealToTrip(tripId, recipeId);
+      // Add the meal to the trip (with ownership check)
+      const updatedTrip = await storage.addMealToTrip(tripId, recipeId, userId);
       
       if (!updatedTrip) {
         return res.status(404).json({ error: "Trip not found" });
@@ -380,10 +426,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // DELETE /api/trips/:id/meals/:recipeId
   // Remove a recipe (meal) from a trip
-  app.delete("/api/trips/:id/meals/:recipeId", async (req, res) => {
+  // Protected route - requires authentication
+  app.delete("/api/trips/:id/meals/:recipeId", isAuthenticated, async (req: any, res) => {
     try {
       const tripId = parseInt(req.params.id);
       const recipeId = parseInt(req.params.recipeId);
+      const userId = req.user.claims.sub;
       
       // Validate IDs
       if (isNaN(tripId)) {
@@ -393,8 +441,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid recipe ID" });
       }
 
-      // Remove the meal from the trip
-      const updatedTrip = await storage.removeMealFromTrip(tripId, recipeId);
+      // Remove the meal from the trip (with ownership check)
+      const updatedTrip = await storage.removeMealFromTrip(tripId, recipeId, userId);
       
       if (!updatedTrip) {
         return res.status(404).json({ error: "Trip not found" });
@@ -410,17 +458,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/trips/:id/grocery
   // Generate a grocery list from all recipes in a trip
   // Returns the same format as /api/grocery/generate
-  app.get("/api/trips/:id/grocery", async (req, res) => {
+  // Protected route - requires authentication
+  app.get("/api/trips/:id/grocery", isAuthenticated, async (req: any, res) => {
     try {
       const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
       
       // Validate trip ID
       if (isNaN(tripId)) {
         return res.status(400).json({ error: "Invalid trip ID" });
       }
 
-      // Get the trip
-      const trip = await storage.getTripById(tripId);
+      // Get the trip (user can only access their own trips)
+      const trip = await storage.getTripById(tripId, userId);
       if (!trip) {
         return res.status(404).json({ error: "Trip not found" });
       }
@@ -436,9 +486,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }});
       }
 
-      // Fetch all recipes for the trip's meals
+      // Fetch all recipes for the trip's meals (user can only access their own recipes)
       const recipes = await Promise.all(
-        trip.meals.map(id => storage.getRecipeById(id))
+        trip.meals.map(id => storage.getRecipeById(id, userId))
       );
       
       // Filter out any null recipes (in case some IDs don't exist)

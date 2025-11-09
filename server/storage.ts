@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, users, recipes, trips } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, users, recipes, trips } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -6,45 +6,44 @@ import { eq, desc, sql } from "drizzle-orm";
 // Storage interface definition
 // This defines all the methods we need to store and retrieve data
 export interface IStorage {
-  // User methods (for future authentication features)
+  // User methods (IMPORTANT: required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  upsertUser(user: UpsertUser): Promise<User>;
   
   // Recipe methods
-  // Get all recipes (returns newest first)
-  getAllRecipes(): Promise<Recipe[]>;
+  // Get all recipes for a user (returns newest first)
+  getAllRecipes(userId: string): Promise<Recipe[]>;
   
-  // Get a single recipe by its ID
-  getRecipeById(id: number): Promise<Recipe | undefined>;
+  // Get a single recipe by its ID (with ownership check)
+  getRecipeById(id: number, userId: string): Promise<Recipe | undefined>;
   
-  // Create a new recipe
-  createRecipe(recipe: InsertRecipe): Promise<Recipe>;
+  // Create a new recipe for a user
+  createRecipe(recipe: InsertRecipe, userId: string): Promise<Recipe>;
   
-  // Search recipes by title (case-insensitive)
-  searchRecipes(query: string): Promise<Recipe[]>;
+  // Search recipes by title (case-insensitive) for a user
+  searchRecipes(query: string, userId: string): Promise<Recipe[]>;
   
   // Trip methods
-  // Get all trips (returns newest first)
-  getAllTrips(): Promise<Trip[]>;
+  // Get all trips for a user (returns newest first)
+  getAllTrips(userId: string): Promise<Trip[]>;
   
-  // Get a single trip by its ID
-  getTripById(id: number): Promise<Trip | undefined>;
+  // Get a single trip by its ID (with ownership check)
+  getTripById(id: number, userId: string): Promise<Trip | undefined>;
   
-  // Create a new trip
-  createTrip(trip: InsertTrip): Promise<Trip>;
+  // Create a new trip for a user
+  createTrip(trip: InsertTrip, userId: string): Promise<Trip>;
   
-  // Add a collaborator to a trip
-  addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined>;
+  // Add a collaborator to a trip (with ownership check)
+  addCollaborator(tripId: number, collaborator: string, userId: string): Promise<Trip | undefined>;
   
-  // Update cost information for a trip
-  updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined>;
+  // Update cost information for a trip (with ownership check)
+  updateTripCost(tripId: number, total: number, userId: string, paidBy?: string): Promise<Trip | undefined>;
   
-  // Add a recipe (meal) to a trip
-  addMealToTrip(tripId: number, recipeId: number): Promise<Trip | undefined>;
+  // Add a recipe (meal) to a trip (with ownership check)
+  addMealToTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined>;
   
-  // Remove a recipe (meal) from a trip
-  removeMealFromTrip(tripId: number, recipeId: number): Promise<Trip | undefined>;
+  // Remove a recipe (meal) from a trip (with ownership check)
+  removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined>;
 }
 
 // In-memory storage implementation
@@ -65,72 +64,90 @@ export class MemStorage implements IStorage {
     this.nextTripId = 1;
   }
 
-  // User methods
+  // User methods (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const existingUser = this.users.get(userData.id!);
+    const user: User = {
+      id: userData.id || randomUUID(),
+      email: userData.email ?? null,
+      firstName: userData.firstName ?? null,
+      lastName: userData.lastName ?? null,
+      profileImageUrl: userData.profileImageUrl ?? null,
+      hasPrintableLifetime: existingUser?.hasPrintableLifetime ?? false,
+      isSubscriber: existingUser?.isSubscriber ?? false,
+      subscriptionEndDate: existingUser?.subscriptionEndDate ?? null,
+      stripeCustomerId: existingUser?.stripeCustomerId ?? null,
+      createdAt: existingUser?.createdAt || new Date(),
+      updatedAt: new Date(),
+    };
+    this.users.set(user.id, user);
     return user;
   }
 
   // Recipe methods
-  async getAllRecipes(): Promise<Recipe[]> {
-    // Return all recipes, sorted by creation date (newest first)
-    return Array.from(this.recipes.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-    );
+  async getAllRecipes(userId: string): Promise<Recipe[]> {
+    // Return all recipes for this user, sorted by creation date (newest first)
+    return Array.from(this.recipes.values())
+      .filter(recipe => recipe.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async getRecipeById(id: number): Promise<Recipe | undefined> {
-    return this.recipes.get(id);
+  async getRecipeById(id: number, userId: string): Promise<Recipe | undefined> {
+    const recipe = this.recipes.get(id);
+    // Only return if user owns this recipe
+    if (recipe && recipe.userId === userId) {
+      return recipe;
+    }
+    return undefined;
   }
 
-  async createRecipe(insertRecipe: InsertRecipe): Promise<Recipe> {
-    // Create a new recipe with auto-generated ID and timestamp
+  async createRecipe(insertRecipe: InsertRecipe, userId: string): Promise<Recipe> {
+    // Create a new recipe with auto-generated ID, timestamp, and userId
     const recipe: Recipe = {
       ...insertRecipe,
       id: this.nextRecipeId++,
+      userId,
       createdAt: new Date(),
     };
     this.recipes.set(recipe.id, recipe);
     return recipe;
   }
 
-  async searchRecipes(query: string): Promise<Recipe[]> {
-    // Search for recipes where title contains the query (case-insensitive)
+  async searchRecipes(query: string, userId: string): Promise<Recipe[]> {
+    // Search for recipes where title contains the query (case-insensitive) for this user
     const lowerQuery = query.toLowerCase();
     return Array.from(this.recipes.values())
-      .filter((recipe) => recipe.title.toLowerCase().includes(lowerQuery))
+      .filter((recipe) => recipe.userId === userId && recipe.title.toLowerCase().includes(lowerQuery))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   // Trip methods
-  async getAllTrips(): Promise<Trip[]> {
-    // Return all trips, sorted by start date (newest first)
-    return Array.from(this.trips.values()).sort(
-      (a, b) => b.startDate.getTime() - a.startDate.getTime()
-    );
+  async getAllTrips(userId: string): Promise<Trip[]> {
+    // Return all trips for this user, sorted by start date (newest first)
+    return Array.from(this.trips.values())
+      .filter(trip => trip.userId === userId)
+      .sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
   }
 
-  async getTripById(id: number): Promise<Trip | undefined> {
-    return this.trips.get(id);
+  async getTripById(id: number, userId: string): Promise<Trip | undefined> {
+    const trip = this.trips.get(id);
+    // Only return if user owns this trip
+    if (trip && trip.userId === userId) {
+      return trip;
+    }
+    return undefined;
   }
 
-  async createTrip(insertTrip: InsertTrip): Promise<Trip> {
-    // Create a new trip with auto-generated ID, timestamp, and empty arrays
+  async createTrip(insertTrip: InsertTrip, userId: string): Promise<Trip> {
+    // Create a new trip with auto-generated ID, timestamp, userId, and empty arrays
     const trip: Trip = {
       ...insertTrip,
       id: this.nextTripId++,
+      userId,
       meals: [],
       collaborators: [],
       costTotal: null,
@@ -141,10 +158,10 @@ export class MemStorage implements IStorage {
     return trip;
   }
 
-  async addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined> {
-    // Find the trip
+  async addCollaborator(tripId: number, collaborator: string, userId: string): Promise<Trip | undefined> {
+    // Find the trip and verify ownership
     const trip = this.trips.get(tripId);
-    if (!trip) {
+    if (!trip || trip.userId !== userId) {
       return undefined;
     }
 
@@ -162,10 +179,10 @@ export class MemStorage implements IStorage {
     return trip;
   }
 
-  async updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined> {
-    // Find the trip
+  async updateTripCost(tripId: number, total: number, userId: string, paidBy?: string): Promise<Trip | undefined> {
+    // Find the trip and verify ownership
     const trip = this.trips.get(tripId);
-    if (!trip) {
+    if (!trip || trip.userId !== userId) {
       return undefined;
     }
 
@@ -176,10 +193,10 @@ export class MemStorage implements IStorage {
     return trip;
   }
 
-  async addMealToTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
-    // Find the trip
+  async addMealToTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
+    // Find the trip and verify ownership
     const trip = this.trips.get(tripId);
-    if (!trip) {
+    if (!trip || trip.userId !== userId) {
       return undefined;
     }
 
@@ -194,10 +211,10 @@ export class MemStorage implements IStorage {
     return trip;
   }
 
-  async removeMealFromTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
-    // Find the trip
+  async removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
+    // Find the trip and verify ownership
     const trip = this.trips.get(tripId);
-    if (!trip) {
+    if (!trip || trip.userId !== userId) {
       return undefined;
     }
 
@@ -212,64 +229,100 @@ export class MemStorage implements IStorage {
 // Uses PostgreSQL database for persistent storage
 // Data survives server restarts
 export class DatabaseStorage implements IStorage {
-  // User methods
+  // User methods (IMPORTANT: required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    // Insert or update user on conflict (Replit Auth requirement)
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
     return user;
   }
 
   // Recipe methods
-  async getAllRecipes(): Promise<Recipe[]> {
-    return await db.select().from(recipes).orderBy(desc(recipes.createdAt));
-  }
-
-  async getRecipeById(id: number): Promise<Recipe | undefined> {
-    const [recipe] = await db.select().from(recipes).where(eq(recipes.id, id));
-    return recipe || undefined;
-  }
-
-  async createRecipe(insertRecipe: InsertRecipe): Promise<Recipe> {
-    const [recipe] = await db.insert(recipes).values(insertRecipe).returning();
-    return recipe;
-  }
-
-  async searchRecipes(query: string): Promise<Recipe[]> {
-    // Search for recipes where title contains the query (case-insensitive)
+  async getAllRecipes(userId: string): Promise<Recipe[]> {
+    // Get all recipes for this user only
     return await db
       .select()
       .from(recipes)
-      .where(sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + query + '%'})`)
+      .where(eq(recipes.userId, userId))
+      .orderBy(desc(recipes.createdAt));
+  }
+
+  async getRecipeById(id: number, userId: string): Promise<Recipe | undefined> {
+    // Get recipe only if user owns it
+    const [recipe] = await db
+      .select()
+      .from(recipes)
+      .where(sql`${recipes.id} = ${id} AND ${recipes.userId} = ${userId}`);
+    return recipe || undefined;
+  }
+
+  async createRecipe(insertRecipe: InsertRecipe, userId: string): Promise<Recipe> {
+    // Create recipe with userId
+    const [recipe] = await db
+      .insert(recipes)
+      .values({ ...insertRecipe, userId })
+      .returning();
+    return recipe;
+  }
+
+  async searchRecipes(query: string, userId: string): Promise<Recipe[]> {
+    // Search for recipes where title contains the query (case-insensitive) for this user
+    return await db
+      .select()
+      .from(recipes)
+      .where(sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + query + '%'}) AND ${recipes.userId} = ${userId}`)
       .orderBy(desc(recipes.createdAt));
   }
 
   // Trip methods
-  async getAllTrips(): Promise<Trip[]> {
-    return await db.select().from(trips).orderBy(desc(trips.startDate));
+  async getAllTrips(userId: string): Promise<Trip[]> {
+    // Get all trips for this user only
+    return await db
+      .select()
+      .from(trips)
+      .where(eq(trips.userId, userId))
+      .orderBy(desc(trips.startDate));
   }
 
-  async getTripById(id: number): Promise<Trip | undefined> {
-    const [trip] = await db.select().from(trips).where(eq(trips.id, id));
+  async getTripById(id: number, userId: string): Promise<Trip | undefined> {
+    // Get trip only if user owns it
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${id} AND ${trips.userId} = ${userId}`);
     return trip || undefined;
   }
 
-  async createTrip(insertTrip: InsertTrip): Promise<Trip> {
-    const [trip] = await db.insert(trips).values(insertTrip).returning();
+  async createTrip(insertTrip: InsertTrip, userId: string): Promise<Trip> {
+    // Create trip with userId
+    const [trip] = await db
+      .insert(trips)
+      .values({ ...insertTrip, userId })
+      .returning();
     return trip;
   }
 
-  async addCollaborator(tripId: number, collaborator: string): Promise<Trip | undefined> {
-    // Get the current trip
-    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId));
+  async addCollaborator(tripId: number, collaborator: string, userId: string): Promise<Trip | undefined> {
+    // Get the current trip and verify ownership
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
     if (!trip) {
       return undefined;
     }
@@ -299,23 +352,27 @@ export class DatabaseStorage implements IStorage {
     return trip;
   }
 
-  async updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined> {
-    // Convert number to string for numeric column (Drizzle handles the conversion)
+  async updateTripCost(tripId: number, total: number, userId: string, paidBy?: string): Promise<Trip | undefined> {
+    // Update trip cost only if user owns the trip
     const [trip] = await db
       .update(trips)
       .set({
         costTotal: total.toFixed(2), // Store as string with 2 decimal places
         costPaidBy: paidBy || null,
       })
-      .where(eq(trips.id, tripId))
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`)
       .returning();
     
     return trip || undefined;
   }
 
-  async addMealToTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
-    // Get the current trip
-    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId));
+  async addMealToTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
+    // Get the current trip and verify ownership
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
     if (!trip) {
       return undefined;
     }
@@ -328,7 +385,7 @@ export class DatabaseStorage implements IStorage {
     // Add the recipe to the meals array
     const updatedMeals = [...trip.meals, recipeId];
     
-    // Update the trip in the database
+    // Update the trip in the database (ownership already verified above)
     const [updatedTrip] = await db
       .update(trips)
       .set({ meals: updatedMeals })
@@ -338,9 +395,13 @@ export class DatabaseStorage implements IStorage {
     return updatedTrip;
   }
 
-  async removeMealFromTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
-    // Get the current trip
-    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId));
+  async removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
+    // Get the current trip and verify ownership
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
     if (!trip) {
       return undefined;
     }
@@ -348,7 +409,7 @@ export class DatabaseStorage implements IStorage {
     // Remove the recipe from meals array
     const updatedMeals = trip.meals.filter(id => id !== recipeId);
     
-    // Update the trip in the database
+    // Update the trip in the database (ownership already verified above)
     const [updatedTrip] = await db
       .update(trips)
       .set({ meals: updatedMeals })

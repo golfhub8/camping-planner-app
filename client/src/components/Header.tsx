@@ -1,19 +1,33 @@
 import { Link, useLocation } from "wouter";
-import { Search } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
 export default function Header() {
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       setLocation(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
     }
+  };
+
+  // Get user initials for avatar fallback
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase();
+    }
+    return "U";
   };
 
   return (
@@ -76,6 +90,25 @@ export default function Header() {
               />
             </div>
           </form>
+
+          {/* User profile and logout */}
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10" data-testid="avatar-user">
+              <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || "User"} />
+              <AvatarFallback>{getUserInitials()}</AvatarFallback>
+            </Avatar>
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              title="Log out"
+              data-testid="button-logout"
+            >
+              <a href="/api/logout">
+                <LogOut className="h-5 w-5" />
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
     </header>
