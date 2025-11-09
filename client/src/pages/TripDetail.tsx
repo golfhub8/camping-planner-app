@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useRoute, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { addCollaboratorSchema, addTripCostSchema, type Trip, type Recipe } from "@shared/schema";
+import { addCollaboratorSchema, addTripCostSchema, addMealSchema, type Trip, type Recipe, type GroceryItem, type GroceryCategory } from "@shared/schema";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,14 +12,23 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
 
 export default function TripDetail() {
+  const { toast } = useToast();
   const [, navigate] = useLocation();
   const [match, params] = useRoute("/trips/:id");
   const tripId = params?.id ? parseInt(params.id) : null;
+  
+  // State for dialogs
+  const [addMealDialogOpen, setAddMealDialogOpen] = useState(false);
+  const [groceryDialogOpen, setGroceryDialogOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Fetch trip data
   const { data: trip, isLoading: tripLoading, error: tripError } = useQuery<Trip>({
@@ -78,6 +88,53 @@ export default function TripDetail() {
     },
   });
 
+  // Mutation to add meal to trip
+  const addMealMutation = useMutation({
+    mutationFn: async (recipeId: number) => {
+      const response = await apiRequest("POST", `/api/trips/${tripId}/meals`, { recipeId });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
+      setAddMealDialogOpen(false);
+      toast({
+        title: "Meal added!",
+        description: "Recipe has been added to your trip.",
+      });
+    },
+  });
+
+  // Mutation to remove meal from trip
+  const removeMealMutation = useMutation({
+    mutationFn: async (recipeId: number) => {
+      const response = await apiRequest("DELETE", `/api/trips/${tripId}/meals/${recipeId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
+      toast({
+        title: "Meal removed",
+        description: "Recipe has been removed from your trip.",
+      });
+    },
+  });
+
+  // Query to fetch grocery list for the trip
+  const { data: groceryData, refetch: refetchGrocery } = useQuery<{
+    items: GroceryItem[];
+    grouped: Record<GroceryCategory, GroceryItem[]>;
+  }>({
+    queryKey: ["/api/trips", tripId, "grocery"],
+    queryFn: async () => {
+      const response = await fetch(`/api/trips/${tripId}/grocery`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch grocery list");
+      }
+      return response.json();
+    },
+    enabled: false, // Only fetch when dialog is opened
+  });
+
   if (!match || tripId === null) {
     return (
       <div className="min-h-screen bg-background">
@@ -123,6 +180,59 @@ export default function TripDetail() {
     const recipe = recipes.find(r => r.id === mealId);
     return recipe ? { id: mealId, title: recipe.title } : { id: mealId, title: `Recipe #${mealId}` };
   }) || [];
+
+  // Get recipes that aren't already added to the trip
+  const availableRecipes = recipes.filter(
+    recipe => !trip.meals?.includes(recipe.id)
+  );
+
+  // Handle opening grocery dialog
+  const handleOpenGroceryDialog = async () => {
+    setGroceryDialogOpen(true);
+    if (trip.meals && trip.meals.length > 0) {
+      await refetchGrocery();
+    }
+  };
+
+  // Copy grocery list to clipboard
+  const handleCopyGroceryList = async () => {
+    if (!groceryData || !groceryData.items || groceryData.items.length === 0) {
+      return;
+    }
+
+    // Generate plain text for copying
+    let text = `${trip.name} - Shopping List\n\n`;
+    
+    const categories: GroceryCategory[] = ["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"];
+    categories.forEach(category => {
+      const items = groceryData.grouped[category];
+      if (items && items.length > 0) {
+        text += `${category}:\n`;
+        items.forEach(item => {
+          text += `- ${item.name}\n`;
+        });
+        text += "\n";
+      }
+    });
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard!",
+        description: "You can now paste this list into a text message or email.",
+      });
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Please try selecting and copying the text manually.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -331,13 +441,133 @@ export default function TripDetail() {
         {/* Meals Section */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UtensilsIcon className="w-5 h-5" />
-              Meals for this Trip
-            </CardTitle>
-            <CardDescription>
-              {meals.length} {meals.length === 1 ? 'meal' : 'meals'} planned
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <UtensilsIcon className="w-5 h-5" />
+                  Meals for this Trip
+                </CardTitle>
+                <CardDescription>
+                  {meals.length} {meals.length === 1 ? 'meal' : 'meals'} planned
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                {/* Generate Grocery List Button */}
+                <Dialog open={groceryDialogOpen} onOpenChange={setGroceryDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={meals.length === 0}
+                      onClick={handleOpenGroceryDialog}
+                      data-testid="button-generate-grocery"
+                    >
+                      <ShoppingCartIcon className="w-4 h-4 mr-2" />
+                      Grocery List
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Shopping List for {trip.name}</DialogTitle>
+                      <DialogDescription>
+                        Combined ingredients from all {meals.length} {meals.length === 1 ? 'meal' : 'meals'}
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    {groceryData && groceryData.items.length > 0 ? (
+                      <div className="space-y-4">
+                        {/* Copy Button */}
+                        <Button
+                          onClick={handleCopyGroceryList}
+                          variant="outline"
+                          className="w-full"
+                          data-testid="button-copy-grocery"
+                        >
+                          {copied ? (
+                            <>
+                              <CheckIcon className="w-4 h-4 mr-2" />
+                              Copied!
+                            </>
+                          ) : (
+                            <>
+                              <CopyIcon className="w-4 h-4 mr-2" />
+                              Copy to Clipboard
+                            </>
+                          )}
+                        </Button>
+
+                        {/* Grocery Items by Category */}
+                        <div className="space-y-4">
+                          {(["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"] as GroceryCategory[]).map(category => {
+                            const items = groceryData.grouped[category];
+                            if (!items || items.length === 0) return null;
+                            
+                            return (
+                              <div key={category} className="space-y-2">
+                                <h3 className="font-semibold text-sm text-muted-foreground">{category}</h3>
+                                <ul className="space-y-1">
+                                  {items.map((item, idx) => (
+                                    <li key={idx} className="flex items-center gap-2 text-sm">
+                                      <span className="text-primary">•</span>
+                                      <span>{item.name}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">
+                        No ingredients to display
+                      </p>
+                    )}
+                  </DialogContent>
+                </Dialog>
+
+                {/* Add Meal Dialog */}
+                <Dialog open={addMealDialogOpen} onOpenChange={setAddMealDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      disabled={availableRecipes.length === 0}
+                      data-testid="button-add-meal"
+                    >
+                      <PlusIcon className="w-4 h-4 mr-2" />
+                      Add Meal
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add a Meal</DialogTitle>
+                      <DialogDescription>
+                        Select a recipe to add to your trip
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <Command>
+                      <CommandInput placeholder="Search recipes..." data-testid="input-search-recipes" />
+                      <CommandList>
+                        <CommandEmpty>No recipes found.</CommandEmpty>
+                        <CommandGroup>
+                          {availableRecipes.map((recipe) => (
+                            <CommandItem
+                              key={recipe.id}
+                              onSelect={() => addMealMutation.mutate(recipe.id)}
+                              data-testid={`recipe-option-${recipe.id}`}
+                            >
+                              <UtensilsIcon className="w-4 h-4 mr-2" />
+                              {recipe.title}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {meals.length > 0 ? (
@@ -348,8 +578,19 @@ export default function TripDetail() {
                     className="flex items-center justify-between p-3 rounded-lg border hover-elevate"
                     data-testid={`meal-item-${idx}`}
                   >
-                    <span className="font-medium">{meal.title}</span>
-                    <Badge variant="outline">Recipe #{meal.id}</Badge>
+                    <div className="flex items-center gap-2">
+                      <UtensilsIcon className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-medium">{meal.title}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeMealMutation.mutate(meal.id)}
+                      disabled={removeMealMutation.isPending}
+                      data-testid={`button-remove-meal-${idx}`}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </Button>
                   </div>
                 ))}
               </div>

@@ -132,8 +132,14 @@ export const addTripCostSchema = z.object({
   paidBy: z.string().trim().optional(),
 });
 
+// Schema for adding a meal (recipe) to a trip
+export const addMealSchema = z.object({
+  recipeId: z.number().int().positive("Recipe ID must be a positive integer"),
+});
+
 // TypeScript types for working with trips
 export type InsertTrip = z.infer<typeof insertTripSchema>;
 export type Trip = typeof trips.$inferSelect;
 export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;
 export type AddTripCost = z.infer<typeof addTripCostSchema>;
+export type AddMeal = z.infer<typeof addMealSchema>;

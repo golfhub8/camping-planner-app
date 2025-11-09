@@ -39,6 +39,12 @@ export interface IStorage {
   
   // Update cost information for a trip
   updateTripCost(tripId: number, total: number, paidBy?: string): Promise<Trip | undefined>;
+  
+  // Add a recipe (meal) to a trip
+  addMealToTrip(tripId: number, recipeId: number): Promise<Trip | undefined>;
+  
+  // Remove a recipe (meal) from a trip
+  removeMealFromTrip(tripId: number, recipeId: number): Promise<Trip | undefined>;
 }
 
 // In-memory storage implementation
@@ -169,6 +175,37 @@ export class MemStorage implements IStorage {
 
     return trip;
   }
+
+  async addMealToTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
+    // Find the trip
+    const trip = this.trips.get(tripId);
+    if (!trip) {
+      return undefined;
+    }
+
+    // Don't add if recipe is already in meals
+    if (trip.meals.includes(recipeId)) {
+      return trip;
+    }
+
+    // Add the recipe to the meals array
+    trip.meals.push(recipeId);
+
+    return trip;
+  }
+
+  async removeMealFromTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
+    // Find the trip
+    const trip = this.trips.get(tripId);
+    if (!trip) {
+      return undefined;
+    }
+
+    // Remove the recipe from meals array
+    trip.meals = trip.meals.filter(id => id !== recipeId);
+
+    return trip;
+  }
 }
 
 // Database storage implementation
@@ -274,6 +311,51 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return trip || undefined;
+  }
+
+  async addMealToTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
+    // Get the current trip
+    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId));
+    if (!trip) {
+      return undefined;
+    }
+
+    // Don't add if recipe is already in meals
+    if (trip.meals.includes(recipeId)) {
+      return trip;
+    }
+
+    // Add the recipe to the meals array
+    const updatedMeals = [...trip.meals, recipeId];
+    
+    // Update the trip in the database
+    const [updatedTrip] = await db
+      .update(trips)
+      .set({ meals: updatedMeals })
+      .where(eq(trips.id, tripId))
+      .returning();
+    
+    return updatedTrip;
+  }
+
+  async removeMealFromTrip(tripId: number, recipeId: number): Promise<Trip | undefined> {
+    // Get the current trip
+    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId));
+    if (!trip) {
+      return undefined;
+    }
+
+    // Remove the recipe from meals array
+    const updatedMeals = trip.meals.filter(id => id !== recipeId);
+    
+    // Update the trip in the database
+    const [updatedTrip] = await db
+      .update(trips)
+      .set({ meals: updatedMeals })
+      .where(eq(trips.id, tripId))
+      .returning();
+    
+    return updatedTrip;
   }
 }
 

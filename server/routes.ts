@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -333,6 +333,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.error("Error updating trip cost:", error);
       res.status(500).json({ error: "Failed to update trip cost" });
+    }
+  });
+
+  // POST /api/trips/:id/meals
+  // Add a recipe (meal) to a trip
+  // Body: { recipeId: number }
+  app.post("/api/trips/:id/meals", async (req, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Validate the request body
+      const { recipeId } = addMealSchema.parse(req.body);
+
+      // Check if recipe exists
+      const recipe = await storage.getRecipeById(recipeId);
+      if (!recipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      // Add the meal to the trip
+      const updatedTrip = await storage.addMealToTrip(tripId, recipeId);
+      
+      if (!updatedTrip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      res.json(updatedTrip);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid meal data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error adding meal to trip:", error);
+      res.status(500).json({ error: "Failed to add meal to trip" });
+    }
+  });
+
+  // DELETE /api/trips/:id/meals/:recipeId
+  // Remove a recipe (meal) from a trip
+  app.delete("/api/trips/:id/meals/:recipeId", async (req, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const recipeId = parseInt(req.params.recipeId);
+      
+      // Validate IDs
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+      if (isNaN(recipeId)) {
+        return res.status(400).json({ error: "Invalid recipe ID" });
+      }
+
+      // Remove the meal from the trip
+      const updatedTrip = await storage.removeMealFromTrip(tripId, recipeId);
+      
+      if (!updatedTrip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      res.json(updatedTrip);
+    } catch (error) {
+      console.error("Error removing meal from trip:", error);
+      res.status(500).json({ error: "Failed to remove meal from trip" });
+    }
+  });
+
+  // GET /api/trips/:id/grocery
+  // Generate a grocery list from all recipes in a trip
+  // Returns the same format as /api/grocery/generate
+  app.get("/api/trips/:id/grocery", async (req, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Get the trip
+      const trip = await storage.getTripById(tripId);
+      if (!trip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      // Check if trip has any meals
+      if (trip.meals.length === 0) {
+        return res.json({ items: [], grouped: {
+          "Produce": [],
+          "Dairy": [],
+          "Meat": [],
+          "Pantry": [],
+          "Camping Gear": [],
+        }});
+      }
+
+      // Fetch all recipes for the trip's meals
+      const recipes = await Promise.all(
+        trip.meals.map(id => storage.getRecipeById(id))
+      );
+      
+      // Filter out any null recipes (in case some IDs don't exist)
+      const validRecipes = recipes.filter((r): r is Recipe => r !== null && r !== undefined);
+      
+      if (validRecipes.length === 0) {
+        return res.json({ items: [], grouped: {
+          "Produce": [],
+          "Dairy": [],
+          "Meat": [],
+          "Pantry": [],
+          "Camping Gear": [],
+        }});
+      }
+      
+      // Collect all ingredients from selected recipes
+      const allIngredients: string[] = [];
+      validRecipes.forEach(recipe => {
+        allIngredients.push(...recipe.ingredients);
+      });
+      
+      // Normalize and deduplicate ingredients (case-insensitive)
+      const uniqueIngredients = Array.from(
+        new Set(allIngredients.map(i => i.trim().toLowerCase()))
+      ).map(i => {
+        // Find the original casing from the first occurrence
+        return allIngredients.find(orig => orig.trim().toLowerCase() === i) || i;
+      });
+      
+      // Categorize each ingredient and create GroceryItem objects
+      const groceryItems: GroceryItem[] = uniqueIngredients.map(ingredient => ({
+        name: ingredient,
+        category: categorizeIngredient(ingredient),
+        checked: false,
+      }));
+      
+      // Group by category
+      const grouped: Record<GroceryCategory, GroceryItem[]> = {
+        "Produce": [],
+        "Dairy": [],
+        "Meat": [],
+        "Pantry": [],
+        "Camping Gear": [],
+      };
+      
+      groceryItems.forEach(item => {
+        grouped[item.category].push(item);
+      });
+      
+      res.json({ items: groceryItems, grouped });
+    } catch (error) {
+      console.error("Error generating trip grocery list:", error);
+      res.status(500).json({ error: "Failed to generate grocery list" });
     }
   });
 
