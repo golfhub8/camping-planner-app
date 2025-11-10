@@ -16,11 +16,11 @@ The frontend is a React 18 application with TypeScript, utilizing Vite for fast 
 
 ### Backend
 
-The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. All API routes are protected by `isAuthenticated` middleware, and user ownership is strictly verified for all data access and mutations. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation, and comprehensive trip management including creation, collaborator management, cost tracking, meal planning, and trip-specific grocery list generation. Zod is used for schema validation on all request and response payloads, ensuring type safety across the application.
+The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. All API routes are protected by `isAuthenticated` middleware, and user ownership is strictly verified for all data access and mutations. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation, and comprehensive trip management including creation, collaborator management, cost tracking, meal planning, trip-specific grocery list generation, and shareable grocery links for collaborators. Shareable links maintain one persistent token per trip and allow public read-only access to trip grocery lists without requiring authentication. Zod is used for schema validation on all request and response payloads, ensuring type safety across the application.
 
 ### Data Layer
 
-Data persistence is managed using PostgreSQL with the Neon serverless driver, accessed via Drizzle ORM. A robust database schema defines tables for users, sessions, recipes, and trips, with `userId` foreign keys enforcing user ownership. Drizzle-Zod integration ensures schema validation, and `drizzle-kit` manages database migrations.
+Data persistence is managed using PostgreSQL with the Neon serverless driver, accessed via Drizzle ORM. A robust database schema defines tables for users, sessions, recipes, trips, and shared_grocery_lists, with `userId` foreign keys enforcing user ownership. The shared_grocery_lists table stores public shareable links with trip metadata (tripId, tripName, collaborators) and maintains one persistent token per trip. Drizzle-Zod integration ensures schema validation, and `drizzle-kit` manages database migrations.
 
 ## External Dependencies
 
