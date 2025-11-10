@@ -74,12 +74,12 @@ export function registerWebhookRoute(app: Express): void {
               await storage.updateStripeCustomerId(userId, session.customer as string);
               await storage.updateStripeSubscriptionId(userId, session.subscription as string);
               
-              // Set Pro membership end date 1 year from now (trial period handled by Stripe)
-              const endDate = new Date();
-              endDate.setFullYear(endDate.getFullYear() + 1);
+              // Fetch the subscription to get the actual current_period_end (includes trial)
+              const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+              const endDate = new Date(subscription.current_period_end * 1000);
               await storage.updateProMembershipEndDate(userId, endDate);
               
-              console.log(`Activated Pro membership for user ${userId} - expires ${endDate}`);
+              console.log(`Activated Pro membership for user ${userId} - status: ${subscription.status}, expires ${endDate}`);
             }
           }
           break;
@@ -995,6 +995,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ],
         subscription_data: {
           trial_period_days: 7, // 7-day free trial
+          metadata: {
+            app_user_id: userId,
+            purchase_type: "pro_membership_annual",
+          },
         },
         success_url: successUrl,
         cancel_url: cancelUrl,
