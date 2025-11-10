@@ -7,14 +7,32 @@ import { ExternalLinkIcon, FileTextIcon, GamepadIcon, BookOpenIcon, DownloadIcon
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 
+interface AccessResponse {
+  hasAccess: boolean;
+  accessType?: 'lifetime' | 'subscription';
+  message: string;
+  expiresAt?: Date;
+}
+
+interface Download {
+  id: string;
+  title: string;
+  description: string;
+  downloadUrl: string;
+}
+
+interface DownloadsResponse {
+  downloads: Download[];
+}
+
 export default function Printables() {
   // Check if user has access to printables
-  const { data: accessData, isLoading: accessLoading } = useQuery({
+  const { data: accessData, isLoading: accessLoading } = useQuery<AccessResponse>({
     queryKey: ['/api/printables/access'],
   });
 
   // Get download links if user has access
-  const { data: downloadsData, isLoading: downloadsLoading } = useQuery({
+  const { data: downloadsData, isLoading: downloadsLoading } = useQuery<DownloadsResponse>({
     queryKey: ['/api/printables/downloads'],
     enabled: accessData?.hasAccess === true,
   });
