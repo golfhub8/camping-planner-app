@@ -55,6 +55,12 @@ export interface IStorage {
   
   // Get a shared grocery list by its token (public access - no ownership check)
   getSharedGroceryListByToken(token: string): Promise<SharedGroceryList | undefined>;
+  
+  // Upsert a shared grocery list for a trip (replaces any existing share for that trip)
+  upsertSharedGroceryListByTrip(tripId: number, data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList>;
+  
+  // Get the current shared grocery list for a trip (returns undefined if none exists)
+  getSharedGroceryListByTrip(tripId: number): Promise<SharedGroceryList | undefined>;
 }
 
 // In-memory storage implementation
@@ -292,6 +298,32 @@ export class MemStorage implements IStorage {
     }
     
     return sharedList;
+  }
+
+  async upsertSharedGroceryListByTrip(tripId: number, data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList> {
+    // Remove any existing shared list for this trip
+    for (const [token, list] of this.sharedLists.entries()) {
+      if (list.tripId === tripId) {
+        this.sharedLists.delete(token);
+      }
+    }
+    
+    // Create a new shared list with the trip data
+    return this.createSharedGroceryList({ ...data, tripId }, userId);
+  }
+
+  async getSharedGroceryListByTrip(tripId: number): Promise<SharedGroceryList | undefined> {
+    // Find the shared list for this trip
+    for (const list of this.sharedLists.values()) {
+      if (list.tripId === tripId) {
+        // Check if the link has expired
+        if (list.expiresAt && list.expiresAt < new Date()) {
+          return undefined;
+        }
+        return list;
+      }
+    }
+    return undefined;
   }
 }
 
@@ -548,6 +580,30 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(sharedGroceryLists)
       .where(eq(sharedGroceryLists.token, token));
+    
+    // Check if the link has expired
+    if (sharedList && sharedList.expiresAt && sharedList.expiresAt < new Date()) {
+      return undefined;
+    }
+    
+    return sharedList || undefined;
+  }
+
+  async upsertSharedGroceryListByTrip(tripId: number, data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList> {
+    // Delete any existing shared list for this trip (revokes old token)
+    await db
+      .delete(sharedGroceryLists)
+      .where(eq(sharedGroceryLists.tripId, tripId));
+    
+    // Create a new shared list with a fresh token
+    return this.createSharedGroceryList({ ...data, tripId }, userId);
+  }
+
+  async getSharedGroceryListByTrip(tripId: number): Promise<SharedGroceryList | undefined> {
+    const [sharedList] = await db
+      .select()
+      .from(sharedGroceryLists)
+      .where(eq(sharedGroceryLists.tripId, tripId));
     
     // Check if the link has expired
     if (sharedList && sharedList.expiresAt && sharedList.expiresAt < new Date()) {
