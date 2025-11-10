@@ -366,6 +366,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/recipes/external
+  // Fetches camping recipes from TheCampingPlanner.com WordPress site
+  // Returns: Array of external recipes with { id, title, source, url, ingredients? }
+  // This endpoint tries to fetch posts from the "camping-food" category using WordPress REST API
+  // If the API is unavailable or CORS blocks the request, it returns an empty array
+  // Protected route - requires authentication
+  app.get("/api/recipes/external", isAuthenticated, async (req: any, res) => {
+    try {
+      // WordPress site base URL
+      const siteUrl = "https://thecampingplanner.com";
+      
+      // Step 1: First, try to find the "camping-food" category ID
+      // WordPress REST API exposes categories at /wp-json/wp/v2/categories
+      let categoryId: number | null = null;
+      
+      try {
+        const categoriesResponse = await fetch(`${siteUrl}/wp-json/wp/v2/categories?per_page=100`);
+        
+        if (categoriesResponse.ok) {
+          const categories = await categoriesResponse.json();
+          // Find the category with slug "camping-food"
+          const campingFoodCategory = categories.find(
+            (cat: any) => cat.slug === "camping-food"
+          );
+          
+          if (campingFoodCategory) {
+            categoryId = campingFoodCategory.id;
+          }
+        }
+      } catch (error) {
+        console.log("Failed to fetch categories from WordPress:", error);
+        // Continue anyway - we'll return empty array at the end
+      }
+      
+      // Step 2: If we found the category ID, fetch posts from that category
+      if (categoryId) {
+        try {
+          // Fetch up to 20 posts from the camping-food category
+          // Use _fields parameter to limit the response size for faster loading
+          const postsUrl = `${siteUrl}/wp-json/wp/v2/posts?categories=${categoryId}&per_page=20&_fields=id,title,link,excerpt`;
+          const postsResponse = await fetch(postsUrl);
+          
+          if (postsResponse.ok) {
+            const posts = await postsResponse.json();
+            
+            // Transform WordPress posts into our external recipe format
+            const externalRecipes = posts.map((post: any) => ({
+              // Use WordPress post ID as string to avoid conflicts with internal recipe IDs
+              id: `wp-${post.id}`,
+              
+              // WordPress returns title as { rendered: "..." }
+              title: post.title?.rendered || "Untitled Recipe",
+              
+              // Mark as external source so frontend knows this is from WordPress
+              source: "external" as const,
+              
+              // Link to the full recipe on TheCampingPlanner.com
+              url: post.link,
+              
+              // For now, we can't extract ingredients from WordPress
+              // This could be enhanced later with web scraping if needed
+              ingredients: undefined,
+            }));
+            
+            return res.json(externalRecipes);
+          }
+        } catch (error) {
+          console.log("Failed to fetch posts from WordPress:", error);
+          // Continue to return empty array
+        }
+      }
+      
+      // If we couldn't fetch recipes (no category found, CORS error, etc.), return empty array
+      // This allows the frontend to still render without breaking
+      res.json([]);
+    } catch (error) {
+      console.error("Error in external recipes endpoint:", error);
+      // Return empty array instead of error to gracefully handle failures
+      res.json([]);
+    }
+  });
+
+  // POST /api/recipes/share
+  // Shares a recipe with a collaborator via email
+  // Body: { recipeId: string | number, toEmail: string }
+  // Returns: { message: string } - A message that can be copied and sent
+  // This endpoint builds a shareable message about the recipe
+  // In the future, this can be connected to an email service to actually send the email
+  // Protected route - requires authentication
+  app.post("/api/recipes/share", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate the request body
+      const shareSchema = z.object({
+        recipeId: z.union([z.number(), z.string()]),
+        toEmail: z.string().email("Invalid email address"),
+      });
+      
+      const { recipeId, toEmail } = shareSchema.parse(req.body);
+      
+      let recipeTitle: string;
+      let recipeUrl: string | null = null;
+      let recipeIngredients: string[] | undefined;
+      
+      // Check if this is an external recipe (starts with "wp-") or internal recipe (number)
+      if (typeof recipeId === "string" && recipeId.startsWith("wp-")) {
+        // This is an external WordPress recipe
+        // For external recipes, we don't have the full data stored locally
+        // The frontend should have passed the title and URL, but we'll construct a generic message
+        recipeTitle = "A Camping Recipe from TheCampingPlanner.com";
+        recipeUrl = `https://thecampingplanner.com/category/camping-food/`;
+      } else {
+        // This is an internal recipe - fetch it from the database
+        const numericId = typeof recipeId === "string" ? parseInt(recipeId) : recipeId;
+        
+        if (isNaN(numericId)) {
+          return res.status(400).json({ error: "Invalid recipe ID format" });
+        }
+        
+        const recipe = await storage.getRecipeById(numericId, userId);
+        
+        if (!recipe) {
+          return res.status(404).json({ error: "Recipe not found" });
+        }
+        
+        recipeTitle = recipe.title;
+        recipeIngredients = recipe.ingredients;
+        // For internal recipes, we don't have a public URL yet
+        // In the future, you could generate a shareable link
+        recipeUrl = null;
+      }
+      
+      // Build the shareable message
+      // This message can be copied by the user and sent manually
+      // Or in the future, sent automatically via email service
+      let message = `Your friend shared a camping recipe with you!\n\n`;
+      message += `Recipe: ${recipeTitle}\n\n`;
+      
+      if (recipeIngredients && recipeIngredients.length > 0) {
+        message += `Ingredients:\n`;
+        recipeIngredients.forEach(ingredient => {
+          message += `• ${ingredient}\n`;
+        });
+        message += `\n`;
+      }
+      
+      if (recipeUrl) {
+        message += `View the full recipe here: ${recipeUrl}\n`;
+      } else {
+        message += `Ask your friend for more details about this recipe!\n`;
+      }
+      
+      message += `\nHappy camping! 🏕️`;
+      
+      // Return the message to the frontend
+      res.json({ 
+        message,
+        recipient: toEmail,
+      });
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error sharing recipe:", error);
+      res.status(500).json({ error: "Failed to share recipe" });
+    }
+  });
+
   // Grocery List Routes
   
   // Helper function to categorize ingredients
