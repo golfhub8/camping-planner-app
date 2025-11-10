@@ -23,6 +23,7 @@ export default function Subscribe() {
   // Check if user is authenticated
   const { data: user, isLoading: isLoadingUser } = useQuery({
     queryKey: ['/api/auth/user'],
+    retry: false, // Don't retry if auth fails
   });
 
   useEffect(() => {
@@ -66,6 +67,30 @@ export default function Subscribe() {
       setIsLoading(false);
     }
   };
+
+  // Show loading skeleton only for initial load
+  if (isLoadingUser) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-6 md:px-10 py-12 max-w-2xl">
+          <Card>
+            <CardHeader>
+              <div className="h-8 w-3/4 bg-muted animate-pulse rounded"></div>
+              <div className="h-4 w-1/2 bg-muted animate-pulse rounded mt-2"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="h-4 bg-muted animate-pulse rounded"></div>
+                <div className="h-4 bg-muted animate-pulse rounded"></div>
+                <div className="h-4 bg-muted animate-pulse rounded"></div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
