@@ -273,33 +273,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // All routes are prefixed with /api
   // All recipe routes require authentication
   
-  // Helper function to extract ingredients from WordPress HTML content
-  // Looks for <li> tags in the HTML and extracts their text content
-  // Strips HTML tags and decodes common HTML entities
-  function extractIngredientsFromHtml(contentHtml: string): string[] {
-    const ingredients: string[] = [];
-    const liRegex = /<li[^>]*>(.*?)<\/li>/gi;
-    let match;
+  // Type definition for structured ingredient from WordPress table
+  interface IngredientChecklistItem {
+    name: string;
+    amountImperial?: string;
+    amountMetric?: string;
+    notes?: string;
+  }
+
+  // Type definition for parsed WordPress recipe content
+  interface ParsedRecipeContent {
+    ingredientsChecklist: IngredientChecklistItem[];
+    extraBullets: string[];
+  }
+
+  // Helper function: Parse WordPress recipe HTML to extract structured ingredients
+  // This function uses cheerio to parse the HTML and extract both:
+  // 1. Structured ingredients from the "Ingredients Checklist" table
+  // 2. Extra bullet points (related recipes, tips, etc.)
+  // WordPress recipe structure may vary - adjust selectors below if needed
+  function parseWordPressRecipe(html: string): ParsedRecipeContent {
+    const cheerio = require('cheerio');
+    const $ = cheerio.load(html);
     
-    while ((match = liRegex.exec(contentHtml)) !== null) {
-      // match[1] contains the content between <li> and </li>
-      // Remove any remaining HTML tags and decode HTML entities
-      let ingredientText = match[1]
-        .replace(/<[^>]+>/g, "") // Remove HTML tags
-        .replace(/&nbsp;/g, " ") // Replace &nbsp; with space
-        .replace(/&amp;/g, "&")  // Replace &amp; with &
-        .replace(/&lt;/g, "<")   // Replace &lt; with <
-        .replace(/&gt;/g, ">")   // Replace &gt; with >
-        .replace(/&quot;/g, '"') // Replace &quot; with "
-        .trim();
+    const ingredientsChecklist: IngredientChecklistItem[] = [];
+    const extraBullets: string[] = [];
+    
+    // ========================================
+    // PART 1: Extract structured ingredients from table
+    // ========================================
+    // Look for a table that contains ingredients data
+    // The table typically has columns: Ingredient, Amount (Imperial), Metric, Notes
+    // ADJUST THIS SELECTOR if your WordPress theme changes the table structure
+    
+    // Try to find the ingredients table
+    // We look for a table that has "Ingredient" in the header
+    $('table').each((_, tableEl) => {
+      const $table = $(tableEl);
+      const headerCells = $table.find('thead tr th, thead tr td, tr:first-child th, tr:first-child td');
       
-      // Only add non-empty ingredients
-      if (ingredientText) {
-        ingredients.push(ingredientText);
+      // Check if this looks like an ingredients table by looking at headers
+      const headers: string[] = [];
+      headerCells.each((_, cell) => {
+        headers.push($(cell).text().trim().toLowerCase());
+      });
+      
+      // If we find "ingredient" in the headers, this is likely our ingredients table
+      const hasIngredientHeader = headers.some(h => h.includes('ingredient'));
+      
+      if (hasIngredientHeader) {
+        // Find the column indices for each field
+        // ADJUST THESE SEARCH TERMS if your table headers change
+        const nameIndex = headers.findIndex(h => h.includes('ingredient'));
+        const imperialIndex = headers.findIndex(h => h.includes('imperial') || h.includes('amount'));
+        const metricIndex = headers.findIndex(h => h.includes('metric'));
+        const notesIndex = headers.findIndex(h => h.includes('note'));
+        
+        // Get all data rows (skip header row)
+        const dataRows = $table.find('tbody tr, tr').slice(1);
+        
+        dataRows.each((_, rowEl) => {
+          const $row = $(rowEl);
+          const cells = $row.find('td, th');
+          
+          // Skip if this is a header row
+          if (cells.length === 0) return;
+          
+          // Extract data from each column
+          const ingredient: IngredientChecklistItem = {
+            name: nameIndex >= 0 ? $(cells[nameIndex]).text().trim() : '',
+          };
+          
+          if (imperialIndex >= 0 && $(cells[imperialIndex]).text().trim()) {
+            ingredient.amountImperial = $(cells[imperialIndex]).text().trim();
+          }
+          
+          if (metricIndex >= 0 && $(cells[metricIndex]).text().trim()) {
+            ingredient.amountMetric = $(cells[metricIndex]).text().trim();
+          }
+          
+          if (notesIndex >= 0 && $(cells[notesIndex]).text().trim()) {
+            ingredient.notes = $(cells[notesIndex]).text().trim();
+          }
+          
+          // Only add if we have at least a name
+          if (ingredient.name) {
+            ingredientsChecklist.push(ingredient);
+          }
+        });
       }
-    }
+    });
     
-    return ingredients;
+    // ========================================
+    // PART 2: Extract extra bullet points (related recipes, tips, etc.)
+    // ========================================
+    // We want to collect <li> items, but EXCLUDE:
+    // - The ingredients list (if it's in a <ul> instead of a table)
+    // - The "suggested recipes" section at the top
+    // ADJUST THESE SELECTORS if your WordPress structure changes
+    
+    // Strategy: Get all <li> elements, but skip the first <ul> which is often the suggested recipes
+    const allLists = $('ul');
+    
+    // Skip the first <ul> (assumed to be suggested recipes)
+    allLists.slice(1).each((_, ulEl) => {
+      $(ulEl).find('li').each((_, liEl) => {
+        const text = $(liEl).text().trim();
+        // Clean up HTML entities
+        const cleanText = text
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"');
+        
+        if (cleanText) {
+          extraBullets.push(cleanText);
+        }
+      });
+    });
+    
+    return {
+      ingredientsChecklist,
+      extraBullets,
+    };
+  }
+
+  // Legacy helper function for backward compatibility
+  // This is kept for the /ingredients endpoint, but the main endpoint now uses parseWordPressRecipe
+  function extractIngredientsFromHtml(html: string): string[] {
+    const parsed = parseWordPressRecipe(html);
+    // Return the checklist names if available, otherwise extra bullets
+    if (parsed.ingredientsChecklist.length > 0) {
+      return parsed.ingredientsChecklist.map(item => {
+        let text = item.name;
+        if (item.amountImperial) text = `${item.amountImperial} ${text}`;
+        if (item.notes) text = `${text} (${item.notes})`;
+        return text;
+      });
+    }
+    return parsed.extraBullets;
   }
   
   // GET /api/recipes
@@ -439,16 +552,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // WordPress returns content as { rendered: "..." }
       const contentHtml = post.content?.rendered || "";
       
-      // Best-effort ingredient extraction from HTML content
-      // Uses helper function to look for <li> tags and extract their text
-      const ingredients = extractIngredientsFromHtml(contentHtml);
+      // Parse the HTML to extract structured ingredients and extra content
+      // Uses cheerio to find ingredients table and filter out unrelated bullets
+      const parsed = parseWordPressRecipe(contentHtml);
       
-      // Return the recipe data
+      // Return the recipe data with structured ingredients
+      // ingredientsChecklist: Structured table data with amounts and notes
+      // extraBullets: Additional content like related recipes or tips
       res.json({
         id: externalId,
         title: post.title?.rendered || "Untitled Recipe",
         contentHtml,
-        ingredients,
+        ingredientsChecklist: parsed.ingredientsChecklist,
+        extraBullets: parsed.extraBullets,
         url: post.link,
       });
     } catch (error) {

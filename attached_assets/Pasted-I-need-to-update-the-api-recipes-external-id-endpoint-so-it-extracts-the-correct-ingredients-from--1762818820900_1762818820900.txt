@@ -1,0 +1,73 @@
+I need to update the /api/recipes/external/:id endpoint so it extracts the correct ingredients from my WordPress recipe pages.
+
+Right now it’s pulling the first <ul> it finds, which is a list of other articles (“Brioche French Toast…”, “Savory Oat Risotto…”) — that is NOT the actual ingredients.
+
+Please update the route so it does this:
+
+Fetch the post from
+https://thecampingplanner.com/wp-json/wp/v2/posts/:id
+
+Parse content.rendered as HTML (you can use cheerio if it’s already in the project; if not, show me how to add it).
+
+Try to find the “Ingredients Checklist” section first. On my page this is rendered as a table with columns like:
+
+Ingredient
+
+Amount (Imperial)
+
+Metric
+
+Notes
+
+So:
+
+if there is a <table> that looks like the ingredients checklist, loop over the <tr> rows (skip the header) and build an array of ingredient objects:
+
+{
+  name: string;
+  amountImperial?: string;
+  amountMetric?: string;
+  notes?: string;
+}
+
+
+return this array in the JSON as ingredientsChecklist: [...]
+
+Separately, still collect a simple ingredients list from <li> tags, BUT:
+
+ignore any <li> that is inside the top “suggested recipes” section
+
+only take <li> elements that are inside or after the main recipe content
+
+if it’s hard to detect, it’s okay to just return this as extraBullets: [...]
+
+The final JSON response should look like this:
+
+{
+  "id": 123,
+  "title": "Campfire Truffle Mac with Bacon",
+  "contentHtml": "<p>full html…</p>",
+  "ingredientsChecklist": [
+    { "name": "Elbow macaroni", "amountImperial": "2 cups", "amountMetric": "200 g", "notes": "Cooked al dente" },
+    { "name": "Bacon", "amountImperial": "6 slices", "notes": "Cooked crisp, crumbled" }
+  ],
+  "extraBullets": [
+    "Campfire Paella with Chorizo & Shrimp — ...",
+    "Foil-Baked Salmon with Lemon Dill Cream — ..."
+  ]
+}
+
+
+On the frontend recipe detail component:
+
+Show the title and content as before
+
+If ingredientsChecklist exists and has items, show it at the bottom under a heading “Ingredients Checklist (printable)”
+
+If only extraBullets exists, show them in a smaller section called “Related ideas from TheCampingPlanner.com”
+
+Keep the “Copy Ingredients” button, but have it copy the ingredientsChecklist first; if that is empty, then copy extraBullets
+
+Please comment the code to show me where to adjust the selector if I change how WordPress renders that table later.
+
+Tell me which files you changed.
