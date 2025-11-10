@@ -127,6 +127,39 @@ export function registerWebhookRoute(app: Express): void {
   });
 }
 
+// Middleware to require printable access (lifetime or active subscription)
+// Usage: app.get("/api/printables", isAuthenticated, requirePrintableAccess, handler)
+function requirePrintableAccess(req: any, res: any, next: any) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Not logged in" });
+  }
+
+  const userId = req.user.claims.sub;
+  
+  // Check if user has access (will be populated by isAuthenticated middleware)
+  storage.getUser(userId).then(user => {
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    // Check for lifetime access
+    if (user.hasPrintableLifetime) {
+      return next();
+    }
+
+    // Check for active subscription
+    if (user.isSubscriber && user.subscriptionEndDate && user.subscriptionEndDate > new Date()) {
+      return next();
+    }
+
+    // No valid access
+    return res.status(402).json({ error: "Printable access required. Please purchase lifetime access or subscribe." });
+  }).catch(err => {
+    console.error("Error checking printable access:", err);
+    return res.status(500).json({ error: "Failed to verify access" });
+  });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication middleware (Replit Auth integration)
   await setupAuth(app);
@@ -145,6 +178,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  // Printables Routes
+  
+  // GET /api/printables/access
+  // Check if user has access to printables (lifetime or active subscription)
+  // Protected route - requires authentication
+  app.get('/api/printables/access', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ hasAccess: false, message: "User not found" });
+      }
+
+      // Check for lifetime access
+      if (user.hasPrintableLifetime) {
+        return res.json({ 
+          hasAccess: true, 
+          accessType: 'lifetime',
+          message: "You have lifetime access to all printables"
+        });
+      }
+
+      // Check for active subscription
+      if (user.isSubscriber && user.subscriptionEndDate && user.subscriptionEndDate > new Date()) {
+        return res.json({ 
+          hasAccess: true, 
+          accessType: 'subscription',
+          expiresAt: user.subscriptionEndDate,
+          message: "You have subscription access to all printables"
+        });
+      }
+
+      // No access
+      return res.json({ 
+        hasAccess: false,
+        message: "Purchase lifetime access or subscribe to download printables"
+      });
+    } catch (error) {
+      console.error("Error checking printable access:", error);
+      res.status(500).json({ hasAccess: false, message: "Failed to check access" });
+    }
+  });
+
+  // GET /api/printables/downloads
+  // Get download links for printables (requires paid access)
+  // Protected route - requires authentication AND printable access
+  app.get('/api/printables/downloads', isAuthenticated, requirePrintableAccess, async (req: any, res) => {
+    // Return download links for all printables
+    // For now, return the external shop URLs
+    // In the future, this could return actual file download URLs from storage
+    const downloads = [
+      {
+        id: "camping-planner",
+        title: "The Camping Planner",
+        description: "Plan your perfect camping trip with our comprehensive planner",
+        downloadUrl: "https://thecampingplanner.com/shop/",
+      },
+      {
+        id: "activity-book",
+        title: "Camping Activity Book",
+        description: "Keep the kids entertained with fun camping-themed activities",
+        downloadUrl: "https://thecampingplanner.com/shop/",
+      },
+      {
+        id: "games-bundle",
+        title: "Camping Games Bundle",
+        description: "Make your camping trip unforgettable with our complete games bundle",
+        downloadUrl: "https://thecampingplanner.com/shop/",
+      },
+    ];
+
+    res.json({ downloads });
   });
 
   // Recipe Routes
