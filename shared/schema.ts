@@ -60,20 +60,16 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   
-  // Subscription fields for printables download access
-  // True if user purchased lifetime access to printables
-  hasPrintableLifetime: boolean("has_printable_lifetime").notNull().default(false),
-  
-  // True if user has an active subscription
-  isSubscriber: boolean("is_subscriber").notNull().default(false),
-  
-  // When the subscription ends (nullable - only set if isSubscriber is true)
-  subscriptionEndDate: timestamp("subscription_end_date"),
+  // Pro Membership fields for printables access
+  // Annual subscription at $29.99/year with 7-day free trial
+  // When the pro membership expires (covers both trial and paid subscriptions)
+  // If null: not a member. If future date: active member (trial or paid)
+  proMembershipEndDate: timestamp("pro_membership_end_date"),
   
   // Stripe customer ID for managing payments and subscriptions
   stripeCustomerId: varchar("stripe_customer_id"),
   
-  // Stripe subscription ID for tracking active subscriptions
+  // Stripe subscription ID for tracking the annual subscription
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   
   createdAt: timestamp("created_at").notNull().defaultNow(),
