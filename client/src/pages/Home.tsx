@@ -5,6 +5,7 @@ import RecipeCard from "@/components/RecipeCard";
 import RecipeForm from "@/components/RecipeForm";
 import EmptyState from "@/components/EmptyState";
 import Header from "@/components/Header";
+import ExternalRecipeViewer from "@/components/ExternalRecipeViewer";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import type { Recipe } from "@shared/schema";
@@ -24,6 +25,10 @@ export default function Home() {
   
   // State for search query - filters recipes by title and ingredients
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // State for viewing external recipe details in modal
+  // When set to a recipe ID (e.g., "wp-12345"), the modal opens
+  const [viewingExternalRecipeId, setViewingExternalRecipeId] = useState<string | null>(null);
 
   // Fetch user's own recipes from the database
   const { data: recipes = [], isLoading } = useQuery<Recipe[]>({
@@ -202,12 +207,19 @@ export default function Home() {
                   ingredients={recipe.ingredients || []}
                   source="external"
                   url={recipe.url}
+                  onViewExternal={() => setViewingExternalRecipeId(recipe.id)}
                 />
               ))}
             </div>
           </div>
         )}
       </main>
+
+      {/* External Recipe Viewer Modal */}
+      <ExternalRecipeViewer
+        recipeId={viewingExternalRecipeId}
+        onClose={() => setViewingExternalRecipeId(null)}
+      />
     </div>
   );
 }

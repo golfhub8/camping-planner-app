@@ -19,9 +19,10 @@ interface RecipeCardProps {
   createdAt?: Date; // Optional for external recipes
   source?: "internal" | "external"; // Indicates if this is from database or WordPress
   url?: string; // For external recipes - link to full recipe
+  onViewExternal?: () => void; // Handler for viewing external recipes in modal
 }
 
-export default function RecipeCard({ id, title, ingredients, createdAt, source = "internal", url }: RecipeCardProps) {
+export default function RecipeCard({ id, title, ingredients, createdAt, source = "internal", url, onViewExternal }: RecipeCardProps) {
   const { toast } = useToast();
   
   // State for the share dialog
@@ -167,14 +168,18 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               Share
             </Button>
             
-            {/* View button - links to internal recipe page or external URL */}
-            {source === "external" && url ? (
-              <a href={url} target="_blank" rel="noopener noreferrer" data-testid={`link-view-recipe-${id}`}>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <ExternalLink className="h-4 w-4" />
-                  View Recipe
-                </Button>
-              </a>
+            {/* View button - opens modal for external recipes or links to internal recipe page */}
+            {source === "external" ? (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-1.5"
+                onClick={onViewExternal}
+                data-testid={`button-view-recipe-${id}`}
+              >
+                <Eye className="h-4 w-4" />
+                View Recipe
+              </Button>
             ) : (
               <Link href={`/recipe/${id}`} data-testid={`link-view-recipe-${id}`}>
                 <Button variant="outline" size="sm" className="gap-1.5">

@@ -273,6 +273,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // All routes are prefixed with /api
   // All recipe routes require authentication
   
+  // Helper function to extract ingredients from WordPress HTML content
+  // Looks for <li> tags in the HTML and extracts their text content
+  // Strips HTML tags and decodes common HTML entities
+  function extractIngredientsFromHtml(contentHtml: string): string[] {
+    const ingredients: string[] = [];
+    const liRegex = /<li[^>]*>(.*?)<\/li>/gi;
+    let match;
+    
+    while ((match = liRegex.exec(contentHtml)) !== null) {
+      // match[1] contains the content between <li> and </li>
+      // Remove any remaining HTML tags and decode HTML entities
+      let ingredientText = match[1]
+        .replace(/<[^>]+>/g, "") // Remove HTML tags
+        .replace(/&nbsp;/g, " ") // Replace &nbsp; with space
+        .replace(/&amp;/g, "&")  // Replace &amp; with &
+        .replace(/&lt;/g, "<")   // Replace &lt; with <
+        .replace(/&gt;/g, ">")   // Replace &gt; with >
+        .replace(/&quot;/g, '"') // Replace &quot; with "
+        .trim();
+      
+      // Only add non-empty ingredients
+      if (ingredientText) {
+        ingredients.push(ingredientText);
+      }
+    }
+    
+    return ingredients;
+  }
+  
   // GET /api/recipes
   // Returns all recipes for the logged in user, sorted by newest first
   // Protected route - requires authentication
@@ -367,6 +396,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error in external recipes endpoint:", error);
       // Return empty array instead of error to gracefully handle failures
       res.json([]);
+    }
+  });
+
+  // GET /api/recipes/external/:id
+  // Fetches a single external recipe from WordPress by post ID
+  // Example: /api/recipes/external/wp-12345
+  // Returns: { id, title, contentHtml, ingredients[], url }
+  // PUBLIC route - no authentication required
+  // IMPORTANT: This route must come BEFORE /api/recipes/:id to avoid routing conflicts
+  app.get("/api/recipes/external/:id", async (req: any, res) => {
+    try {
+      const externalId = req.params.id;
+      
+      // Extract the WordPress post ID from our prefixed format (wp-12345 -> 12345)
+      // If the ID doesn't start with "wp-", try to use it as-is
+      let wpPostId: string;
+      if (externalId.startsWith("wp-")) {
+        wpPostId = externalId.substring(3); // Remove "wp-" prefix
+      } else {
+        wpPostId = externalId;
+      }
+      
+      // WordPress site base URL
+      // You can change this URL if you move your WordPress site or want to use a different one
+      const siteUrl = "https://thecampingplanner.com";
+      
+      // Fetch the full post from WordPress REST API
+      // WordPress REST API endpoint: /wp-json/wp/v2/posts/:id
+      // You can add more fields by modifying the _fields parameter below
+      const postUrl = `${siteUrl}/wp-json/wp/v2/posts/${wpPostId}`;
+      
+      const response = await fetch(postUrl);
+      
+      if (!response.ok) {
+        return res.status(404).json({ error: "Recipe not found on WordPress" });
+      }
+      
+      const post = await response.json();
+      
+      // Extract the HTML content from the post
+      // WordPress returns content as { rendered: "..." }
+      const contentHtml = post.content?.rendered || "";
+      
+      // Best-effort ingredient extraction from HTML content
+      // Uses helper function to look for <li> tags and extract their text
+      const ingredients = extractIngredientsFromHtml(contentHtml);
+      
+      // Return the recipe data
+      res.json({
+        id: externalId,
+        title: post.title?.rendered || "Untitled Recipe",
+        contentHtml,
+        ingredients,
+        url: post.link,
+      });
+    } catch (error) {
+      console.error("Error fetching external recipe:", error);
+      res.status(500).json({ error: "Failed to fetch recipe from WordPress" });
+    }
+  });
+
+  // GET /api/recipes/external/:id/ingredients
+  // Returns just the ingredients array for an external recipe
+  // This is a convenience endpoint for "downloading" or copying just the ingredients
+  // Example: /api/recipes/external/wp-12345/ingredients
+  // Returns: { ingredients: [...] }
+  // PUBLIC route - no authentication required
+  // IMPORTANT: This route must come BEFORE /api/recipes/:id to avoid routing conflicts
+  app.get("/api/recipes/external/:id/ingredients", async (req: any, res) => {
+    try {
+      const externalId = req.params.id;
+      
+      // Extract the WordPress post ID from our prefixed format (wp-12345 -> 12345)
+      let wpPostId: string;
+      if (externalId.startsWith("wp-")) {
+        wpPostId = externalId.substring(3);
+      } else {
+        wpPostId = externalId;
+      }
+      
+      // WordPress site base URL (same as above - you can change this if needed)
+      const siteUrl = "https://thecampingplanner.com";
+      
+      // Fetch just the content field to extract ingredients
+      // Using _fields parameter to minimize data transfer
+      const postUrl = `${siteUrl}/wp-json/wp/v2/posts/${wpPostId}?_fields=content`;
+      
+      const response = await fetch(postUrl);
+      
+      if (!response.ok) {
+        return res.status(404).json({ error: "Recipe not found on WordPress" });
+      }
+      
+      const post = await response.json();
+      const contentHtml = post.content?.rendered || "";
+      
+      // Extract ingredients using the shared helper function
+      const ingredients = extractIngredientsFromHtml(contentHtml);
+      
+      // Return just the ingredients array (not the full recipe data)
+      res.json({ ingredients });
+    } catch (error) {
+      console.error("Error fetching external recipe ingredients:", error);
+      res.status(500).json({ error: "Failed to fetch ingredients from WordPress" });
     }
   });
 
