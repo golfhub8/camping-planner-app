@@ -13,6 +13,8 @@ export interface IStorage {
   // Stripe methods for payment integration
   updateStripeCustomerId(userId: string, customerId: string): Promise<User>;
   updateStripeSubscriptionId(userId: string, subscriptionId: string): Promise<User>;
+  grantLifetimePrintableAccess(userId: string): Promise<User>;
+  updateSubscriptionStatus(userId: string, isSubscriber: boolean, endDate: Date | null): Promise<User>;
   
   // Recipe methods
   // Get all recipes for a user (returns newest first)
@@ -124,6 +126,29 @@ export class MemStorage implements IStorage {
       throw new Error("User not found");
     }
     user.stripeSubscriptionId = subscriptionId;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async grantLifetimePrintableAccess(userId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.hasPrintableLifetime = true;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async updateSubscriptionStatus(userId: string, isSubscriber: boolean, endDate: Date | null): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.isSubscriber = isSubscriber;
+    user.subscriptionEndDate = endDate;
     user.updatedAt = new Date();
     this.users.set(userId, user);
     return user;
@@ -377,6 +402,39 @@ export class DatabaseStorage implements IStorage {
       .update(users)
       .set({ 
         stripeSubscriptionId: subscriptionId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async grantLifetimePrintableAccess(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        hasPrintableLifetime: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async updateSubscriptionStatus(userId: string, isSubscriber: boolean, endDate: Date | null): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        isSubscriber,
+        subscriptionEndDate: endDate,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))

@@ -740,39 +740,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stripe Payment Routes
   // Reference: blueprint:javascript_stripe
 
-  // POST /api/create-payment-intent
-  // Create a one-time payment for lifetime printable access
-  // SECURITY: Amount is hard-coded server-side to prevent client tampering
+  // POST /api/billing/create-checkout-session
+  // Create a Stripe Checkout session for one-time lifetime access purchase
+  // Checkout Sessions are more secure and handle the entire payment flow
   // Protected route - requires authentication
-  app.post("/api/create-payment-intent", isAuthenticated, async (req: any, res) => {
-    if (!stripe) {
-      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
-    }
-
-    try {
-      // SECURITY: Hard-code the price server-side - never trust client amount
-      const LIFETIME_ACCESS_PRICE = 2999; // $29.99 in cents
-
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: LIFETIME_ACCESS_PRICE,
-        currency: "usd",
-        metadata: {
-          userId: req.user.claims.sub,
-          purchaseType: "lifetime_printables",
-        },
-      });
-
-      res.json({ clientSecret: paymentIntent.client_secret });
-    } catch (error: any) {
-      console.error("Error creating payment intent:", error);
-      res.status(500).json({ error: "Failed to create payment intent: " + error.message });
-    }
-  });
-
-  // POST /api/create-subscription
-  // Create or retrieve a subscription for monthly access
-  // Protected route - requires authentication
-  app.post("/api/create-subscription", isAuthenticated, async (req: any, res) => {
+  app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
       return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
     }
@@ -785,89 +757,215 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // If user already has a subscription, retrieve it
-      if (user.stripeSubscriptionId) {
-        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
-          expand: ['latest_invoice.payment_intent'],
-        });
-        
-        // Check if subscription has a pending payment
-        if (subscription.latest_invoice && typeof subscription.latest_invoice === 'object') {
-          const invoice = subscription.latest_invoice as Stripe.Invoice;
-          // @ts-ignore - payment_intent exists when expanded
-          if (invoice.payment_intent && typeof invoice.payment_intent === 'object') {
-            // @ts-ignore - payment_intent exists when expanded
-            const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
-            return res.json({
-              subscriptionId: subscription.id,
-              clientSecret: paymentIntent.client_secret,
-            });
-          }
-        }
+      // Build success and cancel URLs
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const successUrl = `${baseUrl}/printables?payment=success`;
+      const cancelUrl = `${baseUrl}/checkout?canceled=true`;
 
-        return res.json({
-          subscriptionId: subscription.id,
-          clientSecret: null,
-        });
-      }
-
-      // Create or get Stripe customer
-      let customerId = user.stripeCustomerId;
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: user.email || undefined,
-          name: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : undefined,
-          metadata: {
-            userId: userId,
+      // Create checkout session for one-time payment
+      // SECURITY: Amount is set in Stripe Dashboard, not passed from client
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment", // One-time payment
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: "Lifetime Printables Access",
+                description: "Unlimited access to all camping planners and printables",
+              },
+              unit_amount: 2999, // $29.99 in cents
+            },
+            quantity: 1,
           },
-        });
-        customerId = customer.id;
-        await storage.updateStripeCustomerId(userId, customerId);
-      }
-
-      // Create subscription
-      // Note: STRIPE_PRICE_ID must be set in environment for monthly subscription
-      const priceId = process.env.STRIPE_PRICE_ID;
-      if (!priceId) {
-        return res.status(503).json({ 
-          error: "Subscription not configured. Please contact support." 
-        });
-      }
-
-      const subscription = await stripe.subscriptions.create({
-        customer: customerId,
-        items: [{
-          price: priceId,
-        }],
-        payment_behavior: 'default_incomplete',
-        payment_settings: {
-          save_default_payment_method: 'on_subscription',
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        client_reference_id: userId, // Pass user ID to identify them in webhook
+        customer_email: user.email || undefined,
+        metadata: {
+          app_user_id: userId,
+          purchase_type: "lifetime_printables",
         },
-        expand: ['latest_invoice.payment_intent'],
       });
 
-      // Save subscription ID to user
-      await storage.updateStripeSubscriptionId(userId, subscription.id);
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ error: "Unable to create checkout session: " + error.message });
+    }
+  });
 
-      // Extract client secret
-      let clientSecret = null;
-      if (subscription.latest_invoice && typeof subscription.latest_invoice === 'object') {
-        const invoice = subscription.latest_invoice as Stripe.Invoice;
-        // @ts-ignore - payment_intent exists when expanded
-        if (invoice.payment_intent && typeof invoice.payment_intent === 'object') {
-          // @ts-ignore - payment_intent exists when expanded
-          const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
-          clientSecret = paymentIntent.client_secret;
-        }
+  // POST /api/billing/create-subscription-checkout
+  // Create a Stripe Checkout session for monthly subscription
+  // Protected route - requires authentication
+  app.post("/api/billing/create-subscription-checkout", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
+    }
+
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
       }
 
-      res.json({
-        subscriptionId: subscription.id,
-        clientSecret: clientSecret,
+      // Check if user already has an active subscription
+      if (user.isSubscriber && user.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date()) {
+        return res.status(400).json({ 
+          error: "You already have an active subscription",
+          subscriptionEndDate: user.subscriptionEndDate
+        });
+      }
+
+      // Build success and cancel URLs
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const successUrl = `${baseUrl}/printables?subscription=success`;
+      const cancelUrl = `${baseUrl}/subscribe?canceled=true`;
+
+      // Create checkout session for subscription
+      // Use price_data for inline pricing or price ID if configured
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: "Monthly Printables Subscription",
+                description: "Unlimited access to all camping planners and printables",
+              },
+              unit_amount: 999, // $9.99 in cents
+              recurring: {
+                interval: "month",
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        client_reference_id: userId,
+        customer_email: user.email || undefined,
+        metadata: {
+          app_user_id: userId,
+          purchase_type: "subscription_printables",
+        },
       });
+
+      res.json({ url: session.url });
     } catch (error: any) {
-      console.error("Error creating subscription:", error);
-      res.status(500).json({ error: "Failed to create subscription: " + error.message });
+      console.error("Error creating subscription checkout:", error);
+      res.status(500).json({ error: "Unable to create subscription checkout: " + error.message });
+    }
+  });
+
+  // POST /api/webhooks/stripe
+  // Stripe webhook handler for payment events
+  // This endpoint is called by Stripe when payment events occur
+  // NO authentication middleware - Stripe verifies using webhook signature
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    if (!stripe) {
+      return res.status(503).send("Stripe not configured");
+    }
+
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!sig) {
+      return res.status(400).send("No signature");
+    }
+
+    if (!webhookSecret) {
+      console.error("STRIPE_WEBHOOK_SECRET not configured");
+      return res.status(500).send("Webhook secret not configured");
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      // Verify webhook signature
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        webhookSecret
+      );
+    } catch (err: any) {
+      console.error("Webhook signature verification failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      // Handle the event
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const userId = session.client_reference_id || session.metadata?.app_user_id;
+
+          if (!userId) {
+            console.error("No user ID in checkout session");
+            break;
+          }
+
+          const purchaseType = session.metadata?.purchase_type;
+
+          if (purchaseType === 'lifetime_printables') {
+            // Grant lifetime access
+            await storage.grantLifetimePrintableAccess(userId);
+            console.log(`Granted lifetime access to user ${userId}`);
+          } else if (purchaseType === 'subscription_printables') {
+            // Handle subscription - save customer and subscription IDs
+            if (session.customer && session.subscription) {
+              await storage.updateStripeCustomerId(userId, session.customer as string);
+              await storage.updateStripeSubscriptionId(userId, session.subscription as string);
+              
+              // Mark as subscriber with end date 1 month from now
+              const endDate = new Date();
+              endDate.setMonth(endDate.getMonth() + 1);
+              await storage.updateSubscriptionStatus(userId, true, endDate);
+              
+              console.log(`Activated subscription for user ${userId}`);
+            }
+          }
+          break;
+        }
+
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted': {
+          const subscription = event.data.object as Stripe.Subscription;
+          
+          // Find user by Stripe subscription ID
+          const userId = subscription.metadata?.app_user_id;
+          if (!userId) {
+            console.error("No user ID in subscription metadata");
+            break;
+          }
+
+          // Update subscription status based on Stripe status
+          if (subscription.status === 'active') {
+            // @ts-ignore - current_period_end exists on Stripe.Subscription
+            const periodEnd = subscription.current_period_end as number;
+            const endDate = new Date(periodEnd * 1000);
+            await storage.updateSubscriptionStatus(userId, true, endDate);
+            console.log(`Updated subscription for user ${userId} - active until ${endDate}`);
+          } else {
+            // Subscription canceled, expired, or past_due
+            await storage.updateSubscriptionStatus(userId, false, null);
+            console.log(`Deactivated subscription for user ${userId}`);
+          }
+          break;
+        }
+
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Error processing webhook:", error);
+      res.status(500).send("Webhook processing failed");
     }
   });
 
