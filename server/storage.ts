@@ -1,4 +1,4 @@
-import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, users, recipes, trips } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type SharedGroceryList, type CreateSharedGroceryList, users, recipes, trips, sharedGroceryLists } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -48,6 +48,13 @@ export interface IStorage {
   
   // Remove a recipe (meal) from a trip (with ownership check)
   removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined>;
+  
+  // Shared Grocery List methods
+  // Create a shareable grocery list with a unique token
+  createSharedGroceryList(data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList>;
+  
+  // Get a shared grocery list by its token (public access - no ownership check)
+  getSharedGroceryListByToken(token: string): Promise<SharedGroceryList | undefined>;
 }
 
 // In-memory storage implementation
@@ -250,6 +257,41 @@ export class MemStorage implements IStorage {
     trip.meals = trip.meals.filter(id => id !== recipeId);
 
     return trip;
+  }
+
+  // Shared Grocery List methods
+  private sharedLists: Map<string, SharedGroceryList> = new Map();
+  private nextSharedListId: number = 1;
+
+  async createSharedGroceryList(data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList> {
+    // Generate a unique token for sharing (URL-safe random string)
+    const token = randomUUID().replace(/-/g, '').substring(0, 32);
+    
+    const sharedList: SharedGroceryList = {
+      id: this.nextSharedListId++,
+      token,
+      tripId: data.tripId ?? null,
+      tripName: data.tripName ?? null,
+      items: data.items as any,
+      collaborators: data.collaborators,
+      userId,
+      expiresAt: data.expiresAt ?? null,
+      createdAt: new Date(),
+    };
+
+    this.sharedLists.set(token, sharedList);
+    return sharedList;
+  }
+
+  async getSharedGroceryListByToken(token: string): Promise<SharedGroceryList | undefined> {
+    const sharedList = this.sharedLists.get(token);
+    
+    // Check if the link has expired
+    if (sharedList && sharedList.expiresAt && sharedList.expiresAt < new Date()) {
+      return undefined;
+    }
+    
+    return sharedList;
   }
 }
 
@@ -478,6 +520,41 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedTrip;
+  }
+
+  // Shared Grocery List methods
+  async createSharedGroceryList(data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList> {
+    // Generate a unique token for sharing (URL-safe random string)
+    const token = randomUUID().replace(/-/g, '').substring(0, 32);
+    
+    const [sharedList] = await db
+      .insert(sharedGroceryLists)
+      .values({
+        token,
+        tripId: data.tripId ?? null,
+        tripName: data.tripName ?? null,
+        items: data.items as any,
+        collaborators: data.collaborators,
+        userId,
+        expiresAt: data.expiresAt ?? null,
+      })
+      .returning();
+    
+    return sharedList;
+  }
+
+  async getSharedGroceryListByToken(token: string): Promise<SharedGroceryList | undefined> {
+    const [sharedList] = await db
+      .select()
+      .from(sharedGroceryLists)
+      .where(eq(sharedGroceryLists.token, token));
+    
+    // Check if the link has expired
+    if (sharedList && sharedList.expiresAt && sharedList.expiresAt < new Date()) {
+      return undefined;
+    }
+    
+    return sharedList || undefined;
   }
 }
 
