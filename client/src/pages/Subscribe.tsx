@@ -1,147 +1,55 @@
 // Monthly subscription page for recurring printable access
+// Now using Stripe Checkout Sessions for a more secure, hosted payment experience
 // Reference: blueprint:javascript_stripe
 
-import { useStripe, Elements, PaymentElement, useElements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLocation } from "wouter";
-
-// Load Stripe with public key (only if available)
-const stripePromise = import.meta.env.VITE_STRIPE_PUBLIC_KEY 
-  ? loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY)
-  : null;
-
-// Subscribe form component
-function SubscribeForm() {
-  const stripe = useStripe();
-  const elements = useElements();
-  const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!stripe || !elements) {
-      return;
-    }
-
-    setIsProcessing(true);
-
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: window.location.origin + '/printables?subscription=success',
-      },
-    });
-
-    setIsProcessing(false);
-
-    if (error) {
-      toast({
-        title: "Payment Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <PaymentElement />
-      <Button 
-        type="submit" 
-        disabled={!stripe || isProcessing} 
-        className="w-full"
-        data-testid="button-submit-subscription"
-      >
-        {isProcessing ? "Processing..." : "Subscribe for $9.99/month"}
-      </Button>
-    </form>
-  );
-}
+import { CheckCircle2Icon } from "lucide-react";
 
 // Main subscribe page component
 export default function Subscribe() {
-  const [clientSecret, setClientSecret] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const searchParams = new URLSearchParams(window.location.search);
+  const canceled = searchParams.get('canceled');
 
   useEffect(() => {
-    // Check if Stripe is configured
-    if (!stripePromise) {
-      setIsLoading(false);
-      return;
-    }
-
-    // Create or retrieve subscription
-    apiRequest("POST", "/api/create-subscription", {})
-      .then((res: any) => res.json())
-      .then((data: any) => {
-        if (data.clientSecret) {
-          setClientSecret(data.clientSecret);
-        } else {
-          // User already has an active subscription
-          toast({
-            title: "Already Subscribed",
-            description: "You already have an active subscription!",
-          });
-          setTimeout(() => window.location.href = '/printables', 2000);
-        }
-        setIsLoading(false);
-      })
-      .catch((error: any) => {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to initialize subscription. Please try again.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
+    if (canceled) {
+      toast({
+        title: "Subscription Canceled",
+        description: "You can try again when you're ready.",
+        variant: "destructive",
       });
-  }, []);
+    }
+  }, [canceled]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" aria-label="Loading"/>
-      </div>
-    );
-  }
+  const handleSubscribe = async () => {
+    setIsLoading(true);
 
-  // Show message if Stripe is not configured
-  if (!stripePromise) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Subscription Not Available</CardTitle>
-            <CardDescription>
-              Payment processing is not configured yet. Please contact the site administrator.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!clientSecret) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Subscription Error</CardTitle>
-            <CardDescription>
-              Unable to initialize subscription. Please try again or contact support.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
+    try {
+      const response = await apiRequest("POST", "/api/billing/create-subscription-checkout", {});
+      const data = await response.json();
+      
+      if (data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else if (data.error) {
+        throw new Error(data.error);
+      } else {
+        throw new Error("No checkout URL returned");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start subscription. Please try again.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -153,22 +61,60 @@ export default function Subscribe() {
               Get access to all printable camping planners and games with a monthly subscription
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="mb-6 space-y-2">
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
               <h3 className="font-semibold">What's Included:</h3>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>All printable camping planners and games</li>
-                <li>New resources added each month</li>
-                <li>High-quality PDF downloads</li>
-                <li>Cancel anytime - no commitments</li>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground">
+                    All printable camping planners and games
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground">
+                    New resources added each month
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground">
+                    High-quality PDF downloads
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2Icon className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-muted-foreground">
+                    Cancel anytime - no commitments
+                  </span>
+                </li>
               </ul>
-              <p className="text-sm text-muted-foreground pt-4">
-                Only $9.99/month - save vs. lifetime access if you only need short-term access
+            </div>
+
+            <div className="pt-4 border-t">
+              <div className="flex items-baseline justify-between mb-4">
+                <span className="text-lg font-semibold">Monthly</span>
+                <div className="text-right">
+                  <span className="text-3xl font-bold">$9.99</span>
+                  <span className="text-sm text-muted-foreground">/month</span>
+                </div>
+              </div>
+              
+              <Button 
+                onClick={handleSubscribe}
+                disabled={isLoading} 
+                className="w-full"
+                data-testid="button-subscribe"
+                size="lg"
+              >
+                {isLoading ? "Redirecting to Checkout..." : "Subscribe for $9.99/month"}
+              </Button>
+              
+              <p className="text-xs text-center text-muted-foreground mt-4">
+                Secure payment powered by Stripe. You'll be redirected to complete your subscription. Cancel anytime.
               </p>
             </div>
-            <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <SubscribeForm />
-            </Elements>
           </CardContent>
         </Card>
       </div>
