@@ -4,6 +4,7 @@
 // Reference: blueprint:javascript_stripe
 
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,11 @@ export default function Subscribe() {
   const { toast } = useToast();
   const searchParams = new URLSearchParams(window.location.search);
   const canceled = searchParams.get('canceled');
+
+  // Check if user is authenticated
+  const { data: user, isLoading: isLoadingUser } = useQuery({
+    queryKey: ['/api/auth/user'],
+  });
 
   useEffect(() => {
     if (canceled) {
@@ -130,15 +136,27 @@ export default function Subscribe() {
                 </div>
               </div>
               
-              <Button 
-                onClick={handleSubscribe}
-                disabled={isLoading} 
-                className="w-full"
-                data-testid="button-subscribe"
-                size="lg"
-              >
-                {isLoading ? "Redirecting to Checkout..." : "Start 7-Day Free Trial"}
-              </Button>
+              {!user ? (
+                <Button 
+                  onClick={() => window.location.href = '/api/auth/login'}
+                  disabled={isLoadingUser} 
+                  className="w-full"
+                  data-testid="button-login"
+                  size="lg"
+                >
+                  {isLoadingUser ? "Loading..." : "Log In to Continue"}
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleSubscribe}
+                  disabled={isLoading} 
+                  className="w-full"
+                  data-testid="button-subscribe"
+                  size="lg"
+                >
+                  {isLoading ? "Redirecting to Checkout..." : "Start 7-Day Free Trial"}
+                </Button>
+              )}
               
               <p className="text-xs text-center text-muted-foreground mt-4">
                 Secure payment powered by Stripe. Cancel anytime during trial for $0 charge.
