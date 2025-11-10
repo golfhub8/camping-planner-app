@@ -10,9 +10,14 @@ import Stripe from "stripe";
 // Reference: blueprint:javascript_stripe
 let stripe: Stripe | null = null;
 if (process.env.STRIPE_SECRET_KEY) {
+  const keyPrefix = process.env.STRIPE_SECRET_KEY.substring(0, 7);
+  console.log(`[Stripe] Initializing with key prefix: ${keyPrefix}`);
   stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: "2025-10-29.clover",
   });
+  console.log('[Stripe] Client initialized successfully');
+} else {
+  console.error('[Stripe] STRIPE_SECRET_KEY not found in environment');
 }
 
 // Register Stripe webhook route BEFORE global JSON middleware
@@ -75,11 +80,25 @@ export function registerWebhookRoute(app: Express): void {
               await storage.updateStripeSubscriptionId(userId, session.subscription as string);
               
               // Fetch the subscription to get the actual current_period_end (includes trial)
-              const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
-              const endDate = new Date(subscription.current_period_end * 1000);
+              const subscriptionResponse = await stripe.subscriptions.retrieve(session.subscription as string);
+              
+              // Type guard: ensure this is an active subscription (not deleted)
+              if (!subscriptionResponse || subscriptionResponse.object !== 'subscription') {
+                console.error(`Expected subscription object but got: ${subscriptionResponse?.object || 'null'}`);
+                break;
+              }
+              
+              // Type guard: ensure current_period_end exists and is a number
+              if (!('current_period_end' in subscriptionResponse) || 
+                  typeof subscriptionResponse.current_period_end !== 'number') {
+                console.error('Subscription missing valid current_period_end');
+                break;
+              }
+              
+              const endDate = new Date(subscriptionResponse.current_period_end * 1000);
               await storage.updateProMembershipEndDate(userId, endDate);
               
-              console.log(`Activated Pro membership for user ${userId} - status: ${subscription.status}, expires ${endDate}`);
+              console.log(`Activated Pro membership for user ${userId} - status: ${subscriptionResponse.status}, expires ${endDate}`);
             }
           }
           break;
@@ -87,7 +106,13 @@ export function registerWebhookRoute(app: Express): void {
 
         case 'customer.subscription.updated':
         case 'customer.subscription.deleted': {
-          const subscription = event.data.object as Stripe.Subscription;
+          const subscription = event.data.object;
+          
+          // Type guard: ensure this is an active subscription (not deleted)
+          if (subscription.object !== 'subscription') {
+            console.error(`Expected subscription object but got: ${subscription.object}`);
+            break;
+          }
           
           // Find user by Stripe subscription ID
           const userId = subscription.metadata?.app_user_id;
@@ -98,9 +123,14 @@ export function registerWebhookRoute(app: Express): void {
 
           // Update Pro membership status based on Stripe subscription status
           if (subscription.status === 'active' || subscription.status === 'trialing') {
-            // @ts-ignore - current_period_end exists on Stripe.Subscription
-            const periodEnd = subscription.current_period_end as number;
-            const endDate = new Date(periodEnd * 1000);
+            // Type guard: ensure current_period_end exists and is a number
+            if (!('current_period_end' in subscription) || 
+                typeof subscription.current_period_end !== 'number') {
+              console.error('Subscription missing valid current_period_end');
+              break;
+            }
+            
+            const endDate = new Date(subscription.current_period_end * 1000);
             await storage.updateProMembershipEndDate(userId, endDate);
             console.log(`Updated Pro membership for user ${userId} - expires ${endDate}`);
           } else {
