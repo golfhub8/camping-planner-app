@@ -182,3 +182,58 @@ export type Trip = typeof trips.$inferSelect;
 export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;
 export type AddTripCost = z.infer<typeof addTripCostSchema>;
 export type AddMeal = z.infer<typeof addMealSchema>;
+
+// Shared Grocery Lists table schema
+// Stores shareable grocery lists with unique tokens for public access
+export const sharedGroceryLists = pgTable("shared_grocery_lists", {
+  // Auto-generated unique identifier
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  
+  // Unique token for sharing (URL-safe random string)
+  token: varchar("token", { length: 32 }).notNull().unique(),
+  
+  // Associated trip ID (nullable - can share grocery list without trip)
+  tripId: integer("trip_id"),
+  
+  // Trip name for display purposes (nullable)
+  tripName: text("trip_name"),
+  
+  // Array of grocery items (stored as JSONB)
+  items: jsonb("items").notNull(),
+  
+  // Array of collaborator emails/names who should receive notifications
+  collaborators: text("collaborators").array().notNull().default(sql`'{}'::text[]`),
+  
+  // User who created this shared list
+  userId: varchar("user_id").notNull().references(() => users.id),
+  
+  // When the link expires (nullable - if null, never expires)
+  expiresAt: timestamp("expires_at"),
+  
+  // When the shared list was created
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Schema for creating a shared grocery list
+export const createSharedGroceryListSchema = z.object({
+  tripId: z.number().optional(),
+  tripName: z.string().optional(),
+  items: z.array(groceryItemSchema).min(1, "At least one item is required"),
+  collaborators: z.array(z.string().email()).default([]),
+  expiresAt: z.coerce.date().optional(),
+});
+
+// Schema for sending notifications about a shared list
+export const sendGroceryNotificationSchema = z.object({
+  shareToken: z.string(),
+  recipients: z.array(z.object({
+    email: z.string().email().optional(),
+    phone: z.string().optional(),
+  })).min(1, "At least one recipient is required"),
+  message: z.string().optional(),
+});
+
+// TypeScript types for shared grocery lists
+export type CreateSharedGroceryList = z.infer<typeof createSharedGroceryListSchema>;
+export type SendGroceryNotification = z.infer<typeof sendGroceryNotificationSchema>;
+export type SharedGroceryList = typeof sharedGroceryLists.$inferSelect;
