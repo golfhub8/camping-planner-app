@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import Stripe from "stripe";
@@ -232,6 +232,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.error("Error generating grocery list:", error);
       res.status(500).json({ error: "Failed to generate grocery list" });
+    }
+  });
+
+  // POST /api/grocery/share
+  // Creates a shareable grocery list with a unique token
+  // Body: { items: GroceryItem[], tripId?: number, tripName?: string, collaborators?: string[] }
+  // Returns: { token: string, shareUrl: string }
+  // Protected route - requires authentication
+  app.post("/api/grocery/share", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate the request body
+      const data = createSharedGroceryListSchema.parse(req.body);
+      
+      // Create the shared grocery list
+      const sharedList = await storage.createSharedGroceryList(data, userId);
+      
+      // Generate the full shareable URL
+      const shareUrl = `${req.protocol}://${req.get('host')}/shared/${sharedList.token}`;
+      
+      res.json({ 
+        token: sharedList.token,
+        shareUrl,
+        id: sharedList.id,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error creating shared grocery list:", error);
+      res.status(500).json({ error: "Failed to create shared list" });
+    }
+  });
+
+  // GET /api/grocery/shared/:token
+  // Retrieves a shared grocery list by its token
+  // Public route - no authentication required
+  app.get("/api/grocery/shared/:token", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Retrieve the shared list
+      const sharedList = await storage.getSharedGroceryListByToken(token);
+      
+      if (!sharedList) {
+        return res.status(404).json({ error: "Shared list not found or expired" });
+      }
+      
+      res.json(sharedList);
+    } catch (error) {
+      console.error("Error fetching shared grocery list:", error);
+      res.status(500).json({ error: "Failed to fetch shared list" });
     }
   });
 
