@@ -68,22 +68,18 @@ export function registerWebhookRoute(app: Express): void {
 
           const purchaseType = session.metadata?.purchase_type;
 
-          if (purchaseType === 'lifetime_printables') {
-            // Grant lifetime access
-            await storage.grantLifetimePrintableAccess(userId);
-            console.log(`Granted lifetime access to user ${userId}`);
-          } else if (purchaseType === 'subscription_printables') {
-            // Handle subscription - save customer and subscription IDs
+          if (purchaseType === 'pro_membership_annual') {
+            // Handle annual Pro membership subscription - save customer and subscription IDs
             if (session.customer && session.subscription) {
               await storage.updateStripeCustomerId(userId, session.customer as string);
               await storage.updateStripeSubscriptionId(userId, session.subscription as string);
               
-              // Mark as subscriber with end date 1 month from now
+              // Set Pro membership end date 1 year from now (trial period handled by Stripe)
               const endDate = new Date();
-              endDate.setMonth(endDate.getMonth() + 1);
-              await storage.updateSubscriptionStatus(userId, true, endDate);
+              endDate.setFullYear(endDate.getFullYear() + 1);
+              await storage.updateProMembershipEndDate(userId, endDate);
               
-              console.log(`Activated subscription for user ${userId}`);
+              console.log(`Activated Pro membership for user ${userId} - expires ${endDate}`);
             }
           }
           break;
@@ -100,17 +96,17 @@ export function registerWebhookRoute(app: Express): void {
             break;
           }
 
-          // Update subscription status based on Stripe status
-          if (subscription.status === 'active') {
+          // Update Pro membership status based on Stripe subscription status
+          if (subscription.status === 'active' || subscription.status === 'trialing') {
             // @ts-ignore - current_period_end exists on Stripe.Subscription
             const periodEnd = subscription.current_period_end as number;
             const endDate = new Date(periodEnd * 1000);
-            await storage.updateSubscriptionStatus(userId, true, endDate);
-            console.log(`Updated subscription for user ${userId} - active until ${endDate}`);
+            await storage.updateProMembershipEndDate(userId, endDate);
+            console.log(`Updated Pro membership for user ${userId} - expires ${endDate}`);
           } else {
-            // Subscription canceled, expired, or past_due
-            await storage.updateSubscriptionStatus(userId, false, null);
-            console.log(`Deactivated subscription for user ${userId}`);
+            // Subscription canceled, expired, or past_due - revoke access
+            await storage.updateProMembershipEndDate(userId, null);
+            console.log(`Revoked Pro membership for user ${userId}`);
           }
           break;
         }
@@ -127,7 +123,8 @@ export function registerWebhookRoute(app: Express): void {
   });
 }
 
-// Middleware to require printable access (lifetime or active subscription)
+// Middleware to require Pro membership for printables access
+// Checks if user has active Pro membership (includes both trial and paid)
 // Usage: app.get("/api/printables", isAuthenticated, requirePrintableAccess, handler)
 function requirePrintableAccess(req: any, res: any, next: any) {
   if (!req.user) {
@@ -136,19 +133,14 @@ function requirePrintableAccess(req: any, res: any, next: any) {
 
   const userId = req.user.claims.sub;
   
-  // Check if user has access (will be populated by isAuthenticated middleware)
+  // Check if user has Pro membership access
   storage.getUser(userId).then(user => {
     if (!user) {
       return res.status(401).json({ error: "User not found" });
     }
 
-    // Check for lifetime access
-    if (user.hasPrintableLifetime) {
-      return next();
-    }
-
-    // Check for active subscription
-    if (user.isSubscriber && user.subscriptionEndDate && user.subscriptionEndDate > new Date()) {
+    // Check for active Pro membership (including trial period)
+    if (user.proMembershipEndDate && user.proMembershipEndDate > new Date()) {
       return next();
     }
 
@@ -183,7 +175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Printables Routes
   
   // GET /api/printables/access
-  // Check if user has access to printables (lifetime or active subscription)
+  // Check if user has Pro membership for printables access
+  // Includes both trial and paid annual subscriptions
   // Protected route - requires authentication
   app.get('/api/printables/access', isAuthenticated, async (req: any, res) => {
     try {
@@ -194,22 +187,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ hasAccess: false, message: "User not found" });
       }
 
-      // Check for lifetime access
-      if (user.hasPrintableLifetime) {
+      // Check for active Pro membership (trial or paid)
+      if (user.proMembershipEndDate && user.proMembershipEndDate > new Date()) {
         return res.json({ 
           hasAccess: true, 
-          accessType: 'lifetime',
-          message: "You have lifetime access to all printables"
-        });
-      }
-
-      // Check for active subscription
-      if (user.isSubscriber && user.subscriptionEndDate && user.subscriptionEndDate > new Date()) {
-        return res.json({ 
-          hasAccess: true, 
-          accessType: 'subscription',
-          expiresAt: user.subscriptionEndDate,
-          message: "You have subscription access to all printables"
+          accessType: 'pro',
+          expiresAt: user.proMembershipEndDate,
+          message: "You have Pro membership access to all printables"
         });
       }
 
@@ -961,8 +945,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reference: blueprint:javascript_stripe
 
   // POST /api/billing/create-checkout-session
-  // Create a Stripe Checkout session for one-time lifetime access purchase
-  // Checkout Sessions are more secure and handle the entire payment flow
+  // Create a Stripe Checkout session for Pro Membership
+  // Annual subscription at $29.99/year with 7-day free trial
   // Protected route - requires authentication
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
@@ -977,76 +961,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Build success and cancel URLs
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${baseUrl}/printables?payment=success`;
-      const cancelUrl = `${baseUrl}/checkout?canceled=true`;
-
-      // Create checkout session for one-time payment
-      // SECURITY: Amount is set in Stripe Dashboard, not passed from client
-      const session = await stripe.checkout.sessions.create({
-        mode: "payment", // One-time payment
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Lifetime Printables Access",
-                description: "Unlimited access to all camping planners and printables",
-              },
-              unit_amount: 2999, // $29.99 in cents
-            },
-            quantity: 1,
-          },
-        ],
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        client_reference_id: userId, // Pass user ID to identify them in webhook
-        customer_email: user.email || undefined,
-        metadata: {
-          app_user_id: userId,
-          purchase_type: "lifetime_printables",
-        },
-      });
-
-      res.json({ url: session.url });
-    } catch (error: any) {
-      console.error("Error creating checkout session:", error);
-      res.status(500).json({ error: "Unable to create checkout session: " + error.message });
-    }
-  });
-
-  // POST /api/billing/create-subscription-checkout
-  // Create a Stripe Checkout session for monthly subscription
-  // Protected route - requires authentication
-  app.post("/api/billing/create-subscription-checkout", isAuthenticated, async (req: any, res) => {
-    if (!stripe) {
-      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
-    }
-
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      // Check if user already has an active subscription
-      if (user.isSubscriber && user.subscriptionEndDate && new Date(user.subscriptionEndDate) > new Date()) {
+      // Check if user already has an active Pro membership
+      if (user.proMembershipEndDate && new Date(user.proMembershipEndDate) > new Date()) {
         return res.status(400).json({ 
-          error: "You already have an active subscription",
-          subscriptionEndDate: user.subscriptionEndDate
+          error: "You already have an active Pro membership",
+          expiresAt: user.proMembershipEndDate
         });
       }
 
       // Build success and cancel URLs
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${baseUrl}/printables?subscription=success`;
+      const successUrl = `${baseUrl}/printables?payment=success`;
       const cancelUrl = `${baseUrl}/subscribe?canceled=true`;
 
-      // Create checkout session for subscription
-      // Use price_data for inline pricing or price ID if configured
+      // Create checkout session for annual subscription with 7-day trial
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         line_items: [
@@ -1054,33 +982,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
             price_data: {
               currency: "usd",
               product_data: {
-                name: "Monthly Printables Subscription",
-                description: "Unlimited access to all camping planners and printables",
+                name: "Pro Membership",
+                description: "Annual access to all camping printables with 7-day free trial",
               },
-              unit_amount: 999, // $9.99 in cents
+              unit_amount: 2999, // $29.99 in cents
               recurring: {
-                interval: "month",
+                interval: "year",
               },
             },
             quantity: 1,
           },
         ],
+        subscription_data: {
+          trial_period_days: 7, // 7-day free trial
+        },
         success_url: successUrl,
         cancel_url: cancelUrl,
         client_reference_id: userId,
         customer_email: user.email || undefined,
         metadata: {
           app_user_id: userId,
-          purchase_type: "subscription_printables",
+          purchase_type: "pro_membership_annual",
         },
       });
 
       res.json({ url: session.url });
     } catch (error: any) {
-      console.error("Error creating subscription checkout:", error);
-      res.status(500).json({ error: "Unable to create subscription checkout: " + error.message });
+      console.error("Error creating Pro membership checkout:", error);
+      res.status(500).json({ error: "Unable to create checkout session: " + error.message });
     }
   });
+
 
   const httpServer = createServer(app);
 
