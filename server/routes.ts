@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
@@ -862,11 +862,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/webhooks/stripe
+  // POST /api/stripe/webhook
   // Stripe webhook handler for payment events
   // This endpoint is called by Stripe when payment events occur
   // NO authentication middleware - Stripe verifies using webhook signature
-  app.post("/api/webhooks/stripe", async (req, res) => {
+  // IMPORTANT: This route MUST use raw body for signature verification
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     if (!stripe) {
       return res.status(503).send("Stripe not configured");
     }
