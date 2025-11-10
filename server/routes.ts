@@ -15,6 +15,118 @@ if (process.env.STRIPE_SECRET_KEY) {
   });
 }
 
+// Register Stripe webhook route BEFORE global JSON middleware
+// This is critical for proper signature verification
+export function registerWebhookRoute(app: Express): void {
+  // POST /api/stripe/webhook
+  // Stripe webhook handler for payment events
+  // This endpoint is called by Stripe when payment events occur
+  // NO authentication middleware - Stripe verifies using webhook signature
+  // IMPORTANT: This route MUST use raw body for signature verification
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    if (!stripe) {
+      return res.status(503).send("Stripe not configured");
+    }
+
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!sig) {
+      return res.status(400).send("No signature");
+    }
+
+    if (!webhookSecret) {
+      console.error("STRIPE_WEBHOOK_SECRET not configured");
+      return res.status(500).send("Webhook secret not configured");
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      // Verify webhook signature
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        webhookSecret
+      );
+    } catch (err: any) {
+      console.error("Webhook signature verification failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      // Handle the event
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const userId = session.client_reference_id || session.metadata?.app_user_id;
+
+          if (!userId) {
+            console.error("No user ID in checkout session");
+            break;
+          }
+
+          const purchaseType = session.metadata?.purchase_type;
+
+          if (purchaseType === 'lifetime_printables') {
+            // Grant lifetime access
+            await storage.grantLifetimePrintableAccess(userId);
+            console.log(`Granted lifetime access to user ${userId}`);
+          } else if (purchaseType === 'subscription_printables') {
+            // Handle subscription - save customer and subscription IDs
+            if (session.customer && session.subscription) {
+              await storage.updateStripeCustomerId(userId, session.customer as string);
+              await storage.updateStripeSubscriptionId(userId, session.subscription as string);
+              
+              // Mark as subscriber with end date 1 month from now
+              const endDate = new Date();
+              endDate.setMonth(endDate.getMonth() + 1);
+              await storage.updateSubscriptionStatus(userId, true, endDate);
+              
+              console.log(`Activated subscription for user ${userId}`);
+            }
+          }
+          break;
+        }
+
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted': {
+          const subscription = event.data.object as Stripe.Subscription;
+          
+          // Find user by Stripe subscription ID
+          const userId = subscription.metadata?.app_user_id;
+          if (!userId) {
+            console.error("No user ID in subscription metadata");
+            break;
+          }
+
+          // Update subscription status based on Stripe status
+          if (subscription.status === 'active') {
+            // @ts-ignore - current_period_end exists on Stripe.Subscription
+            const periodEnd = subscription.current_period_end as number;
+            const endDate = new Date(periodEnd * 1000);
+            await storage.updateSubscriptionStatus(userId, true, endDate);
+            console.log(`Updated subscription for user ${userId} - active until ${endDate}`);
+          } else {
+            // Subscription canceled, expired, or past_due
+            await storage.updateSubscriptionStatus(userId, false, null);
+            console.log(`Deactivated subscription for user ${userId}`);
+          }
+          break;
+        }
+
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+      }
+
+      res.json({ received: true });
+    } catch (error) {
+      console.error("Error processing webhook:", error);
+      res.status(500).send("Webhook processing failed");
+    }
+  });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication middleware (Replit Auth integration)
   await setupAuth(app);
@@ -859,114 +971,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating subscription checkout:", error);
       res.status(500).json({ error: "Unable to create subscription checkout: " + error.message });
-    }
-  });
-
-  // POST /api/stripe/webhook
-  // Stripe webhook handler for payment events
-  // This endpoint is called by Stripe when payment events occur
-  // NO authentication middleware - Stripe verifies using webhook signature
-  // IMPORTANT: This route MUST use raw body for signature verification
-  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-    if (!stripe) {
-      return res.status(503).send("Stripe not configured");
-    }
-
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-    if (!sig) {
-      return res.status(400).send("No signature");
-    }
-
-    if (!webhookSecret) {
-      console.error("STRIPE_WEBHOOK_SECRET not configured");
-      return res.status(500).send("Webhook secret not configured");
-    }
-
-    let event: Stripe.Event;
-
-    try {
-      // Verify webhook signature
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        webhookSecret
-      );
-    } catch (err: any) {
-      console.error("Webhook signature verification failed:", err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    try {
-      // Handle the event
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object as Stripe.Checkout.Session;
-          const userId = session.client_reference_id || session.metadata?.app_user_id;
-
-          if (!userId) {
-            console.error("No user ID in checkout session");
-            break;
-          }
-
-          const purchaseType = session.metadata?.purchase_type;
-
-          if (purchaseType === 'lifetime_printables') {
-            // Grant lifetime access
-            await storage.grantLifetimePrintableAccess(userId);
-            console.log(`Granted lifetime access to user ${userId}`);
-          } else if (purchaseType === 'subscription_printables') {
-            // Handle subscription - save customer and subscription IDs
-            if (session.customer && session.subscription) {
-              await storage.updateStripeCustomerId(userId, session.customer as string);
-              await storage.updateStripeSubscriptionId(userId, session.subscription as string);
-              
-              // Mark as subscriber with end date 1 month from now
-              const endDate = new Date();
-              endDate.setMonth(endDate.getMonth() + 1);
-              await storage.updateSubscriptionStatus(userId, true, endDate);
-              
-              console.log(`Activated subscription for user ${userId}`);
-            }
-          }
-          break;
-        }
-
-        case 'customer.subscription.updated':
-        case 'customer.subscription.deleted': {
-          const subscription = event.data.object as Stripe.Subscription;
-          
-          // Find user by Stripe subscription ID
-          const userId = subscription.metadata?.app_user_id;
-          if (!userId) {
-            console.error("No user ID in subscription metadata");
-            break;
-          }
-
-          // Update subscription status based on Stripe status
-          if (subscription.status === 'active') {
-            // @ts-ignore - current_period_end exists on Stripe.Subscription
-            const periodEnd = subscription.current_period_end as number;
-            const endDate = new Date(periodEnd * 1000);
-            await storage.updateSubscriptionStatus(userId, true, endDate);
-            console.log(`Updated subscription for user ${userId} - active until ${endDate}`);
-          } else {
-            // Subscription canceled, expired, or past_due
-            await storage.updateSubscriptionStatus(userId, false, null);
-            console.log(`Deactivated subscription for user ${userId}`);
-          }
-          break;
-        }
-
-        default:
-          console.log(`Unhandled event type: ${event.type}`);
-      }
-
-      res.json({ received: true });
-    } catch (error) {
-      console.error("Error processing webhook:", error);
-      res.status(500).send("Webhook processing failed");
     }
   });
 
