@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent, Copy, Check } from "lucide-react";
 import Header from "@/components/Header";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { GroceryItem, GroceryCategory } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
 
@@ -28,6 +30,10 @@ export default function GroceryList() {
   const [location, setLocation] = useLocation();
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
   const [showOnlyNeeded, setShowOnlyNeeded] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   // Parse recipe IDs from URL query parameters
   const searchParams = new URLSearchParams(window.location.search);
@@ -61,12 +67,61 @@ export default function GroceryList() {
     );
   }
 
-  // Navigate to share page with unchecked items
+  // Create shareable link mutation
+  const createShareLinkMutation = useMutation({
+    mutationFn: async (items: GroceryItem[]) => {
+      const response = await apiRequest("POST", "/api/grocery/share", { items });
+      const data = await response.json();
+      return data as { token: string; shareUrl: string };
+    },
+    onSuccess: (data) => {
+      setShareUrl(data.shareUrl);
+      setShareDialogOpen(true);
+      toast({
+        title: "Share link created!",
+        description: "Copy the link to share your grocery list with others.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create share link",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle creating shareable link
   function handleShare() {
     const neededItems = groceryItems.filter(item => !item.checked);
-    // Store items in sessionStorage to pass to share page
-    sessionStorage.setItem("groceryItems", JSON.stringify(neededItems));
-    setLocation("/grocery/share");
+    if (neededItems.length === 0) {
+      toast({
+        title: "No items to share",
+        description: "All items are checked off. Uncheck some items to share.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createShareLinkMutation.mutate(neededItems);
+  }
+
+  // Copy share URL to clipboard
+  async function copyShareUrl() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast({
+        title: "Link copied!",
+        description: "You can now paste and share the link.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the link manually.",
+        variant: "destructive",
+      });
+    }
   }
 
   // Group items by category
@@ -239,13 +294,60 @@ export default function GroceryList() {
         </Button>
         <Button
           onClick={handleShare}
-          disabled={neededCount === 0}
+          disabled={neededCount === 0 || createShareLinkMutation.isPending}
           data-testid="button-share"
         >
-          <Share2 className="h-4 w-4 mr-2" />
-          Share List ({neededCount} items)
+          {createShareLinkMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Creating Link...
+            </>
+          ) : (
+            <>
+              <Share2 className="h-4 w-4 mr-2" />
+              Share List ({neededCount} items)
+            </>
+          )}
         </Button>
       </div>
+
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent data-testid="dialog-share">
+          <DialogHeader>
+            <DialogTitle>Share Your Grocery List</DialogTitle>
+            <DialogDescription>
+              Anyone with this link can view your grocery list. The link never expires.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={shareUrl}
+                readOnly
+                className="flex-1 px-3 py-2 border rounded-md bg-muted text-sm"
+                data-testid="input-share-url"
+              />
+              <Button
+                onClick={copyShareUrl}
+                variant="outline"
+                size="icon"
+                data-testid="button-copy-url"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Share this link with family or friends so they can see what groceries to buy for your camping trip!
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
       </main>
     </div>
   );
