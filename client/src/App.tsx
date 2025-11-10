@@ -15,6 +15,7 @@ import TripDetail from "@/pages/TripDetail";
 import Printables from "@/pages/Printables";
 import Checkout from "@/pages/Checkout";
 import Subscribe from "@/pages/Subscribe";
+import SharedGroceryView from "@/pages/SharedGroceryView";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,38 +78,51 @@ function Landing() {
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Show loading state while checking authentication
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <img src={bannerImage} alt="The Camping Planner" className="h-24 mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show landing page if not authenticated
-  if (!isAuthenticated) {
-    return <Landing />;
-  }
-
-  // Show authenticated app routes
+  // Public routes that don't require authentication
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/recipe/:id" component={RecipeDetail} />
-      <Route path="/search" component={SearchResults} />
-      <Route path="/grocery" component={GrocerySelection} />
-      <Route path="/grocery/list" component={GroceryList} />
-      <Route path="/grocery/share" component={GroceryShare} />
-      <Route path="/trips/:id" component={TripDetail} />
-      <Route path="/trips" component={Trips} />
-      <Route path="/printables" component={Printables} />
-      <Route path="/checkout" component={Checkout} />
-      <Route path="/subscribe" component={Subscribe} />
-      <Route component={NotFound} />
+      {/* Public shared grocery list view - no auth required */}
+      <Route path="/shared/:token" component={SharedGroceryView} />
+      
+      {/* All other routes require authentication */}
+      <Route>
+        {() => {
+          // Show loading state while checking authentication
+          if (isLoading) {
+            return (
+              <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="text-center">
+                  <img src={bannerImage} alt="The Camping Planner" className="h-24 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading...</p>
+                </div>
+              </div>
+            );
+          }
+
+          // Show landing page if not authenticated
+          if (!isAuthenticated) {
+            return <Landing />;
+          }
+
+          // Show authenticated app routes
+          return (
+            <Switch>
+              <Route path="/" component={Home} />
+              <Route path="/recipe/:id" component={RecipeDetail} />
+              <Route path="/search" component={SearchResults} />
+              <Route path="/grocery" component={GrocerySelection} />
+              <Route path="/grocery/list" component={GroceryList} />
+              <Route path="/grocery/share" component={GroceryShare} />
+              <Route path="/trips/:id" component={TripDetail} />
+              <Route path="/trips" component={Trips} />
+              <Route path="/printables" component={Printables} />
+              <Route path="/checkout" component={Checkout} />
+              <Route path="/subscribe" component={Subscribe} />
+              <Route component={NotFound} />
+            </Switch>
+          );
+        }}
+      </Route>
     </Switch>
   );
 }
