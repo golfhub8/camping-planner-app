@@ -38,30 +38,37 @@ export default function Subscribe() {
 
   const handleSubscribe = async () => {
     setIsLoading(true);
-    console.log("Starting Pro membership signup...");
 
     try {
-      console.log("Sending API request...");
       const response = await apiRequest("POST", "/api/billing/create-checkout-session", {});
-      console.log("Response status:", response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Network error" }));
+        throw new Error(errorData.error || "Failed to create checkout session");
+      }
       
       const data = await response.json();
-      console.log("Response data:", data);
       
       if (data.url) {
-        console.log("Redirecting to:", data.url);
+        // Show toast before redirecting
+        toast({
+          title: "Redirecting to checkout...",
+          description: "You'll be redirected to Stripe's secure payment page",
+        });
+        
+        // Small delay to ensure toast is visible
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Redirect to Stripe Checkout
         window.location.href = data.url;
-      } else if (data.error) {
-        throw new Error(data.error);
       } else {
-        throw new Error("No checkout URL returned");
+        throw new Error("No checkout URL returned from server");
       }
     } catch (error: any) {
       console.error("Signup error:", error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to start Pro membership signup. Please try again.",
+        title: "Error Starting Checkout",
+        description: error.message || "Unable to start checkout. Please refresh and try again.",
         variant: "destructive",
       });
       setIsLoading(false);
