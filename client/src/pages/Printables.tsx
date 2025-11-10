@@ -9,7 +9,7 @@ import { Link } from "wouter";
 
 interface AccessResponse {
   hasAccess: boolean;
-  accessType?: 'lifetime' | 'subscription';
+  accessType?: 'pro';
   message: string;
   expiresAt?: Date;
 }
@@ -72,12 +72,12 @@ export default function Printables() {
               {hasAccess ? (
                 <Badge variant="default" className="text-sm px-4 py-1" data-testid="badge-access-status">
                   <CheckCircle2Icon className="w-4 h-4 mr-2" />
-                  {accessData.accessType === 'lifetime' ? 'Lifetime Access' : 'Subscription Active'}
+                  Pro Member
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="text-sm px-4 py-1" data-testid="badge-no-access">
                   <LockIcon className="w-4 h-4 mr-2" />
-                  No Access
+                  Not a Pro Member
                 </Badge>
               )}
             </div>
@@ -90,18 +90,14 @@ export default function Printables() {
             <LockIcon className="h-4 w-4" />
             <AlertDescription>
               <p className="font-semibold mb-2">{accessData?.message}</p>
-              <div className="flex gap-3 mt-4">
-                <Button asChild size="sm" data-testid="button-purchase-lifetime">
-                  <Link href="/checkout">
-                    Purchase Lifetime Access ($29.99)
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="sm" data-testid="button-subscribe">
-                  <Link href="/subscribe">
-                    Subscribe ($9.99/month)
-                  </Link>
-                </Button>
-              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Become a Pro member to access all printables. Start with a 7-day free trial!
+              </p>
+              <Button asChild size="sm" data-testid="button-start-trial">
+                <Link href="/subscribe">
+                  Start 7-Day Free Trial ($29.99/year)
+                </Link>
+              </Button>
             </AlertDescription>
           </Alert>
         )}
