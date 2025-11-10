@@ -612,6 +612,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/trips/:id/share
+  // Create or update a shareable link for a trip's grocery list
+  // This generates the grocery list from the trip's meals and creates a public share link
+  // Protected route - requires authentication and trip ownership
+  app.post("/api/trips/:id/share", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Get the trip (user can only access their own trips)
+      const trip = await storage.getTripById(tripId, userId);
+      if (!trip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      // Check if trip has any meals
+      if (trip.meals.length === 0) {
+        return res.status(400).json({ error: "Cannot share grocery list - trip has no meals" });
+      }
+
+      // Fetch all recipes for the trip's meals
+      const recipes = await Promise.all(
+        trip.meals.map(id => storage.getRecipeById(id, userId))
+      );
+      
+      // Filter out any null recipes
+      const validRecipes = recipes.filter((r): r is Recipe => r !== null && r !== undefined);
+      
+      if (validRecipes.length === 0) {
+        return res.status(400).json({ error: "Cannot share grocery list - no valid recipes found" });
+      }
+      
+      // Collect all ingredients from selected recipes
+      const allIngredients: string[] = [];
+      validRecipes.forEach(recipe => {
+        allIngredients.push(...recipe.ingredients);
+      });
+      
+      // Normalize and deduplicate ingredients (case-insensitive)
+      const uniqueIngredients = Array.from(
+        new Set(allIngredients.map(i => i.trim().toLowerCase()))
+      ).map(i => {
+        return allIngredients.find(orig => orig.trim().toLowerCase() === i) || i;
+      });
+      
+      // Categorize each ingredient and create GroceryItem objects
+      const groceryItems: GroceryItem[] = uniqueIngredients.map(ingredient => ({
+        name: ingredient,
+        category: categorizeIngredient(ingredient),
+        checked: false,
+      }));
+
+      // Create or update the shared grocery list for this trip
+      const sharedList = await storage.upsertSharedGroceryListByTrip(tripId, {
+        tripId,
+        tripName: trip.name,
+        items: groceryItems,
+        collaborators: trip.collaborators || [],
+      }, userId);
+
+      // Build the full share URL
+      const shareUrl = `${req.protocol}://${req.get('host')}/shared/${sharedList.token}`;
+
+      res.json({ 
+        token: sharedList.token, 
+        shareUrl,
+        tripName: trip.name,
+        itemCount: groceryItems.length,
+      });
+    } catch (error) {
+      console.error("Error creating trip share link:", error);
+      res.status(500).json({ error: "Failed to create share link" });
+    }
+  });
+
   // Stripe Payment Routes
   // Reference: blueprint:javascript_stripe
 

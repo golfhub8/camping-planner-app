@@ -302,7 +302,8 @@ export class MemStorage implements IStorage {
 
   async upsertSharedGroceryListByTrip(tripId: number, data: CreateSharedGroceryList, userId: string): Promise<SharedGroceryList> {
     // Remove any existing shared list for this trip
-    for (const [token, list] of this.sharedLists.entries()) {
+    const entries = Array.from(this.sharedLists.entries());
+    for (const [token, list] of entries) {
       if (list.tripId === tripId) {
         this.sharedLists.delete(token);
       }
@@ -314,7 +315,8 @@ export class MemStorage implements IStorage {
 
   async getSharedGroceryListByTrip(tripId: number): Promise<SharedGroceryList | undefined> {
     // Find the shared list for this trip
-    for (const list of this.sharedLists.values()) {
+    const lists = Array.from(this.sharedLists.values());
+    for (const list of lists) {
       if (list.tripId === tripId) {
         // Check if the link has expired
         if (list.expiresAt && list.expiresAt < new Date()) {
