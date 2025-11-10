@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon } from "lucide-react";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -28,7 +28,10 @@ export default function TripDetail() {
   // State for dialogs
   const [addMealDialogOpen, setAddMealDialogOpen] = useState(false);
   const [groceryDialogOpen, setGroceryDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
 
   // Fetch trip data
   const { data: trip, isLoading: tripLoading, error: tripError } = useQuery<Trip>({
@@ -135,6 +138,64 @@ export default function TripDetail() {
     enabled: false, // Only fetch when dialog is opened
   });
 
+  // Query to fetch existing share link for trip
+  const { data: existingShare, refetch: refetchShare } = useQuery<{
+    token: string;
+    shareUrl: string;
+    tripName: string;
+    itemCount: number;
+  } | null>({
+    queryKey: ["/api/trips", tripId, "share"],
+    queryFn: async () => {
+      const response = await fetch(`/api/trips/${tripId}/share`);
+      if (response.status === 404) {
+        return null; // No existing share
+      }
+      if (!response.ok) {
+        throw new Error("Failed to fetch share link");
+      }
+      return response.json();
+    },
+    enabled: false, // Only fetch when needed
+  });
+
+  // Mutation to create/update share link for trip
+  const createShareLinkMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/trips/${tripId}/share`, {});
+      return response.json();
+    },
+    onSuccess: (data: { shareUrl: string; token: string; tripName: string; itemCount: number }) => {
+      setShareUrl(data.shareUrl);
+      setShareDialogOpen(true);
+      toast({
+        title: "Share link created!",
+        description: `Trip grocery list with ${data.itemCount} items is ready to share.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create share link",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle share button click - fetch existing or create new
+  const handleShareClick = async () => {
+    // First check if there's an existing share
+    const result = await refetchShare();
+    if (result.data) {
+      // Use existing share
+      setShareUrl(result.data.shareUrl);
+      setShareDialogOpen(true);
+    } else {
+      // Create new share
+      createShareLinkMutation.mutate();
+    }
+  };
+
   if (!match || tripId === null) {
     return (
       <div className="min-h-screen bg-background">
@@ -229,6 +290,25 @@ export default function TripDetail() {
       toast({
         title: "Failed to copy",
         description: "Please try selecting and copying the text manually.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Copy share URL to clipboard
+  const handleCopyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      toast({
+        title: "Link copied!",
+        description: "You can now paste and share the link with collaborators.",
+      });
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the link manually.",
         variant: "destructive",
       });
     }
@@ -452,6 +532,18 @@ export default function TripDetail() {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
+                {/* Share Grocery List Button */}
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={meals.length === 0 || createShareLinkMutation.isPending}
+                  onClick={handleShareClick}
+                  data-testid="button-share-trip-grocery"
+                >
+                  <Share2Icon className="w-4 h-4 mr-2" />
+                  Share Grocery List
+                </Button>
+
                 {/* Generate Grocery List Button */}
                 <Dialog open={groceryDialogOpen} onOpenChange={setGroceryDialogOpen}>
                   <DialogTrigger asChild>
@@ -604,6 +696,44 @@ export default function TripDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Share Grocery List Dialog */}
+        <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+          <DialogContent data-testid="dialog-share-trip-grocery">
+            <DialogHeader>
+              <DialogTitle>Share Trip Grocery List</DialogTitle>
+              <DialogDescription>
+                Share this link with your trip collaborators so they can view the grocery list.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={shareUrl}
+                  readOnly
+                  className="flex-1 px-3 py-2 border rounded-md bg-muted text-sm"
+                  data-testid="input-share-trip-url"
+                />
+                <Button
+                  onClick={handleCopyShareUrl}
+                  variant="outline"
+                  size="icon"
+                  data-testid="button-copy-trip-url"
+                >
+                  {shareCopied ? (
+                    <CheckIcon className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <CopyIcon className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Anyone with this link can view the grocery list for {trip.name}. Perfect for sharing with family members or other trip collaborators!
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

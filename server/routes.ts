@@ -612,6 +612,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/trips/:id/share
+  // Get the current shareable link for a trip's grocery list (if one exists)
+  // Protected route - requires authentication and trip ownership
+  app.get("/api/trips/:id/share", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Verify trip ownership
+      const trip = await storage.getTripById(tripId, userId);
+      if (!trip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      // Get existing share link for this trip
+      const sharedList = await storage.getSharedGroceryListByTrip(tripId);
+      
+      if (!sharedList) {
+        return res.status(404).json({ error: "No share link exists for this trip" });
+      }
+
+      // Build the full share URL
+      const shareUrl = `${req.protocol}://${req.get('host')}/shared/${sharedList.token}`;
+
+      // Count items in the shared list
+      const items = sharedList.items as any[];
+      const itemCount = Array.isArray(items) ? items.length : 0;
+
+      res.json({ 
+        token: sharedList.token, 
+        shareUrl,
+        tripName: sharedList.tripName || trip.name,
+        itemCount,
+      });
+    } catch (error) {
+      console.error("Error fetching trip share link:", error);
+      res.status(500).json({ error: "Failed to fetch share link" });
+    }
+  });
+
   // POST /api/trips/:id/share
   // Create or update a shareable link for a trip's grocery list
   // This generates the grocery list from the trip's meals and creates a public share link
