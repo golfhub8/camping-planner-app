@@ -63,7 +63,7 @@ export default function TripDetail() {
   const costForm = useForm({
     resolver: zodResolver(addTripCostSchema),
     defaultValues: {
-      total: 0,
+      total: "" as any, // Start empty so user can type freely
       paidBy: "",
     },
   });
@@ -481,7 +481,9 @@ export default function TripDetail() {
                             placeholder="0.00"
                             data-testid="input-cost-total"
                             {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                            value={field.value}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => field.onChange(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
                           />
                         </FormControl>
                         <FormMessage />
@@ -623,7 +625,6 @@ export default function TripDetail() {
                   <DialogTrigger asChild>
                     <Button
                       size="sm"
-                      disabled={availableRecipes.length === 0}
                       data-testid="button-add-meal"
                     >
                       <PlusIcon className="w-4 h-4 mr-2" />
@@ -634,28 +635,48 @@ export default function TripDetail() {
                     <DialogHeader>
                       <DialogTitle>Add a Meal</DialogTitle>
                       <DialogDescription>
-                        Select a recipe to add to your trip
+                        {availableRecipes.length === 0 
+                          ? "Create some recipes first to add meals to your trip"
+                          : "Select a recipe to add to your trip"
+                        }
                       </DialogDescription>
                     </DialogHeader>
                     
-                    <Command>
-                      <CommandInput placeholder="Search recipes..." data-testid="input-search-recipes" />
-                      <CommandList>
-                        <CommandEmpty>No recipes found.</CommandEmpty>
-                        <CommandGroup>
-                          {availableRecipes.map((recipe) => (
-                            <CommandItem
-                              key={recipe.id}
-                              onSelect={() => addMealMutation.mutate(recipe.id)}
-                              data-testid={`recipe-option-${recipe.id}`}
-                            >
-                              <UtensilsIcon className="w-4 h-4 mr-2" />
-                              {recipe.title}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
+                    {availableRecipes.length === 0 ? (
+                      <div className="text-center py-8 space-y-4">
+                        <p className="text-muted-foreground">
+                          You haven't created any recipes yet, or all your recipes are already added to this trip.
+                        </p>
+                        <Button
+                          onClick={() => {
+                            setAddMealDialogOpen(false);
+                            navigate("/");
+                          }}
+                          data-testid="button-create-recipe"
+                        >
+                          Create a Recipe
+                        </Button>
+                      </div>
+                    ) : (
+                      <Command>
+                        <CommandInput placeholder="Search recipes..." data-testid="input-search-recipes" />
+                        <CommandList>
+                          <CommandEmpty>No recipes found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableRecipes.map((recipe) => (
+                              <CommandItem
+                                key={recipe.id}
+                                onSelect={() => addMealMutation.mutate(recipe.id)}
+                                data-testid={`recipe-option-${recipe.id}`}
+                              >
+                                <UtensilsIcon className="w-4 h-4 mr-2" />
+                                {recipe.title}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    )}
                   </DialogContent>
                 </Dialog>
               </div>

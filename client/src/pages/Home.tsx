@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import RecipeCard from "@/components/RecipeCard";
@@ -7,6 +8,8 @@ import Header from "@/components/Header";
 import type { Recipe } from "@shared/schema";
 
 export default function Home() {
+  const recipeFormRef = useRef<HTMLDivElement>(null);
+
   // Fetch all recipes from the API
   const { data: recipes = [], isLoading } = useQuery<Recipe[]>({
     queryKey: ["/api/recipes"],
@@ -39,6 +42,17 @@ export default function Home() {
     createRecipeMutation.mutate(newRecipe);
   };
 
+  const scrollToRecipeForm = () => {
+    recipeFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Focus the form after scrolling
+    setTimeout(() => {
+      const firstInput = recipeFormRef.current?.querySelector('input, textarea');
+      if (firstInput instanceof HTMLElement) {
+        firstInput.focus();
+      }
+    }, 500);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -64,7 +78,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto" ref={recipeFormRef}>
           <RecipeForm onSubmit={handleCreateRecipe} />
         </div>
 
@@ -72,7 +86,7 @@ export default function Home() {
           <EmptyState
             message="No recipes yet. Create your first camping recipe!"
             actionLabel="Get Started"
-            onAction={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onAction={scrollToRecipeForm}
           />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
