@@ -308,13 +308,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     // Try to find the ingredients table
     // We look for a table that has "Ingredient" in the header
-    $('table').each((_, tableEl) => {
+    $('table').each((index: number, tableEl: any) => {
       const $table = $(tableEl);
       const headerCells = $table.find('thead tr th, thead tr td, tr:first-child th, tr:first-child td');
       
       // Check if this looks like an ingredients table by looking at headers
       const headers: string[] = [];
-      headerCells.each((_, cell) => {
+      headerCells.each((i: number, cell: any) => {
         headers.push($(cell).text().trim().toLowerCase());
       });
       
@@ -329,10 +329,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const metricIndex = headers.findIndex(h => h.includes('metric'));
         const notesIndex = headers.findIndex(h => h.includes('note'));
         
-        // Get all data rows (skip header row)
-        const dataRows = $table.find('tbody tr, tr').slice(1);
+        // Get all data rows - prefer tbody if it exists to avoid duplicate processing
+        // ADJUST THIS if your table structure doesn't use tbody
+        const hasTbody = $table.find('tbody tr').length > 0;
+        const rowSelector = hasTbody ? 'tbody tr' : 'tr';
+        const dataRows = $table.find(rowSelector);
         
-        dataRows.each((_, rowEl) => {
+        // Skip first row if we're using all 'tr' (it's the header)
+        const startIndex = hasTbody ? 0 : 1;
+        
+        dataRows.slice(startIndex).each((i: number, rowEl: any) => {
           const $row = $(rowEl);
           const cells = $row.find('td, th');
           
@@ -367,17 +373,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // ========================================
     // PART 2: Extract extra bullet points (related recipes, tips, etc.)
     // ========================================
-    // We want to collect <li> items, but EXCLUDE:
-    // - The ingredients list (if it's in a <ul> instead of a table)
-    // - The "suggested recipes" section at the top
+    // We want to collect <li> items, but be smart about filtering:
+    // - If we found table-based ingredients, skip the first <ul> (likely suggested recipes)
+    // - If no table ingredients were found, include all lists (first list might be ingredients)
     // ADJUST THESE SELECTORS if your WordPress structure changes
     
-    // Strategy: Get all <li> elements, but skip the first <ul> which is often the suggested recipes
     const allLists = $('ul');
     
-    // Skip the first <ul> (assumed to be suggested recipes)
-    allLists.slice(1).each((_, ulEl) => {
-      $(ulEl).find('li').each((_, liEl) => {
+    // Determine starting index: skip first list only if we already have table-based ingredients
+    const startIndex = ingredientsChecklist.length > 0 ? 1 : 0;
+    
+    allLists.slice(startIndex).each((index: number, ulEl: any) => {
+      $(ulEl).find('li').each((i: number, liEl: any) => {
         const text = $(liEl).text().trim();
         // Clean up HTML entities
         const cleanText = text

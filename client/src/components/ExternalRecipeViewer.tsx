@@ -14,11 +14,19 @@ interface ExternalRecipeViewerProps {
   onClose: () => void;
 }
 
+interface IngredientChecklistItem {
+  name: string;
+  amountImperial?: string;
+  amountMetric?: string;
+  notes?: string;
+}
+
 interface ExternalRecipe {
   id: string;
   title: string;
   contentHtml: string;
-  ingredients: string[];
+  ingredientsChecklist: IngredientChecklistItem[];
+  extraBullets: string[];
   url: string;
 }
 
@@ -87,24 +95,49 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
   }, [recipeId, toast]);
 
   // Copy ingredients to clipboard
+  // Prioritizes the structured ingredients checklist, falls back to extra bullets
   const handleCopyIngredients = async () => {
-    if (!recipe || recipe.ingredients.length === 0) {
+    if (!recipe) return;
+
+    let ingredientsText = "";
+    let count = 0;
+
+    // Prioritize the structured ingredients checklist
+    if (recipe.ingredientsChecklist && recipe.ingredientsChecklist.length > 0) {
+      ingredientsText = recipe.ingredientsChecklist.map((item, idx) => {
+        let line = `${idx + 1}. ${item.name}`;
+        if (item.amountImperial) {
+          line = `${idx + 1}. ${item.amountImperial} ${item.name}`;
+        }
+        if (item.amountMetric) {
+          line += ` (${item.amountMetric})`;
+        }
+        if (item.notes) {
+          line += ` - ${item.notes}`;
+        }
+        return line;
+      }).join("\n");
+      count = recipe.ingredientsChecklist.length;
+    } else if (recipe.extraBullets && recipe.extraBullets.length > 0) {
+      // Fallback to extra bullets
+      ingredientsText = recipe.extraBullets.map((item, idx) => `${idx + 1}. ${item}`).join("\n");
+      count = recipe.extraBullets.length;
+    }
+
+    if (!ingredientsText) {
       toast({
         title: "No Ingredients",
-        description: "This recipe has no parsed ingredients to copy",
+        description: "This recipe has no ingredients to copy",
         variant: "destructive",
       });
       return;
     }
 
-    // Format ingredients as a text list
-    const ingredientsText = recipe.ingredients.map((ing, idx) => `${idx + 1}. ${ing}`).join("\n");
-
     try {
       await navigator.clipboard.writeText(ingredientsText);
       toast({
         title: "Copied!",
-        description: `${recipe.ingredients.length} ingredients copied to clipboard`,
+        description: `${count} items copied to clipboard`,
       });
     } catch (error) {
       toast({
@@ -223,11 +256,21 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
 
               {/* Scrollable content area */}
               <div className="flex-1 overflow-y-auto space-y-6 py-4">
-                {/* Ingredients Section */}
-                {recipe.ingredients.length > 0 && (
+                {/* Recipe Content (HTML from WordPress) - shown first */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold">Recipe</h3>
+                  <div
+                    className="prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: recipe.contentHtml }}
+                    data-testid="text-external-recipe-content"
+                  />
+                </div>
+
+                {/* Ingredients Checklist Section (structured table data) */}
+                {recipe.ingredientsChecklist && recipe.ingredientsChecklist.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">Ingredients</h3>
+                      <h3 className="text-lg font-semibold">Ingredients Checklist (printable)</h3>
                       <Button
                         variant="outline"
                         size="sm"
@@ -239,30 +282,55 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
                         Copy Ingredients
                       </Button>
                     </div>
-                    <ul className="space-y-2 bg-muted/50 rounded-lg p-4">
-                      {recipe.ingredients.map((ingredient, idx) => (
+                    <div className="overflow-x-auto bg-muted/50 rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="text-left p-3 font-semibold">Ingredient</th>
+                            <th className="text-left p-3 font-semibold">Amount (Imperial)</th>
+                            <th className="text-left p-3 font-semibold">Metric</th>
+                            <th className="text-left p-3 font-semibold">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recipe.ingredientsChecklist.map((item, idx) => (
+                            <tr
+                              key={idx}
+                              className="border-b border-border last:border-0"
+                              data-testid={`row-ingredient-${idx}`}
+                            >
+                              <td className="p-3">{item.name}</td>
+                              <td className="p-3 text-muted-foreground">{item.amountImperial || "—"}</td>
+                              <td className="p-3 text-muted-foreground">{item.amountMetric || "—"}</td>
+                              <td className="p-3 text-muted-foreground">{item.notes || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Extra Bullets Section (related ideas/recipes) */}
+                {recipe.extraBullets && recipe.extraBullets.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-base font-semibold text-muted-foreground">
+                      Related ideas from TheCampingPlanner.com
+                    </h3>
+                    <ul className="space-y-2 bg-muted/30 rounded-lg p-4">
+                      {recipe.extraBullets.map((item, idx) => (
                         <li
                           key={idx}
-                          className="flex items-start gap-2 text-sm"
-                          data-testid={`text-external-ingredient-${idx}`}
+                          className="flex items-start gap-2 text-sm text-muted-foreground"
+                          data-testid={`text-extra-bullet-${idx}`}
                         >
-                          <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
-                          <span>{ingredient}</span>
+                          <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-muted-foreground/50" />
+                          <span>{item}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-
-                {/* Recipe Content (HTML from WordPress) */}
-                <div className="space-y-3">
-                  <h3 className="text-lg font-semibold">Recipe</h3>
-                  <div
-                    className="prose prose-sm max-w-none dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: recipe.contentHtml }}
-                    data-testid="text-external-recipe-content"
-                  />
-                </div>
               </div>
 
               {/* Fixed footer - always visible */}
@@ -288,7 +356,7 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
                     data-testid="link-open-wordpress"
                   >
                     <Button
-                      variant={recipe.ingredients.length === 0 ? "default" : "outline"}
+                      variant={(recipe.ingredientsChecklist.length === 0 && recipe.extraBullets.length === 0) ? "default" : "outline"}
                       size="sm"
                       className="gap-1.5"
                     >
