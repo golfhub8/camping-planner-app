@@ -287,91 +287,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/recipes/:id
-  // Returns a single recipe by ID (only if user owns it)
-  // Protected route - requires authentication
-  app.get("/api/recipes/:id", isAuthenticated, async (req: any, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const userId = req.user.claims.sub;
-      
-      // Validate that ID is a valid number
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid recipe ID" });
-      }
-
-      const recipe = await storage.getRecipeById(id, userId);
-      
-      if (!recipe) {
-        return res.status(404).json({ error: "Recipe not found" });
-      }
-
-      res.json(recipe);
-    } catch (error) {
-      console.error("Error fetching recipe:", error);
-      res.status(500).json({ error: "Failed to fetch recipe" });
-    }
-  });
-
-  // POST /api/recipes
-  // Creates a new recipe for the logged in user
-  // Body: { title: string, ingredients: string[], steps: string }
-  // Protected route - requires authentication
-  app.post("/api/recipes", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      
-      // Validate the request body against our schema
-      const validatedData = insertRecipeSchema.parse(req.body);
-      
-      // Create the recipe in storage (with userId)
-      const recipe = await storage.createRecipe(validatedData, userId);
-      
-      // Return the created recipe with 201 status
-      res.status(201).json(recipe);
-    } catch (error) {
-      // Handle validation errors from Zod
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ 
-          error: "Invalid recipe data", 
-          details: error.errors 
-        });
-      }
-      
-      console.error("Error creating recipe:", error);
-      res.status(500).json({ error: "Failed to create recipe" });
-    }
-  });
-
-  // GET /api/search
-  // Searches recipes by title for the logged in user
-  // Query parameter: q (the search query)
-  // Example: /api/search?q=chili
-  // Protected route - requires authentication
-  app.get("/api/search", isAuthenticated, async (req: any, res) => {
-    try {
-      const query = req.query.q as string;
-      const userId = req.user.claims.sub;
-      
-      // Validate that query exists
-      if (!query || query.trim() === "") {
-        return res.status(400).json({ error: "Search query is required" });
-      }
-
-      const recipes = await storage.searchRecipes(query, userId);
-      res.json(recipes);
-    } catch (error) {
-      console.error("Error searching recipes:", error);
-      res.status(500).json({ error: "Failed to search recipes" });
-    }
-  });
-
   // GET /api/recipes/external
   // Fetches camping recipes from TheCampingPlanner.com WordPress site
   // Returns: Array of external recipes with { id, title, source, url, ingredients? }
   // This endpoint tries to fetch posts from the "camping-food" category using WordPress REST API
   // If the API is unavailable or CORS blocks the request, it returns an empty array
   // Protected route - requires authentication
+  // IMPORTANT: This route must come BEFORE /api/recipes/:id to avoid matching "external" as an ID
   app.get("/api/recipes/external", isAuthenticated, async (req: any, res) => {
     try {
       // WordPress site base URL
@@ -455,6 +377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // This endpoint builds a shareable message about the recipe
   // In the future, this can be connected to an email service to actually send the email
   // Protected route - requires authentication
+  // IMPORTANT: This route must come BEFORE /api/recipes/:id to avoid routing conflicts
   app.post("/api/recipes/share", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -537,6 +460,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.error("Error sharing recipe:", error);
       res.status(500).json({ error: "Failed to share recipe" });
+    }
+  });
+
+  // GET /api/recipes/:id
+  // Returns a single recipe by ID (only if user owns it)
+  // Protected route - requires authentication
+  app.get("/api/recipes/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate that ID is a valid number
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid recipe ID" });
+      }
+
+      const recipe = await storage.getRecipeById(id, userId);
+      
+      if (!recipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      res.json(recipe);
+    } catch (error) {
+      console.error("Error fetching recipe:", error);
+      res.status(500).json({ error: "Failed to fetch recipe" });
+    }
+  });
+
+  // POST /api/recipes
+  // Creates a new recipe for the logged in user
+  // Body: { title: string, ingredients: string[], steps: string }
+  // Protected route - requires authentication
+  app.post("/api/recipes", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate the request body against our schema
+      const validatedData = insertRecipeSchema.parse(req.body);
+      
+      // Create the recipe in storage (with userId)
+      const recipe = await storage.createRecipe(validatedData, userId);
+      
+      // Return the created recipe with 201 status
+      res.status(201).json(recipe);
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid recipe data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error creating recipe:", error);
+      res.status(500).json({ error: "Failed to create recipe" });
+    }
+  });
+
+  // GET /api/search
+  // Searches recipes by title for the logged in user
+  // Query parameter: q (the search query)
+  // Example: /api/search?q=chili
+  // Protected route - requires authentication
+  app.get("/api/search", isAuthenticated, async (req: any, res) => {
+    try {
+      const query = req.query.q as string;
+      const userId = req.user.claims.sub;
+      
+      // Validate that query exists
+      if (!query || query.trim() === "") {
+        return res.status(400).json({ error: "Search query is required" });
+      }
+
+      const recipes = await storage.searchRecipes(query, userId);
+      res.json(recipes);
+    } catch (error) {
+      console.error("Error searching recipes:", error);
+      res.status(500).json({ error: "Failed to search recipes" });
     }
   });
 
