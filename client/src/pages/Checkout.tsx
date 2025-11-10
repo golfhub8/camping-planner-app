@@ -30,18 +30,25 @@ export default function Checkout() {
 
   const handleCheckout = async () => {
     setIsLoading(true);
+    console.log("Starting checkout...");
 
     try {
+      console.log("Sending API request...");
       const response = await apiRequest("POST", "/api/billing/create-checkout-session", {});
+      console.log("Response status:", response.status);
+      
       const data = await response.json();
+      console.log("Response data:", data);
       
       if (data.url) {
+        console.log("Redirecting to:", data.url);
         // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
         throw new Error("No checkout URL returned");
       }
     } catch (error: any) {
+      console.error("Checkout error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to start checkout. Please try again.",
