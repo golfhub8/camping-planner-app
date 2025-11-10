@@ -10,11 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLocation } from "wouter";
 
-// Load Stripe with public key
-if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
-  throw new Error('Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY');
-}
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+// Load Stripe with public key (only if available)
+const stripePromise = import.meta.env.VITE_STRIPE_PUBLIC_KEY 
+  ? loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY)
+  : null;
 
 // Subscribe form component
 function SubscribeForm() {
@@ -73,6 +72,12 @@ export default function Subscribe() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Check if Stripe is configured
+    if (!stripePromise) {
+      setIsLoading(false);
+      return;
+    }
+
     // Create or retrieve subscription
     apiRequest("POST", "/api/create-subscription", {})
       .then((res: any) => res.json())
@@ -103,6 +108,22 @@ export default function Subscribe() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" aria-label="Loading"/>
+      </div>
+    );
+  }
+
+  // Show message if Stripe is not configured
+  if (!stripePromise) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Subscription Not Available</CardTitle>
+            <CardDescription>
+              Payment processing is not configured yet. Please contact the site administrator.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       </div>
     );
   }
