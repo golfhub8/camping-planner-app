@@ -37,9 +37,11 @@ export default function Home() {
 
   // Fetch external camping recipes from TheCampingPlanner.com WordPress site
   // This query runs independently and gracefully handles errors
-  const { data: externalRecipes = [] } = useQuery<ExternalRecipe[]>({
-    queryKey: ["/api/recipes/external"],
+  const { data: externalRecipesData, isLoading: externalLoading, refetch: refetchExternal } = useQuery<{ recipes: ExternalRecipe[] }>({
+    queryKey: ["/api/external-recipes"],
   });
+  
+  const externalRecipes = externalRecipesData?.recipes || [];
 
   // Mutation for creating a new recipe
   const createRecipeMutation = useMutation({
@@ -223,6 +225,15 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-foreground" data-testid="text-section-external-recipes">
                 From TheCampingPlanner.com
               </h2>
+              <Button
+                onClick={() => refetchExternal()}
+                variant="outline"
+                size="sm"
+                disabled={externalLoading}
+                data-testid="button-refresh-external-recipes"
+              >
+                {externalLoading ? "Loading..." : "Refresh Recipes"}
+              </Button>
             </div>
             
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

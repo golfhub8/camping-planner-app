@@ -436,6 +436,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/external-recipes
+  // Simplified endpoint to fetch latest recipes from WordPress site
+  // Returns: { recipes: Array<{ title, slug, link, excerpt }> }
+  // Protected route - requires authentication
+  app.get("/api/external-recipes", isAuthenticated, async (req: any, res) => {
+    try {
+      const siteUrl = "https://thecampingplanner.com";
+      // Fetch latest 20 posts (you can add ?categories=### if you want to filter by category)
+      const wpRes = await fetch(`${siteUrl}/wp-json/wp/v2/posts?per_page=20&_fields=id,title,slug,link,excerpt`);
+      
+      if (!wpRes.ok) {
+        console.error("Failed to fetch from WordPress:", wpRes.status);
+        return res.status(500).json({ error: "Failed to fetch external recipes" });
+      }
+      
+      const posts = await wpRes.json();
+      
+      // Map to the shape the frontend expects
+      const recipes = posts.map((p: any) => ({
+        id: `wp-${p.id}`,
+        title: p.title?.rendered || "Untitled Recipe",
+        slug: p.slug,
+        link: p.link,
+        excerpt: p.excerpt?.rendered || "",
+        source: "external" as const,
+        url: p.link,
+      }));
+      
+      res.json({ recipes });
+    } catch (err) {
+      console.error("Failed to fetch external recipes", err);
+      res.status(500).json({ error: "Failed to fetch external recipes" });
+    }
+  });
+
   // GET /api/recipes/external
   // Fetches camping recipes from TheCampingPlanner.com WordPress site
   // Returns: Array of external recipes with { id, title, source, url, ingredients? }
