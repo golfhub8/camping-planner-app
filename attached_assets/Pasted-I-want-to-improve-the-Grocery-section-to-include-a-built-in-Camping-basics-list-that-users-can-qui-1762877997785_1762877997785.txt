@@ -1,0 +1,90 @@
+I want to improve the Grocery section to include a built-in “Camping basics” list that users can quickly add to their trip groceries.
+
+What I want:
+
+Add a static list of common camping groceries (see list below).
+
+On the Grocery page, show a section at the top called “Camping Basics.”
+
+Each item in “Camping Basics” should be greyed out / disabled-looking by default (not in the active shopping list yet).
+
+When the user checks an item, it should:
+
+become active (normal text)
+
+be added to their current grocery list / items-to-buy
+
+stay checked for that user (store it in the same place we store their grocery items, tied to user)
+
+Unchecking should remove it from the active list (optional, but nice).
+
+Keep existing behavior where users can export/send the list.
+
+Data shape suggestion:
+
+const CAMPING_BASICS = [
+  { id: "water", name: "Drinking water / jugs", category: "Essentials" },
+  { id: "coffee", name: "Coffee / tea", category: "Breakfast" },
+  { id: "milk", name: "Milk / creamer", category: "Breakfast" },
+  { id: "eggs", name: "Eggs", category: "Breakfast" },
+  { id: "bread", name: "Bread / buns / tortillas", category: "Staples" },
+  { id: "butter", name: "Butter / cooking oil / spray", category: "Cooking" },
+  { id: "condiments", name: "Ketchup, mustard, relish", category: "Condiments" },
+  { id: "snacks", name: "Trail mix / granola bars / chips", category: "Snacks" },
+  { id: "fruit", name: "Apples / oranges / berries", category: "Produce" },
+  { id: "veg", name: "Carrots / peppers / onions", category: "Produce" },
+  { id: "meat", name: "Protein (hot dogs, burgers, sausage)", category: "Meals" },
+  { id: "smores", name: "S'mores kit (graham, chocolate, marshmallows)", category: "Treats" },
+  { id: "spices", name: "Salt, pepper, basic spices", category: "Cooking" },
+  { id: "ice", name: "Ice / ice packs", category: "Cooler" },
+  { id: "foil", name: "Aluminum foil / zip bags", category: "Camp kitchen" },
+  { id: "paper", name: "Paper towel / napkins", category: "Camp kitchen" },
+];
+
+
+UI behavior:
+
+Render this list above the user’s current grocery items.
+
+Each item should have a checkbox and a muted style, e.g. text-muted-foreground and maybe opacity-60.
+
+On check, call an API like POST /api/groceries with the item name so it’s saved.
+
+After it’s added, show it in the normal grocery list area.
+
+Frontend example (TSX):
+
+<section>
+  <h2 className="text-sm font-semibold mb-2">Camping basics</h2>
+  <div className="space-y-1">
+    {CAMPING_BASICS.map((item) => {
+      const alreadyAdded = userGroceries.some((g) => g.name === item.name);
+      return (
+        <label
+          key={item.id}
+          className={`flex items-center gap-2 text-sm ${
+            alreadyAdded ? "text-foreground" : "text-muted-foreground opacity-60"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={alreadyAdded}
+            onChange={() => handleToggleBasic(item)}
+          />
+          {item.name}
+        </label>
+      );
+    })}
+  </div>
+</section>
+
+
+Backend:
+
+Reuse the existing groceries endpoint (whichever we already have for adding items).
+
+In handleToggleBasic, if it’s not added → POST to /api/groceries with { name: item.name, source: "camping-basic" }.
+
+If it is added and user unchecks → DELETE /api/groceries/:id.
+
+Please add comments so I can extend the CAMPING_BASICS list later.
