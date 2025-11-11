@@ -1407,75 +1407,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reference: blueprint:javascript_stripe
 
   // POST /api/billing/create-checkout-session
-  // Create a Stripe Checkout session for Pro Membership
-  // Annual subscription at $29.99/year with 7-day free trial
+  // Create a Stripe Checkout session for Pro Membership using Dashboard Price
+  // Uses STRIPE_PRICE_ID environment variable (price_1SRnQBIEQH0jZmIb2XwrLR5v)
   // Protected route - requires authentication
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
       return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
     }
 
+    if (!process.env.STRIPE_PRICE_ID) {
+      console.error("Missing STRIPE_PRICE_ID environment variable");
+      return res.status(500).json({ error: "Stripe price not configured" });
+    }
+
     try {
       const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
 
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      // Check if user already has an active Pro membership
-      if (user.proMembershipEndDate && new Date(user.proMembershipEndDate) > new Date()) {
-        return res.status(400).json({ 
-          error: "You already have an active Pro membership",
-          expiresAt: user.proMembershipEndDate
-        });
-      }
-
-      // Build success and cancel URLs
+      // Build success and cancel URLs dynamically
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       const successUrl = `${baseUrl}/printables?payment=success`;
       const cancelUrl = `${baseUrl}/subscribe?canceled=true`;
 
-      // Create checkout session for annual subscription with 7-day trial
+      // Create checkout session using Dashboard Price ID
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         line_items: [
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Pro Membership",
-                description: "Annual access to all camping printables with 7-day free trial",
-              },
-              unit_amount: 2999, // $29.99 in cents
-              recurring: {
-                interval: "year",
-              },
-            },
+            price: process.env.STRIPE_PRICE_ID,
             quantity: 1,
           },
         ],
-        subscription_data: {
-          trial_period_days: 7, // 7-day free trial
-          metadata: {
-            app_user_id: userId,
-            purchase_type: "pro_membership_annual",
-          },
+        client_reference_id: userId,
+        metadata: { 
+          app_user_id: userId,
         },
         success_url: successUrl,
         cancel_url: cancelUrl,
-        client_reference_id: userId,
-        customer_email: user.email || undefined,
-        metadata: {
-          app_user_id: userId,
-          purchase_type: "pro_membership_annual",
-        },
       });
 
-      res.json({ url: session.url });
+      return res.json({ url: session.url });
     } catch (error: any) {
-      console.error("Error creating Pro membership checkout:", error);
-      res.status(500).json({ error: "Unable to create checkout session: " + error.message });
+      console.error("Error creating checkout session:", error);
+      return res.status(500).json({ error: "Could not create Stripe checkout session" });
     }
   });
 
