@@ -5,7 +5,6 @@ import { useRoute, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { addCollaboratorSchema, addTripCostSchema, addMealSchema, type Trip, type Recipe, type GroceryItem, type GroceryCategory } from "@shared/schema";
-import Header from "@/components/Header";
 import EditTripDialog from "@/components/EditTripDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -260,36 +259,27 @@ export default function TripDetail() {
 
   if (!match || tripId === null) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="container mx-auto px-6 md:px-10 py-12">
-          <div className="text-center text-destructive">Invalid trip ID</div>
-        </main>
-      </div>
+      <main className="container mx-auto px-6 md:px-10 py-12">
+        <div className="text-center text-destructive">Invalid trip ID</div>
+      </main>
     );
   }
 
   if (tripLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="container mx-auto px-6 md:px-10 py-12">
-          <div className="text-center text-muted-foreground">Loading trip details...</div>
-        </main>
-      </div>
+      <main className="container mx-auto px-6 md:px-10 py-12">
+        <div className="text-center text-muted-foreground">Loading trip details...</div>
+      </main>
     );
   }
 
   if (tripError || !trip) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="container mx-auto px-6 md:px-10 py-12">
-          <div className="text-center text-destructive">
-            {tripError ? "Error loading trip" : "Trip not found"}
-          </div>
-        </main>
-      </div>
+      <main className="container mx-auto px-6 md:px-10 py-12">
+        <div className="text-center text-destructive">
+          {tripError ? "Error loading trip" : "Trip not found"}
+        </div>
+      </main>
     );
   }
 
@@ -377,10 +367,7 @@ export default function TripDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container mx-auto px-6 md:px-10 py-12 space-y-8">
+    <main className="container mx-auto px-6 md:px-10 py-12 space-y-8">
         {/* Back Button and Actions */}
         <div className="flex items-center justify-between gap-4">
           <Button 
@@ -887,16 +874,15 @@ export default function TripDetail() {
             </div>
           </DialogContent>
         </Dialog>
-      </main>
 
-      {/* Edit Trip Dialog */}
-      {trip && (
-        <EditTripDialog
-          trip={trip}
-          open={editTripDialogOpen}
-          onOpenChange={setEditTripDialogOpen}
-        />
-      )}
-    </div>
+        {/* Edit Trip Dialog */}
+        {trip && (
+          <EditTripDialog
+            trip={trip}
+            open={editTripDialogOpen}
+            onOpenChange={setEditTripDialogOpen}
+          />
+        )}
+      </main>
   );
 }

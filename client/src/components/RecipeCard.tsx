@@ -7,10 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, ChefHat, Eye, Share2, ExternalLink } from "lucide-react";
+import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
+import TripSelector from "./TripSelector";
 
 interface RecipeCardProps {
   id: number | string; // Can be number for internal recipes, or string (wp-ID) for external
@@ -30,6 +32,9 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   const [shareEmail, setShareEmail] = useState("");
   const [isSharing, setIsSharing] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  
+  // State for trip selector (external recipes)
+  const [tripSelectorOpen, setTripSelectorOpen] = useState(false);
 
   const displayIngredients = ingredients.slice(0, 3);
   const hasMore = ingredients.length > 3;
@@ -103,6 +108,43 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
     }
   };
 
+  // Add recipe to trip mutation (for external recipes)
+  const addToTripMutation = useMutation({
+    mutationFn: async (tripId: number) => {
+      const response = await apiRequest("POST", `/api/trips/${tripId}/meals`, {
+        isExternal: true,
+        externalRecipeId: String(id),
+        title,
+        sourceUrl: url,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add recipe to trip");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Recipe Added!",
+        description: `"${title}" has been added to your trip.`,
+      });
+      setTripSelectorOpen(false);
+      // Invalidate trip meals queries
+      queryClient.invalidateQueries({ queryKey: ["/api/trips"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add recipe to trip",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSelectTrip = (tripId: number) => {
+    addToTripMutation.mutate(tripId);
+  };
+
   return (
     <>
       <Card className="hover-elevate transition-all" data-testid={`card-recipe-${id}`}>
@@ -156,6 +198,20 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           )}
           
           <div className="flex items-center gap-2 ml-auto">
+            {/* Add to Trip button - only for external recipes */}
+            {source === "external" && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setTripSelectorOpen(true)}
+                data-testid={`button-add-to-trip-${id}`}
+              >
+                <Plus className="h-4 w-4" />
+                Add to Trip
+              </Button>
+            )}
+            
             {/* Share button - works for both internal and external recipes */}
             <Button
               variant="outline"
@@ -282,6 +338,14 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Trip Selector Dialog - for adding external recipes to trips */}
+      <TripSelector
+        open={tripSelectorOpen}
+        onOpenChange={setTripSelectorOpen}
+        onSelectTrip={handleSelectTrip}
+        isLoading={addToTripMutation.isPending}
+      />
     </>
   );
 }
