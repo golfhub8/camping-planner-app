@@ -105,7 +105,7 @@ export default function Home() {
   // Only searches titles since ingredients may not be available
   // Also filters out blog posts that aren't actual recipes
   const filteredExternalRecipes = useMemo(() => {
-    // Phrases we never want to show - using lowercase for case-insensitive matching
+    // Phrases we never want to show (case-insensitive, partial match)
     const blockedPhrases = [
       "camping food: easy meal planning",
       "campfire recipes & must-have cooking gear",
@@ -113,6 +113,12 @@ export default function Home() {
       "50 non-perishable dry snacks for camping",
       "best canned food for camping",
       "easy no-chill meal ideas",
+      "25 delicious and easy sides for camping",
+      "23 easy griddle recipes for camping",
+      "22 must-try skillet meals for camping",
+      "25 easy camping meals for kids",
+      "25 easy crock pot camping meals",
+      "outdoor cooking for beginners",
     ];
 
     // Filter using a contains + lowercase match
@@ -120,9 +126,7 @@ export default function Home() {
       const title = (r?.title || "").toLowerCase();
 
       // If any blocked phrase is inside the title, remove it
-      const isBlocked = blockedPhrases.some((phrase) =>
-        title.includes(phrase)
-      );
+      const isBlocked = blockedPhrases.some((phrase) => title.includes(phrase));
 
       return !isBlocked;
     });
