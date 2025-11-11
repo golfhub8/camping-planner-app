@@ -437,14 +437,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/external-recipes
-  // Simplified endpoint to fetch latest recipes from WordPress site
-  // Returns: { recipes: Array<{ title, slug, link, excerpt }> }
+  // Fetches latest recipes from WordPress "camping-food" category (ID: 174)
+  // Returns: { recipes: Array<{ id, title, slug, url, excerpt, date }> }
   // Protected route - requires authentication
   app.get("/api/external-recipes", isAuthenticated, async (req: any, res) => {
     try {
-      const siteUrl = "https://thecampingplanner.com";
-      // Fetch latest 20 posts (you can add ?categories=### if you want to filter by category)
-      const wpRes = await fetch(`${siteUrl}/wp-json/wp/v2/posts?per_page=20&_fields=id,title,slug,link,excerpt`);
+      // Fetch latest posts from the "camping-food" category (category ID: 174)
+      const wpRes = await fetch(
+        "https://thecampingplanner.com/wp-json/wp/v2/posts?categories=174&per_page=20"
+      );
       
       if (!wpRes.ok) {
         console.error("Failed to fetch from WordPress:", wpRes.status);
@@ -453,15 +454,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const posts = await wpRes.json();
       
-      // Map to the shape the frontend expects
+      // Map to the shape our frontend expects
       const recipes = posts.map((p: any) => ({
         id: `wp-${p.id}`,
         title: p.title?.rendered || "Untitled Recipe",
         slug: p.slug,
-        link: p.link,
-        excerpt: p.excerpt?.rendered || "",
-        source: "external" as const,
         url: p.link,
+        excerpt: p.excerpt?.rendered || "",
+        date: p.date,
+        source: "external" as const,
       }));
       
       res.json({ recipes });

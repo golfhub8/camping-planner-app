@@ -7,6 +7,7 @@ import EmptyState from "@/components/EmptyState";
 import Header from "@/components/Header";
 import ExternalRecipeViewer from "@/components/ExternalRecipeViewer";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import type { Recipe } from "@shared/schema";
 
@@ -104,6 +105,9 @@ export default function Home() {
   // Only searches titles since ingredients may not be available
   // Also filters out blog posts that aren't actual recipes
   const filteredExternalRecipes = useMemo(() => {
+    // Debug: Log what WordPress is returning
+    console.log("externalRecipes from WP:", externalRecipes);
+    
     // List of blog posts to exclude from external recipes
     // Includes both normal and HTML-encoded versions to handle WordPress formatting
     const blockedTitles = [
@@ -128,6 +132,8 @@ export default function Home() {
       const title = (r.title || "").trim();
       return !blockedTitles.includes(title);
     });
+
+    console.log("After filtering blockedTitles:", recipesOnly);
 
     // Then apply search filter if there's a query
     if (!searchQuery.trim()) return recipesOnly;
