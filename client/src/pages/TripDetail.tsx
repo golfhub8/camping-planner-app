@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { addCollaboratorSchema, addTripCostSchema, addMealSchema, type Trip, type Recipe, type GroceryItem, type GroceryCategory } from "@shared/schema";
 import Header from "@/components/Header";
+import EditTripDialog from "@/components/EditTripDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -14,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -59,6 +60,7 @@ export default function TripDetail() {
   const tripId = params?.id ? parseInt(params.id) : null;
   
   // State for dialogs
+  const [editTripDialogOpen, setEditTripDialogOpen] = useState(false);
   const [addMealDialogOpen, setAddMealDialogOpen] = useState(false);
   const [groceryDialogOpen, setGroceryDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -379,15 +381,25 @@ export default function TripDetail() {
       <Header />
       
       <main className="container mx-auto px-6 md:px-10 py-12 space-y-8">
-        {/* Back Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => navigate("/trips")}
-          data-testid="button-back-to-trips"
-        >
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
-          Back to Trips
-        </Button>
+        {/* Back Button and Actions */}
+        <div className="flex items-center justify-between gap-4">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate("/trips")}
+            data-testid="button-back-to-trips"
+          >
+            <ArrowLeftIcon className="w-4 h-4 mr-2" />
+            Back to Trips
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setEditTripDialogOpen(true)}
+            data-testid="button-edit-trip-detail"
+          >
+            <PencilIcon className="w-4 h-4 mr-2" />
+            Edit Trip
+          </Button>
+        </div>
 
         {/* Trip Header */}
         <div className="space-y-3">
@@ -876,6 +888,15 @@ export default function TripDetail() {
           </DialogContent>
         </Dialog>
       </main>
+
+      {/* Edit Trip Dialog */}
+      {trip && (
+        <EditTripDialog
+          trip={trip}
+          open={editTripDialogOpen}
+          onOpenChange={setEditTripDialogOpen}
+        />
+      )}
     </div>
   );
 }

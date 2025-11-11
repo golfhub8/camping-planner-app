@@ -1,20 +1,23 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTripSchema, type Trip, type InsertTrip } from "@shared/schema";
 import Header from "@/components/Header";
+import EditTripDialog from "@/components/EditTripDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon } from "lucide-react";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, PencilIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
 export default function Trips() {
   const [, navigate] = useLocation();
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   
   // Fetch all trips from the API
   const { data: trips = [], isLoading } = useQuery<Trip[]>({
@@ -223,14 +226,31 @@ export default function Trips() {
                 return (
                   <Card 
                     key={trip.id} 
-                    className="hover-elevate active-elevate-2 cursor-pointer transition-all"
-                    onClick={() => navigate(`/trips/${trip.id}`)}
+                    className="hover-elevate active-elevate-2 transition-all"
                     data-testid={`card-trip-${trip.id}`}
                   >
                     <CardHeader>
-                      <CardTitle data-testid={`text-trip-name-${trip.id}`}>
-                        {trip.name}
-                      </CardTitle>
+                      <div className="flex items-start justify-between gap-2">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => navigate(`/trips/${trip.id}`)}
+                        >
+                          <CardTitle data-testid={`text-trip-name-${trip.id}`}>
+                            {trip.name}
+                          </CardTitle>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTrip(trip);
+                          }}
+                          data-testid={`button-edit-trip-${trip.id}`}
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
                       {trip.location && (
                         <CardDescription className="flex items-center gap-1">
                           <MapPinIcon className="w-4 h-4" />
@@ -238,7 +258,10 @@ export default function Trips() {
                         </CardDescription>
                       )}
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent 
+                      className="space-y-3 cursor-pointer"
+                      onClick={() => navigate(`/trips/${trip.id}`)}
+                    >
                       {/* Dates */}
                       {trip.startDate && trip.endDate && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -304,6 +327,17 @@ export default function Trips() {
           )}
         </div>
       </main>
+
+      {/* Edit Trip Dialog */}
+      {editingTrip && (
+        <EditTripDialog
+          trip={editingTrip}
+          open={editingTrip !== null}
+          onOpenChange={(open) => {
+            if (!open) setEditingTrip(null);
+          }}
+        />
+      )}
     </div>
   );
 }
