@@ -105,21 +105,26 @@ export default function Home() {
   // Only searches titles since ingredients may not be available
   // Also filters out blog posts that aren't actual recipes
   const filteredExternalRecipes = useMemo(() => {
-    // List of blog posts to exclude from external recipes
-    // Includes both normal and HTML-encoded versions to handle WordPress formatting
-    const blockedTitles = [
-      "Camping Food: Easy Meal Planning, Campfire Recipes & Must-Have Cooking Gear",
-      "Camping Food: Easy Meal Planning, Campfire Recipes &amp; Must-Have Cooking Gear",
-      "Cozy Winter Camping Meals To Keep You Warm & Energized",
-      "Cozy Winter Camping Meals To Keep You Warm &amp; Energized",
-      "50 Non-Perishable Dry Snacks for Camping To Keep You Satisfied Between Meals",
-      "Best Canned Food For Camping & Easy No-Chill Meal Ideas",
-      "Best Canned Food For Camping &#038; Easy No-Chill Meal Ideas",
+    // Phrases we never want to show - using lowercase for case-insensitive matching
+    const blockedPhrases = [
+      "camping food: easy meal planning",
+      "campfire recipes & must-have cooking gear",
+      "cozy winter camping meals to keep you warm",
+      "50 non-perishable dry snacks for camping",
+      "best canned food for camping",
+      "easy no-chill meal ideas",
     ];
 
-    const cleanedExternalRecipes = (externalRecipes || []).filter((r) => {
-      const title = (r?.title || "").trim();
-      return title && !blockedTitles.includes(title);
+    // Filter using a contains + lowercase match
+    const cleanedExternalRecipes = externalRecipes.filter((r) => {
+      const title = (r?.title || "").toLowerCase();
+
+      // If any blocked phrase is inside the title, remove it
+      const isBlocked = blockedPhrases.some((phrase) =>
+        title.includes(phrase)
+      );
+
+      return !isBlocked;
     });
 
     // Then apply search filter if there's a query
