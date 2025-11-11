@@ -1,0 +1,81 @@
+Prompt for Replit (real weather with Open-Meteo)
+
+I added a /api/trips/:id/weather route earlier that returns mock data. I want to make it return real weather using Open-Meteo.
+
+Please update the backend route like this:
+
+Open the routes file where /api/trips/:id/weather is defined (likely server/routes.ts).
+
+Replace the mock response with a real fetch to Open-Meteo:
+
+app.get("/api/trips/:id/weather", isAuthenticated, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { lat, lng } = req.query;
+
+    // get trip for current user
+    const trip = await storage.getTripById(id, req.user.claims.sub);
+    if (!trip) {
+      return res.status(404).json({ error: "Trip not found" });
+    }
+
+    // prefer lat/lng from query, else from trip, else bail
+    const latitude = Number(lat ?? trip.lat);
+    const longitude = Number(lng ?? trip.lng);
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      return res.status(400).json({ error: "Trip is missing coordinates (lat/lng)" });
+    }
+
+    // we will pull daily forecast for the date range of the trip
+    // Open-Meteo: https://api.open-meteo.com/v1/forecast
+    // We'll get daily max/min temp and weathercode
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", latitude.toString());
+    url.searchParams.set("longitude", longitude.toString());
+    url.searchParams.set("daily", "temperature_2m_max,temperature_2m_min,weathercode");
+    url.searchParams.set("timezone", "auto");
+
+    const weatherRes = await fetch(url.toString());
+    if (!weatherRes.ok) {
+      return res.status(500).json({ error: "Failed to fetch weather" });
+    }
+    const weatherJson = await weatherRes.json();
+
+    // transform Open-Meteo daily data to a simpler array
+    const forecast = (weatherJson.daily.time || []).map((date: string, index: number) => ({
+      date,
+      high: weatherJson.daily.temperature_2m_max[index],
+      low: weatherJson.daily.temperature_2m_min[index],
+      weathercode: weatherJson.daily.weathercode[index],
+    }));
+
+    return res.json({
+      location: trip.location,
+      lat: latitude,
+      lng: longitude,
+      forecast,
+    });
+  } catch (err) {
+    console.error("weather error", err);
+    return res.status(500).json({ error: "Could not load weather" });
+  }
+});
+
+
+Frontend update: in the Trip Planner page (src/pages/TripPlanner.tsx or equivalent), change the weather section to use the new shape:
+
+// tripWeather = { forecast: [{ date, high, low, weathercode }], ... }
+{tripWeather?.forecast?.map((day) => (
+  <div key={day.date} className="flex items-center gap-4 border rounded p-2">
+    <span className="w-32">{formatDate(day.date)}</span>
+    <span className="text-sm text-muted-foreground">
+      High {day.high}°C / Low {day.low}°C
+    </span>
+    {/* optional: map weathercode to text */}
+  </div>
+))}
+
+
+Add a small comment in the backend that if I later add trip.lat and trip.lng to the DB, I can drop the ?lat=...&lng=... query param.
+
+Tell me which files you changed.

@@ -118,6 +118,13 @@ export const trips = pgTable("trips", {
   // Trip location (e.g., "Goldstream Provincial Park")
   location: text("location").notNull(),
   
+  // Geographic coordinates for weather forecasts (optional)
+  // Latitude in decimal degrees (e.g., 48.4284 for Victoria, BC)
+  lat: numeric("lat", { precision: 10, scale: 6 }),
+  
+  // Longitude in decimal degrees (e.g., -123.3656 for Victoria, BC)
+  lng: numeric("lng", { precision: 10, scale: 6 }),
+  
   // Start date of the trip
   startDate: timestamp("start_date").notNull(),
   
