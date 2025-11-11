@@ -6,6 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ExternalLinkIcon, FileTextIcon, GamepadIcon, BookOpenIcon, DownloadIcon, LockIcon, CheckCircle2Icon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import SubscribeButton from "../components/SubscribeButton";
+
 
 interface AccessResponse {
   hasAccess: boolean;
@@ -93,11 +95,7 @@ export default function Printables() {
               <p className="text-sm text-muted-foreground mb-4">
                 Become a Pro member to access all printables. Start with a 7-day free trial!
               </p>
-              <Button asChild size="sm" data-testid="button-start-trial">
-                <Link href="/subscribe">
-                  Start 7-Day Free Trial ($29.99/year)
-                </Link>
-              </Button>
+              <SubscribeButton label="Start 7-Day Free Trial ($29.99/year)" />
             </AlertDescription>
           </Alert>
         )}
