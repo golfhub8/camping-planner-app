@@ -10,6 +10,7 @@ export default function Navbar() {
   const navLinks = [
     { path: "/", label: "Recipes", matchExact: true },
     { path: "/trips", label: "Trips", matchExact: false },
+    { path: "/map", label: "Map", matchExact: false },
     { path: "/printables", label: "Printables", matchExact: false },
   ];
 
