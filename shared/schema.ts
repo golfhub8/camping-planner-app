@@ -154,6 +154,7 @@ export const trips = pgTable("trips", {
 
 // Schema for inserting a new trip (excludes auto-generated fields and defaults)
 // Coerces ISO date strings to Date objects for API compatibility
+// Accepts optional lat/lng coordinates for weather forecasts
 export const insertTripSchema = createInsertSchema(trips).pick({
   name: true,
   location: true,
@@ -163,7 +164,62 @@ export const insertTripSchema = createInsertSchema(trips).pick({
   // Coerce ISO date strings to Date objects
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
-});
+  // Optional coordinates for weather forecasts
+  // Use z.coerce.number() to handle string inputs from forms
+  // Lat must be between -90 and 90, Lng must be between -180 and 180
+  lat: z.coerce.number().min(-90).max(90).nullable().optional(),
+  lng: z.coerce.number().min(-180).max(180).nullable().optional(),
+}).refine(
+  (data) => {
+    // If one coordinate is provided, both must be provided
+    const hasLat = data.lat !== null && data.lat !== undefined;
+    const hasLng = data.lng !== null && data.lng !== undefined;
+    return (hasLat && hasLng) || (!hasLat && !hasLng);
+  },
+  {
+    message: "Both latitude and longitude must be provided together, or both must be empty",
+  }
+).refine(
+  (data) => data.startDate <= data.endDate,
+  {
+    message: "End date must be after start date",
+  }
+);
+
+// Schema for updating an existing trip
+// All fields are optional to allow partial updates
+// Used for PUT /api/trips/:id endpoint
+export const updateTripSchema = z.object({
+  name: z.string().min(1, "Trip name is required").optional(),
+  location: z.string().min(1, "Location is required").optional(),
+  startDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().optional(),
+  // Use z.coerce.number() to handle string inputs from forms
+  // Coordinates must be within valid geographic ranges
+  lat: z.coerce.number().min(-90).max(90).nullable().optional(),
+  lng: z.coerce.number().min(-180).max(180).nullable().optional(),
+}).refine(
+  (data) => {
+    // If one coordinate is updated, both must be updated together
+    const hasLat = data.lat !== null && data.lat !== undefined;
+    const hasLng = data.lng !== null && data.lng !== undefined;
+    return (hasLat && hasLng) || (!hasLat && !hasLng);
+  },
+  {
+    message: "Both latitude and longitude must be provided together, or both must be empty",
+  }
+).refine(
+  (data) => {
+    // If both dates are provided, ensure start is before end
+    if (data.startDate && data.endDate) {
+      return data.startDate <= data.endDate;
+    }
+    return true; // If only one date is provided, skip this validation
+  },
+  {
+    message: "End date must be after start date",
+  }
+);
 
 // Schema for adding a collaborator to a trip
 // The collaborator string will be trimmed and normalized to lowercase
@@ -186,6 +242,7 @@ export const addMealSchema = z.object({
 
 // TypeScript types for working with trips
 export type InsertTrip = z.infer<typeof insertTripSchema>;
+export type UpdateTrip = z.infer<typeof updateTripSchema>;
 export type Trip = typeof trips.$inferSelect;
 export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;
 export type AddTripCost = z.infer<typeof addTripCostSchema>;

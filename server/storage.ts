@@ -1,4 +1,4 @@
-import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, users, recipes, trips, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type UpdateTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, users, recipes, trips, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -46,6 +46,10 @@ export interface IStorage {
   
   // Create a new trip for a user
   createTrip(trip: InsertTrip, userId: string): Promise<Trip>;
+  
+  // Update an existing trip (with ownership check)
+  // All fields in UpdateTrip are optional for partial updates
+  updateTrip(tripId: number, updates: UpdateTrip, userId: string): Promise<Trip | undefined>;
   
   // Add a collaborator to a trip (with ownership check)
   addCollaborator(tripId: number, collaborator: string, userId: string): Promise<Trip | undefined>;
@@ -221,6 +225,8 @@ export class MemStorage implements IStorage {
     // Create a new trip with auto-generated ID, timestamp, userId, and empty arrays
     const trip: Trip = {
       ...insertTrip,
+      lat: insertTrip.lat ? insertTrip.lat.toString() : null,
+      lng: insertTrip.lng ? insertTrip.lng.toString() : null,
       id: this.nextTripId++,
       userId,
       meals: [],
@@ -230,6 +236,24 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.trips.set(trip.id, trip);
+    return trip;
+  }
+
+  async updateTrip(tripId: number, updates: UpdateTrip, userId: string): Promise<Trip | undefined> {
+    // Find the trip and verify ownership
+    const trip = this.trips.get(tripId);
+    if (!trip || trip.userId !== userId) {
+      return undefined;
+    }
+
+    // Apply updates (only update fields that are provided)
+    if (updates.name !== undefined) trip.name = updates.name;
+    if (updates.location !== undefined) trip.location = updates.location;
+    if (updates.startDate !== undefined) trip.startDate = updates.startDate;
+    if (updates.endDate !== undefined) trip.endDate = updates.endDate;
+    if (updates.lat !== undefined) trip.lat = updates.lat ? updates.lat.toString() : null;
+    if (updates.lng !== undefined) trip.lng = updates.lng ? updates.lng.toString() : null;
+
     return trip;
   }
 
@@ -639,11 +663,54 @@ export class DatabaseStorage implements IStorage {
 
   async createTrip(insertTrip: InsertTrip, userId: string): Promise<Trip> {
     // Create trip with userId
+    // Convert numeric lat/lng to strings for database storage
     const [trip] = await db
       .insert(trips)
-      .values({ ...insertTrip, userId })
+      .values({ 
+        name: insertTrip.name,
+        location: insertTrip.location,
+        lat: insertTrip.lat ? insertTrip.lat.toString() : null,
+        lng: insertTrip.lng ? insertTrip.lng.toString() : null,
+        startDate: insertTrip.startDate,
+        endDate: insertTrip.endDate,
+        userId 
+      })
       .returning();
     return trip;
+  }
+
+  async updateTrip(tripId: number, updates: UpdateTrip, userId: string): Promise<Trip | undefined> {
+    // Build the update object with only the fields that were provided
+    const updateData: Partial<{
+      name: string;
+      location: string;
+      lat: string | null;
+      lng: string | null;
+      startDate: Date;
+      endDate: Date;
+    }> = {};
+
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.location !== undefined) updateData.location = updates.location;
+    if (updates.startDate !== undefined) updateData.startDate = updates.startDate;
+    if (updates.endDate !== undefined) updateData.endDate = updates.endDate;
+    if (updates.lat !== undefined) updateData.lat = updates.lat?.toString() ?? null;
+    if (updates.lng !== undefined) updateData.lng = updates.lng?.toString() ?? null;
+
+    // If no fields to update, just return the existing trip
+    if (Object.keys(updateData).length === 0) {
+      const trip = await this.getTripById(tripId, userId);
+      return trip;
+    }
+
+    // Update trip only if user owns it
+    const [trip] = await db
+      .update(trips)
+      .set(updateData)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`)
+      .returning();
+
+    return trip || undefined;
   }
 
   async addCollaborator(tripId: number, collaborator: string, userId: string): Promise<Trip | undefined> {

@@ -1,0 +1,112 @@
+I need to fix the Trips feature so that a saved trip actually has usable location data and the weather endpoint can show real weather.
+
+Right now:
+- I can create a trip (e.g. “Goldstream”) but the trip doesn’t have lat/lng
+- I can’t change the location of an existing trip
+- The weather route is falling back to mock data
+
+Please do the following:
+
+1. **Trips model/schema**
+   - Update the trips table/model to include these fields if they don’t exist:
+     - `location` (string)
+     - `lat` (float / numeric)
+     - `lng` (float / numeric)
+   - If the schema file already exists (e.g. `server/schema.ts`), add those columns/fields there.
+
+2. **Trip create endpoint**
+   - In the POST `/api/trips` endpoint, when a trip is created with a `location` string, try to geocode it.
+   - For now, if there is no real geocoding API key set, just call a helper that returns `null` and allow the trip to be created.
+   - If geocoding succeeds, save `lat` and `lng` on the trip record.
+
+   Example:
+   ```ts
+   app.post("/api/trips", isAuthenticated, async (req, res) => {
+     const userId = req.user.claims.sub;
+     const { name, location, startDate, endDate } = req.body;
+
+     let lat = null;
+     let lng = null;
+
+     if (location && process.env.MAPBOX_TOKEN) {
+       // TODO: real geocode
+     }
+
+     const trip = await storage.createTrip({
+       userId,
+       name,
+       location,
+       startDate,
+       endDate,
+       lat,
+       lng,
+     });
+
+     res.json(trip);
+   });
+Trip update endpoint
+
+Add a new route:
+
+ts
+Copy code
+app.put("/api/trips/:id", isAuthenticated, async (req, res) => {
+  const userId = req.user.claims.sub;
+  const { id } = req.params;
+  const { name, location, startDate, endDate } = req.body;
+
+  // load trip and make sure it belongs to the user
+  const trip = await storage.getTripById(id, userId);
+  if (!trip) return res.status(404).json({ error: "Trip not found" });
+
+  let lat = trip.lat;
+  let lng = trip.lng;
+
+  // if user changed the location, try to geocode again
+  if (location && location !== trip.location && process.env.MAPBOX_TOKEN) {
+    // TODO: real geocode here
+  }
+
+  const updated = await storage.updateTrip(id, userId, {
+    name,
+    location,
+    startDate,
+    endDate,
+    lat,
+    lng,
+  });
+
+  res.json(updated);
+});
+This will let me change the location of an existing trip from the UI.
+
+Weather endpoint
+
+Update /api/trips/:id/weather so that it does not return mock data if the trip already has lat and lng.
+
+Logic should be:
+
+load trip for current user
+
+if trip has lat and lng → call Open-Meteo with those and return real forecast
+
+else → return 400 with “Trip is missing coordinates” so I know to update the trip
+
+That way, when I change the trip’s location, I can refresh the trip page and see real weather.
+
+Frontend
+
+On the Trips page (the list) and the Trip Planner page (/trips/:id), add an “Edit trip” button that opens a small form where I can change:
+
+trip name
+
+location (text input)
+
+start / end dates
+
+On save, call the new PUT /api/trips/:id endpoint.
+
+After saving, re-fetch /api/trips/:id/weather so the weather section updates.
+
+Please add comments where the real geocoding call will go (Mapbox, Google, or OpenCage) so I can add the token later.
+Tell me which files you changed.

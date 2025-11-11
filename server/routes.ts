@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import Stripe from "stripe";
@@ -1142,7 +1142,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // POST /api/trips
   // Creates a new trip for the logged in user
-  // Body: { name: string, location: string, startDate: Date, endDate: Date }
+  // Body: { name: string, location: string, startDate: Date, endDate: Date, lat?: number, lng?: number }
+  // Optional geocoding: If location is provided but coordinates are not, and geocoding API key exists,
+  // the server will attempt to geocode the location and save coordinates for weather forecasts
   // Protected route - requires authentication
   app.post("/api/trips", isAuthenticated, async (req: any, res) => {
     try {
@@ -1150,6 +1152,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate the request body against our schema
       const validatedData = insertTripSchema.parse(req.body);
+      
+      // TODO: Geocoding placeholder
+      // If location is provided but coordinates are missing, attempt geocoding
+      // Supported services: Mapbox (requires MAPBOX_TOKEN), Google Maps (requires GOOGLE_MAPS_API_KEY),
+      // or OpenCage (requires OPENCAGE_API_KEY)
+      // Example:
+      // if (validatedData.location && !validatedData.lat && !validatedData.lng) {
+      //   if (process.env.MAPBOX_TOKEN) {
+      //     const coords = await geocodeLocation(validatedData.location, process.env.MAPBOX_TOKEN);
+      //     validatedData.lat = coords.lat;
+      //     validatedData.lng = coords.lng;
+      //   }
+      // }
       
       // Create the trip in storage (with userId)
       const trip = await storage.createTrip(validatedData, userId);
@@ -1167,6 +1182,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.error("Error creating trip:", error);
       res.status(500).json({ error: "Failed to create trip" });
+    }
+  });
+
+  // PUT /api/trips/:id
+  // Updates an existing trip for the logged in user
+  // Body: { name?: string, location?: string, startDate?: Date, endDate?: Date, lat?: number, lng?: number }
+  // All fields are optional for partial updates
+  // If location changes and geocoding API key exists, coordinates will be updated
+  // Protected route - requires authentication
+  app.put("/api/trips/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+      
+      // Get the existing trip to check ownership and compare location
+      const existingTrip = await storage.getTripById(tripId, userId);
+      if (!existingTrip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+      
+      // Validate the request body against our schema
+      const validatedData = updateTripSchema.parse(req.body);
+      
+      // TODO: Geocoding placeholder
+      // If location changed and coordinates weren't manually provided, attempt geocoding
+      // Supported services: Mapbox (requires MAPBOX_TOKEN), Google Maps (requires GOOGLE_MAPS_API_KEY),
+      // or OpenCage (requires OPENCAGE_API_KEY)
+      // Example:
+      // if (validatedData.location && 
+      //     validatedData.location !== existingTrip.location && 
+      //     validatedData.lat === undefined && 
+      //     validatedData.lng === undefined) {
+      //   if (process.env.MAPBOX_TOKEN) {
+      //     const coords = await geocodeLocation(validatedData.location, process.env.MAPBOX_TOKEN);
+      //     validatedData.lat = coords.lat;
+      //     validatedData.lng = coords.lng;
+      //   }
+      // }
+      
+      // Update the trip
+      const updatedTrip = await storage.updateTrip(tripId, validatedData, userId);
+      
+      if (!updatedTrip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+      
+      res.json(updatedTrip);
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid trip update data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error updating trip:", error);
+      res.status(500).json({ error: "Failed to update trip" });
     }
   });
 
