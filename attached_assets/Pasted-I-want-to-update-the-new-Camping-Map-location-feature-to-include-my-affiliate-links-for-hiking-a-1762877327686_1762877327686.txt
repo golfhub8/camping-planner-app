@@ -1,0 +1,73 @@
+I want to update the new “Camping Map” / location feature to include my affiliate links for hiking and camping.
+
+Please do the following updates:
+
+1. Frontend: in the Camping Map page (e.g. client/src/pages/CampingMap.tsx or whatever file you created for the map):
+
+After we list the nearby campgrounds, for each campground render two buttons/links:
+
+“Nearby hikes (AllTrails)” → this should link to my affiliate URL:
+
+const allTrailsAffiliate = "https://alltrails.pxf.io/VxGVyM";
+
+
+When the user clicks it, open in a new tab.
+If possible, append the campground name as a search param to help users narrow down the hike, like:
+
+const hikesUrl = `https://alltrails.pxf.io/VxGVyM?search=${encodeURIComponent(campground.name || query)}`;
+
+
+If adding the param breaks the affiliate format, just use the raw affiliate link.
+
+“Find a campsite (Hipcamp)” → this should use my referral link:
+
+const hipcampReferral = "https://www.hipcamp.com/i/sterlings5d0b1c?utm_source=camper_referral&utm_medium=share&utm_campaign=sterlings5d0b1c";
+
+
+Also open in a new tab.
+
+Example JSX for each campground card:
+
+<div className="space-y-2">
+  <h3>{campground.name}</h3>
+  <p className="text-sm text-muted-foreground">
+    {campground.type ?? "Campground"}
+  </p>
+  <div className="flex gap-2">
+    <a
+      href={`https://alltrails.pxf.io/VxGVyM?search=${encodeURIComponent(campground.name ?? query ?? "")}`}
+      target="_blank"
+      rel="noreferrer"
+      className="text-sm bg-emerald-500 text-white px-3 py-1 rounded"
+    >
+      Nearby hikes (AllTrails)
+    </a>
+    <a
+      href="https://www.hipcamp.com/i/sterlings5d0b1c?utm_source=camper_referral&utm_medium=share&utm_campaign=sterlings5d0b1c"
+      target="_blank"
+      rel="noreferrer"
+      className="text-sm bg-slate-800 text-white px-3 py-1 rounded"
+    >
+      Find a campsite (Hipcamp)
+    </a>
+  </div>
+</div>
+
+2. Make the links available as env vars
+
+In case I want to change affiliate links later, read from env first:
+
+const ALLTRAILS_AFFILIATE =
+  import.meta.env.VITE_ALLTRAILS_AFFILIATE ?? "https://alltrails.pxf.io/VxGVyM";
+const HIPCAMP_REFERRAL =
+  import.meta.env.VITE_HIPCAMP_REFERRAL ??
+  "https://www.hipcamp.com/i/sterlings5d0b1c?utm_source=camper_referral&utm_medium=share&utm_campaign=sterlings5d0b1c";
+
+
+and then use those in the JSX. But if env vars aren’t set, default to the values above.
+
+3. Keep the map behavior
+
+Don’t remove the map or the geocoding call — just add these two outbound links under each result.
+
+Tell me which files you changed.

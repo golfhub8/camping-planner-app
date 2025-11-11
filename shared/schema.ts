@@ -233,3 +233,37 @@ export const sendGroceryNotificationSchema = z.object({
 export type CreateSharedGroceryList = z.infer<typeof createSharedGroceryListSchema>;
 export type SendGroceryNotification = z.infer<typeof sendGroceryNotificationSchema>;
 export type SharedGroceryList = typeof sharedGroceryLists.$inferSelect;
+
+// Campground schema for Camping Map feature
+// In-memory data (not persisted to database)
+// Represents campgrounds and outdoor recreation areas
+export const campgroundSchema = z.object({
+  // Unique identifier for the campground
+  id: z.string(),
+  
+  // Name of the campground (e.g., "Goldstream Provincial Park")
+  name: z.string(),
+  
+  // Type of campground (e.g., "Provincial Park", "National Park", "Private Campground")
+  type: z.string().optional(),
+  
+  // Location description (e.g., "Victoria, BC" or "Washington State")
+  location: z.string(),
+  
+  // Geographic coordinates for map display
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  
+  // Brief description of the campground
+  description: z.string().optional(),
+});
+
+// Schema for searching campgrounds by location query
+export const searchCampgroundsSchema = z.object({
+  // Location search query (e.g., "Victoria BC", "Olympic National Park")
+  query: z.string().min(1, "Location is required"),
+});
+
+// TypeScript types for campgrounds
+export type Campground = z.infer<typeof campgroundSchema>;
+export type SearchCampgroundsRequest = z.infer<typeof searchCampgroundsSchema>;

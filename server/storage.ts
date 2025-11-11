@@ -1,4 +1,4 @@
-import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type SharedGroceryList, type CreateSharedGroceryList, users, recipes, trips, sharedGroceryLists } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, users, recipes, trips, sharedGroceryLists } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -62,6 +62,10 @@ export interface IStorage {
   
   // Get the current shared grocery list for a trip (returns undefined if none exists)
   getSharedGroceryListByTrip(tripId: number): Promise<SharedGroceryList | undefined>;
+  
+  // Campground methods (in-memory only - not persisted to database)
+  // Search for campgrounds by location query
+  searchCampgrounds(query: string): Promise<Campground[]>;
 }
 
 // In-memory storage implementation
@@ -336,6 +340,101 @@ export class MemStorage implements IStorage {
       }
     }
     return undefined;
+  }
+
+  // Campground search methods (in-memory mock data only)
+  // Mock campground database for demonstration
+  private mockCampgrounds: Campground[] = [
+    // Pacific Northwest Campgrounds
+    {
+      id: "goldstream",
+      name: "Goldstream Provincial Park",
+      type: "Provincial Park",
+      location: "Victoria, BC",
+      latitude: 48.467,
+      longitude: -123.562,
+      description: "Beautiful old-growth forest with hiking trails and salmon spawning in fall"
+    },
+    {
+      id: "french-beach",
+      name: "French Beach Provincial Park",
+      type: "Provincial Park",
+      location: "Sooke, BC",
+      latitude: 48.371,
+      longitude: -123.934,
+      description: "Oceanfront camping with spectacular sunsets and whale watching"
+    },
+    {
+      id: "rathtrevor",
+      name: "Rathtrevor Beach Provincial Park",
+      type: "Provincial Park",
+      location: "Parksville, BC",
+      latitude: 49.311,
+      longitude: -124.279,
+      description: "Family-friendly beach camping with warm waters and sandy shores"
+    },
+    {
+      id: "miracle-beach",
+      name: "Miracle Beach Provincial Park",
+      type: "Provincial Park",
+      location: "Courtenay, BC",
+      latitude: 49.854,
+      longitude: -125.118,
+      description: "Sandy beach with nature programs and great swimming"
+    },
+    {
+      id: "olympic-np",
+      name: "Olympic National Park",
+      type: "National Park",
+      location: "Washington State",
+      latitude: 47.802,
+      longitude: -123.604,
+      description: "Diverse ecosystems from mountains to rainforests to beaches"
+    },
+    {
+      id: "mount-rainier",
+      name: "Mount Rainier National Park",
+      type: "National Park",
+      location: "Washington State",
+      latitude: 46.853,
+      longitude: -121.760,
+      description: "Iconic mountain with alpine meadows and old-growth forests"
+    },
+    {
+      id: "north-cascades",
+      name: "North Cascades National Park",
+      type: "National Park",
+      location: "Washington State",
+      latitude: 48.717,
+      longitude: -121.298,
+      description: "Rugged mountain wilderness with stunning alpine scenery"
+    },
+    {
+      id: "deception-pass",
+      name: "Deception Pass State Park",
+      type: "State Park",
+      location: "Washington State",
+      latitude: 48.405,
+      longitude: -122.647,
+      description: "Dramatic bridge views and forested trails on Whidbey Island"
+    },
+  ];
+
+  async searchCampgrounds(query: string): Promise<Campground[]> {
+    // Simple case-insensitive search across name and location
+    const lowerQuery = query.toLowerCase().trim();
+    
+    if (!lowerQuery) {
+      // Return all campgrounds if no query
+      return this.mockCampgrounds;
+    }
+    
+    // Filter campgrounds that match the query in name or location
+    return this.mockCampgrounds.filter((campground) =>
+      campground.name.toLowerCase().includes(lowerQuery) ||
+      campground.location.toLowerCase().includes(lowerQuery) ||
+      (campground.description && campground.description.toLowerCase().includes(lowerQuery))
+    );
   }
 }
 
@@ -639,6 +738,101 @@ export class DatabaseStorage implements IStorage {
     }
     
     return sharedList || undefined;
+  }
+
+  // Campground search methods (in-memory mock data only - not persisted to database)
+  // Mock campground database for demonstration
+  private mockCampgrounds: Campground[] = [
+    // Pacific Northwest Campgrounds
+    {
+      id: "goldstream",
+      name: "Goldstream Provincial Park",
+      type: "Provincial Park",
+      location: "Victoria, BC",
+      latitude: 48.467,
+      longitude: -123.562,
+      description: "Beautiful old-growth forest with hiking trails and salmon spawning in fall"
+    },
+    {
+      id: "french-beach",
+      name: "French Beach Provincial Park",
+      type: "Provincial Park",
+      location: "Sooke, BC",
+      latitude: 48.371,
+      longitude: -123.934,
+      description: "Oceanfront camping with spectacular sunsets and whale watching"
+    },
+    {
+      id: "rathtrevor",
+      name: "Rathtrevor Beach Provincial Park",
+      type: "Provincial Park",
+      location: "Parksville, BC",
+      latitude: 49.311,
+      longitude: -124.279,
+      description: "Family-friendly beach camping with warm waters and sandy shores"
+    },
+    {
+      id: "miracle-beach",
+      name: "Miracle Beach Provincial Park",
+      type: "Provincial Park",
+      location: "Courtenay, BC",
+      latitude: 49.854,
+      longitude: -125.118,
+      description: "Sandy beach with nature programs and great swimming"
+    },
+    {
+      id: "olympic-np",
+      name: "Olympic National Park",
+      type: "National Park",
+      location: "Washington State",
+      latitude: 47.802,
+      longitude: -123.604,
+      description: "Diverse ecosystems from mountains to rainforests to beaches"
+    },
+    {
+      id: "mount-rainier",
+      name: "Mount Rainier National Park",
+      type: "National Park",
+      location: "Washington State",
+      latitude: 46.853,
+      longitude: -121.760,
+      description: "Iconic mountain with alpine meadows and old-growth forests"
+    },
+    {
+      id: "north-cascades",
+      name: "North Cascades National Park",
+      type: "National Park",
+      location: "Washington State",
+      latitude: 48.717,
+      longitude: -121.298,
+      description: "Rugged mountain wilderness with stunning alpine scenery"
+    },
+    {
+      id: "deception-pass",
+      name: "Deception Pass State Park",
+      type: "State Park",
+      location: "Washington State",
+      latitude: 48.405,
+      longitude: -122.647,
+      description: "Dramatic bridge views and forested trails on Whidbey Island"
+    },
+  ];
+
+  async searchCampgrounds(query: string): Promise<Campground[]> {
+    // Simple case-insensitive search across name and location
+    const lowerQuery = query.toLowerCase().trim();
+    
+    if (!lowerQuery) {
+      // Return all campgrounds if no query
+      return this.mockCampgrounds;
+    }
+    
+    // Filter campgrounds that match the query in name or location
+    return this.mockCampgrounds.filter((campground) =>
+      campground.name.toLowerCase().includes(lowerQuery) ||
+      campground.location.toLowerCase().includes(lowerQuery) ||
+      (campground.description && campground.description.toLowerCase().includes(lowerQuery))
+    );
   }
 }
 
