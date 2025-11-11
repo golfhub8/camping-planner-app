@@ -1,0 +1,121 @@
+Prompt for Replit – enable attaching external recipes to a trip
+
+Open the component that renders the “From TheCampingPlanner.com” recipe cards (it’s probably ExternalRecipeCard.tsx or inside Recipes.tsx where we map externalRecipes).
+
+Add a small action button on each external recipe: “Add to Trip”.
+
+When clicked, open the same trip-select modal/drawer we use for normal recipes (if we don’t have one yet, create a very simple one that fetches /api/trips and lets me pick one).
+
+When I pick a trip, POST to:
+POST /api/trips/:tripId/meals
+body: { recipeId: externalRecipe.id, isExternal: true, title: externalRecipe.title, sourceUrl: externalRecipe.url }
+
+On the backend, update the trip_meals creation logic to allow external recipes (no strict foreign key to recipes table) if isExternal === true.
+
+Show a success toast “Recipe added to trip”.
+
+Tell me which files you changed.
+
+That will let you plan a trip using your blog content 👌
+
+2. Trip form date looks weird / can’t type date
+
+That’s usually because the input is type="date" but we’re trying to manually type MM/DD/YYYY while the browser wants YYYY-MM-DD.
+
+So: we tell Replit to normalize.
+
+Prompt for Replit – normalize trip date inputs
+
+Open the trip create/edit form component (the one used on /trips/new and the “Edit Trip” button).
+
+Make both startDate and endDate use <input type="date" /> bound to ISO format (YYYY-MM-DD).
+
+When loading an existing trip, if the date is like 2025-11-28T00:00:00.000Z, format it to 2025-11-28 before putting it in the input.
+
+When submitting, send the date as ISO (2025-11-28) to the backend.
+
+Add a placeholder text under the field: “Use the date picker”.
+
+Tell me which files you changed.
+
+That will stop the “comes out strange” thing.
+
+3. Location search not pulling cities + double header
+
+Two parts.
+
+3a. Location not found
+
+Your trip editor is probably just saving the raw text and not actually geocoding unless you have a token. So Los Angeles → no coords → weather says “no coordinates”.
+
+So we tell Replit: if geocoding env isn’t set, just save the text, but don’t pretend it failed.
+
+Prompt for Replit – improve trip location UX
+
+In the trip create/edit form, allow any text location to be saved (don’t block on geocoding).
+
+After saving, show “This trip doesn’t have coordinates yet. Add latitude and longitude to see weather.” only if lat and lng are actually missing.
+
+In the backend, if there is no geocoding token, don’t throw — just save the location string.
+
+That way you can at least save “Los Angeles”.
+
+If you actually want auto-lat/lng for cities, we can later add OpenCage or Mapbox.
+
+3b. Double header
+
+You’ve got the app header (Recipes | Trips | Map | Printables) and then the trip page added another top bar. Tell Replit to remove the extra one.
+
+Prompt – remove duplicate header on trip detail
+
+Open the trip detail page (where it shows “California”, weather, collaborators).
+
+It currently renders its own top navigation/header in addition to the global app navbar.
+
+Remove the extra header so only the global navbar is shown.
+
+Keep the “Back to Trips” link.
+
+4. Printables + ThriveCart + Pro membership
+
+Right now you sell on ThriveCart, but the app says “Pro membership gets printables.” You’ve got two paths:
+
+Option A (simplest): host PDFs in the app
+
+Upload your PDFs to the app (they already look like they’re listed).
+
+Gate the download buttons behind user.isPro === true.
+
+Keep ThriveCart on your site but change the website wording to: “Want all printables? Get the Camping Planner app (Pro).”
+
+This is the cleanest because the app controls access.
+
+Option B (keep ThriveCart separate)
+
+Let people buy on ThriveCart like today.
+
+After purchase, you give them a Pro account or a download link.
+
+Harder to automate unless you send a webhook from ThriveCart into your app.
+
+Because you already have Stripe in the app, I would do Option A.
+
+Here’s a prompt for that:
+
+Prompt for Replit – gate downloadable PDFs for Pro users
+
+Open the Printables page component.
+
+For each printable/download card, wrap the download button in a check:
+
+if user.isPro === true → show “Download” (link to the file stored in the app)
+
+else → show the current “Start 7-Day Free Trial ($29.99/year)” button
+
+Make sure the download link uses the file path we already have in the backend (you set up /api/printables/downloads earlier).
+
+Add a note at the top: “Already purchased via ThriveCart? Contact us to activate your Pro account.” (so existing buyers aren’t stuck).
+
+Tell me which files you changed.
+
+That aligns the app with what you’re actually selling.

@@ -252,18 +252,67 @@ export const addTripCostSchema = z.object({
   paidBy: z.string().trim().optional(),
 });
 
-// Schema for adding a meal (recipe) to a trip
-export const addMealSchema = z.object({
-  recipeId: z.number().int().positive("Recipe ID must be a positive integer"),
+// Trip Meals table schema
+// Junction table that stores recipes (internal or external) attached to trips
+export const tripMeals = pgTable("trip_meals", {
+  // Auto-generated unique identifier
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  
+  // Associated trip ID (foreign key to trips table)
+  tripId: integer("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+  
+  // Internal recipe ID (foreign key to recipes table, nullable for external recipes)
+  recipeId: integer("recipe_id").references(() => recipes.id),
+  
+  // Flag indicating if this is an external WordPress recipe
+  isExternal: boolean("is_external").notNull().default(false),
+  
+  // External recipe WordPress post ID (nullable, only for external recipes)
+  externalRecipeId: text("external_recipe_id"),
+  
+  // Cached recipe title (for external recipes, allows display without fetching WordPress)
+  title: text("title").notNull(),
+  
+  // Source URL for external recipes (link to full recipe on WordPress)
+  sourceUrl: text("source_url"),
+  
+  // When this meal was added to the trip
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// TypeScript types for working with trips
+// Schema for adding a meal (recipe) to a trip
+// Supports both internal recipes (from database) and external recipes (from WordPress)
+export const addMealSchema = z.object({
+  // For internal recipes: provide recipeId
+  recipeId: z.number().int().positive("Recipe ID must be a positive integer").optional(),
+  
+  // For external recipes: provide isExternal, title, and sourceUrl
+  isExternal: z.boolean().default(false),
+  externalRecipeId: z.string().optional(), // WordPress post ID
+  title: z.string().optional(),
+  sourceUrl: z.string().url().optional(),
+}).refine(
+  (data) => {
+    // Internal recipe: must have recipeId and not be external
+    if (!data.isExternal) {
+      return data.recipeId !== undefined;
+    }
+    // External recipe: must have externalRecipeId, title, and sourceUrl
+    return data.externalRecipeId !== undefined && data.title !== undefined && data.sourceUrl !== undefined;
+  },
+  {
+    message: "Internal recipes require recipeId. External recipes require externalRecipeId, title, and sourceUrl.",
+  }
+);
+
+// TypeScript types for working with trips and trip meals
 export type InsertTrip = z.infer<typeof insertTripSchema>;
 export type UpdateTrip = z.infer<typeof updateTripSchema>;
 export type Trip = typeof trips.$inferSelect;
 export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;
 export type AddTripCost = z.infer<typeof addTripCostSchema>;
 export type AddMeal = z.infer<typeof addMealSchema>;
+export type TripMeal = typeof tripMeals.$inferSelect;
 
 // Shared Grocery Lists table schema
 // Stores shareable grocery lists with unique tokens for public access

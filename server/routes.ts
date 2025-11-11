@@ -1331,9 +1331,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/trips/:id/meals
+  // Get all meals for a trip
+  // Protected route - requires authentication
+  app.get("/api/trips/:id/meals", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Get all meals for the trip (with ownership check)
+      const meals = await storage.getTripMeals(tripId, userId);
+      
+      res.json(meals);
+    } catch (error: any) {
+      console.error("Error fetching trip meals:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch trip meals" });
+    }
+  });
+
   // POST /api/trips/:id/meals
-  // Add a recipe (meal) to a trip
-  // Body: { recipeId: number }
+  // Add a recipe (meal) to a trip - supports both internal and external recipes
+  // Body: { recipeId: number } for internal OR { isExternal: true, externalRecipeId: string, title: string, sourceUrl: string } for external
   // Protected route - requires authentication
   app.post("/api/trips/:id/meals", isAuthenticated, async (req: any, res) => {
     try {
@@ -1345,23 +1368,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid trip ID" });
       }
 
-      // Validate the request body
-      const { recipeId } = addMealSchema.parse(req.body);
+      // Validate the request body using the updated addMealSchema
+      const mealData = addMealSchema.parse(req.body);
 
-      // Check if recipe exists and user owns it
-      const recipe = await storage.getRecipeById(recipeId, userId);
-      if (!recipe) {
-        return res.status(404).json({ error: "Recipe not found" });
+      // For internal recipes, check if recipe exists and user owns it
+      if (!mealData.isExternal && mealData.recipeId) {
+        const recipe = await storage.getRecipeById(mealData.recipeId, userId);
+        if (!recipe) {
+          return res.status(404).json({ error: "Recipe not found" });
+        }
       }
 
       // Add the meal to the trip (with ownership check)
-      const updatedTrip = await storage.addMealToTrip(tripId, recipeId, userId);
+      const newMeal = await storage.addMealToTrip(tripId, mealData, userId);
       
-      if (!updatedTrip) {
-        return res.status(404).json({ error: "Trip not found" });
+      if (!newMeal) {
+        return res.status(404).json({ error: "Trip not found or meal already exists" });
       }
 
-      res.json(updatedTrip);
+      res.status(201).json(newMeal);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
@@ -1375,31 +1400,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/trips/:id/meals/:recipeId
-  // Remove a recipe (meal) from a trip
+  // DELETE /api/trips/:id/meals/:mealId
+  // Remove a meal from a trip
   // Protected route - requires authentication
-  app.delete("/api/trips/:id/meals/:recipeId", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/trips/:id/meals/:mealId", isAuthenticated, async (req: any, res) => {
     try {
       const tripId = parseInt(req.params.id);
-      const recipeId = parseInt(req.params.recipeId);
+      const mealId = parseInt(req.params.mealId);
       const userId = req.user.claims.sub;
       
       // Validate IDs
       if (isNaN(tripId)) {
         return res.status(400).json({ error: "Invalid trip ID" });
       }
-      if (isNaN(recipeId)) {
-        return res.status(400).json({ error: "Invalid recipe ID" });
+      if (isNaN(mealId)) {
+        return res.status(400).json({ error: "Invalid meal ID" });
       }
 
       // Remove the meal from the trip (with ownership check)
-      const updatedTrip = await storage.removeMealFromTrip(tripId, recipeId, userId);
+      const success = await storage.removeMealFromTrip(tripId, mealId, userId);
       
-      if (!updatedTrip) {
-        return res.status(404).json({ error: "Trip not found" });
+      if (!success) {
+        return res.status(404).json({ error: "Meal not found or trip not found" });
       }
 
-      res.json(updatedTrip);
+      res.json({ success: true });
     } catch (error) {
       console.error("Error removing meal from trip:", error);
       res.status(500).json({ error: "Failed to remove meal from trip" });

@@ -1,4 +1,4 @@
-import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type UpdateTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, users, recipes, trips, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type UpdateTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, type TripMeal, type AddMeal, users, recipes, trips, tripMeals, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -57,11 +57,15 @@ export interface IStorage {
   // Update cost information for a trip (with ownership check)
   updateTripCost(tripId: number, total: number, userId: string, paidBy?: string): Promise<Trip | undefined>;
   
-  // Add a recipe (meal) to a trip (with ownership check)
-  addMealToTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined>;
+  // Trip Meal methods (using trip_meals junction table)
+  // Get all meals for a trip (with ownership check)
+  getTripMeals(tripId: number, userId: string): Promise<import("@shared/schema").TripMeal[]>;
   
-  // Remove a recipe (meal) from a trip (with ownership check)
-  removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined>;
+  // Add a meal (recipe) to a trip - supports both internal and external recipes
+  addMealToTrip(tripId: number, meal: import("@shared/schema").AddMeal, userId: string): Promise<import("@shared/schema").TripMeal | undefined>;
+  
+  // Remove a meal from a trip by meal ID (with ownership check)
+  removeMealFromTrip(tripId: number, mealId: number, userId: string): Promise<boolean>;
   
   // Shared Grocery List methods
   // Create a shareable grocery list with a unique token
@@ -98,15 +102,19 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private recipes: Map<number, Recipe>;
   private trips: Map<number, Trip>;
+  private tripMealsStore: Map<number, TripMeal>; // Store trip meals separately
   private nextRecipeId: number;
   private nextTripId: number;
+  private nextTripMealId: number;
 
   constructor() {
     this.users = new Map();
     this.recipes = new Map();
     this.trips = new Map();
+    this.tripMealsStore = new Map();
     this.nextRecipeId = 1;
     this.nextTripId = 1;
+    this.nextTripMealId = 1;
   }
 
   // User methods (required for Replit Auth)
@@ -296,35 +304,100 @@ export class MemStorage implements IStorage {
     return trip;
   }
 
-  async addMealToTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
-    // Find the trip and verify ownership
+  // Get all meals for a trip (with ownership check)
+  async getTripMeals(tripId: number, userId: string): Promise<TripMeal[]> {
+    // Verify trip ownership
     const trip = this.trips.get(tripId);
     if (!trip || trip.userId !== userId) {
-      return undefined;
+      return [];
     }
 
-    // Don't add if recipe is already in meals
-    if (trip.meals.includes(recipeId)) {
-      return trip;
-    }
-
-    // Add the recipe to the meals array
-    trip.meals.push(recipeId);
-
-    return trip;
+    // Get all meals for this trip
+    return Array.from(this.tripMealsStore.values())
+      .filter(meal => meal.tripId === tripId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
-    // Find the trip and verify ownership
+  // Add a meal (recipe) to a trip - supports both internal and external recipes
+  async addMealToTrip(tripId: number, meal: AddMeal, userId: string): Promise<TripMeal | undefined> {
+    // Verify trip ownership
     const trip = this.trips.get(tripId);
     if (!trip || trip.userId !== userId) {
       return undefined;
     }
 
-    // Remove the recipe from meals array
-    trip.meals = trip.meals.filter(id => id !== recipeId);
+    // For internal recipes, check if meal already exists
+    if (!meal.isExternal && meal.recipeId) {
+      const exists = Array.from(this.tripMealsStore.values()).some(
+        m => m.tripId === tripId && m.recipeId === meal.recipeId && !m.isExternal
+      );
+      if (exists) {
+        return undefined; // Already added
+      }
 
-    return trip;
+      // Get recipe title from recipes map
+      const recipe = this.recipes.get(meal.recipeId);
+      if (!recipe) {
+        return undefined; // Recipe not found
+      }
+
+      const newMeal: TripMeal = {
+        id: this.nextTripMealId++,
+        tripId,
+        recipeId: meal.recipeId,
+        isExternal: false,
+        externalRecipeId: null,
+        title: recipe.title,
+        sourceUrl: null,
+        createdAt: new Date(),
+      };
+      this.tripMealsStore.set(newMeal.id, newMeal);
+      return newMeal;
+    }
+
+    // For external recipes
+    if (meal.isExternal && meal.externalRecipeId && meal.title && meal.sourceUrl) {
+      // Check if external meal already exists
+      const exists = Array.from(this.tripMealsStore.values()).some(
+        m => m.tripId === tripId && m.externalRecipeId === meal.externalRecipeId && m.isExternal
+      );
+      if (exists) {
+        return undefined; // Already added
+      }
+
+      const newMeal: TripMeal = {
+        id: this.nextTripMealId++,
+        tripId,
+        recipeId: null,
+        isExternal: true,
+        externalRecipeId: meal.externalRecipeId,
+        title: meal.title,
+        sourceUrl: meal.sourceUrl,
+        createdAt: new Date(),
+      };
+      this.tripMealsStore.set(newMeal.id, newMeal);
+      return newMeal;
+    }
+
+    return undefined;
+  }
+
+  // Remove a meal from a trip by meal ID (with ownership check)
+  async removeMealFromTrip(tripId: number, mealId: number, userId: string): Promise<boolean> {
+    // Verify trip ownership
+    const trip = this.trips.get(tripId);
+    if (!trip || trip.userId !== userId) {
+      return false;
+    }
+
+    // Find and remove the meal
+    const meal = this.tripMealsStore.get(mealId);
+    if (!meal || meal.tripId !== tripId) {
+      return false;
+    }
+
+    this.tripMealsStore.delete(mealId);
+    return true;
   }
 
   // Shared Grocery List methods
@@ -771,37 +844,31 @@ export class DatabaseStorage implements IStorage {
     return trip || undefined;
   }
 
-  async addMealToTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
-    // Get the current trip and verify ownership
+  // Get all meals for a trip (with ownership check)
+  async getTripMeals(tripId: number, userId: string): Promise<TripMeal[]> {
+    // Verify trip ownership first
     const [trip] = await db
       .select()
       .from(trips)
       .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
     
     if (!trip) {
-      return undefined;
+      return [];
     }
 
-    // Don't add if recipe is already in meals
-    if (trip.meals.includes(recipeId)) {
-      return trip;
-    }
-
-    // Add the recipe to the meals array
-    const updatedMeals = [...trip.meals, recipeId];
+    // Get all meals for this trip
+    const meals = await db
+      .select()
+      .from(tripMeals)
+      .where(eq(tripMeals.tripId, tripId))
+      .orderBy(desc(tripMeals.createdAt));
     
-    // Update the trip in the database (ownership already verified above)
-    const [updatedTrip] = await db
-      .update(trips)
-      .set({ meals: updatedMeals })
-      .where(eq(trips.id, tripId))
-      .returning();
-    
-    return updatedTrip;
+    return meals;
   }
 
-  async removeMealFromTrip(tripId: number, recipeId: number, userId: string): Promise<Trip | undefined> {
-    // Get the current trip and verify ownership
+  // Add a meal (recipe) to a trip - supports both internal and external recipes
+  async addMealToTrip(tripId: number, meal: AddMeal, userId: string): Promise<TripMeal | undefined> {
+    // Verify trip ownership first
     const [trip] = await db
       .select()
       .from(trips)
@@ -811,17 +878,94 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
 
-    // Remove the recipe from meals array
-    const updatedMeals = trip.meals.filter(id => id !== recipeId);
+    // For internal recipes
+    if (!meal.isExternal && meal.recipeId) {
+      // Get recipe title from recipes table
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, meal.recipeId));
+      
+      if (!recipe) {
+        return undefined; // Recipe not found
+      }
+
+      // Check if meal already exists
+      const [existing] = await db
+        .select()
+        .from(tripMeals)
+        .where(sql`${tripMeals.tripId} = ${tripId} AND ${tripMeals.recipeId} = ${meal.recipeId} AND ${tripMeals.isExternal} = false`);
+      
+      if (existing) {
+        return undefined; // Already added
+      }
+
+      // Insert new meal
+      const [newMeal] = await db
+        .insert(tripMeals)
+        .values({
+          tripId,
+          recipeId: meal.recipeId,
+          isExternal: false,
+          externalRecipeId: null,
+          title: recipe.title,
+          sourceUrl: null,
+        })
+        .returning();
+      
+      return newMeal;
+    }
+
+    // For external recipes
+    if (meal.isExternal && meal.externalRecipeId && meal.title && meal.sourceUrl) {
+      // Check if external meal already exists
+      const [existing] = await db
+        .select()
+        .from(tripMeals)
+        .where(sql`${tripMeals.tripId} = ${tripId} AND ${tripMeals.externalRecipeId} = ${meal.externalRecipeId} AND ${tripMeals.isExternal} = true`);
+      
+      if (existing) {
+        return undefined; // Already added
+      }
+
+      // Insert new external meal
+      const [newMeal] = await db
+        .insert(tripMeals)
+        .values({
+          tripId,
+          recipeId: null,
+          isExternal: true,
+          externalRecipeId: meal.externalRecipeId,
+          title: meal.title,
+          sourceUrl: meal.sourceUrl,
+        })
+        .returning();
+      
+      return newMeal;
+    }
+
+    return undefined;
+  }
+
+  // Remove a meal from a trip by meal ID (with ownership check)
+  async removeMealFromTrip(tripId: number, mealId: number, userId: string): Promise<boolean> {
+    // Verify trip ownership first
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
     
-    // Update the trip in the database (ownership already verified above)
-    const [updatedTrip] = await db
-      .update(trips)
-      .set({ meals: updatedMeals })
-      .where(eq(trips.id, tripId))
+    if (!trip) {
+      return false;
+    }
+
+    // Delete the meal
+    const result = await db
+      .delete(tripMeals)
+      .where(sql`${tripMeals.id} = ${mealId} AND ${tripMeals.tripId} = ${tripId}`)
       .returning();
     
-    return updatedTrip;
+    return result.length > 0;
   }
 
   // Shared Grocery List methods
