@@ -66,6 +66,16 @@ export interface IStorage {
   // Campground methods (in-memory only - not persisted to database)
   // Search for campgrounds by location query
   searchCampgrounds(query: string): Promise<Campground[]>;
+  
+  // Camping Basics methods
+  // Get list of camping basic IDs that the user has selected
+  getCampingBasics(userId: string): Promise<string[]>;
+  
+  // Add a camping basic to user's selection (if not already added)
+  addCampingBasic(userId: string, basicId: string): Promise<string[]>;
+  
+  // Remove a camping basic from user's selection
+  removeCampingBasic(userId: string, basicId: string): Promise<string[]>;
 }
 
 // In-memory storage implementation
@@ -102,6 +112,7 @@ export class MemStorage implements IStorage {
       proMembershipEndDate: existingUser?.proMembershipEndDate ?? null,
       stripeCustomerId: existingUser?.stripeCustomerId ?? null,
       stripeSubscriptionId: existingUser?.stripeSubscriptionId ?? null,
+      selectedCampingBasics: existingUser?.selectedCampingBasics ?? [],
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date(),
     };
@@ -435,6 +446,48 @@ export class MemStorage implements IStorage {
       campground.location.toLowerCase().includes(lowerQuery) ||
       (campground.description && campground.description.toLowerCase().includes(lowerQuery))
     );
+  }
+
+  // Camping Basics methods
+  async getCampingBasics(userId: string): Promise<string[]> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user.selectedCampingBasics || [];
+  }
+
+  async addCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    // Don't add if already exists
+    if (user.selectedCampingBasics.includes(basicId)) {
+      return user.selectedCampingBasics;
+    }
+    
+    // Add the basic ID to the array
+    user.selectedCampingBasics.push(basicId);
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    
+    return user.selectedCampingBasics;
+  }
+
+  async removeCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    // Remove the basic ID from the array
+    user.selectedCampingBasics = user.selectedCampingBasics.filter(id => id !== basicId);
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    
+    return user.selectedCampingBasics;
   }
 }
 
@@ -833,6 +886,58 @@ export class DatabaseStorage implements IStorage {
       campground.location.toLowerCase().includes(lowerQuery) ||
       (campground.description && campground.description.toLowerCase().includes(lowerQuery))
     );
+  }
+
+  // Camping Basics methods
+  async getCampingBasics(userId: string): Promise<string[]> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user.selectedCampingBasics || [];
+  }
+
+  async addCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    // Don't add if already exists
+    if (user.selectedCampingBasics.includes(basicId)) {
+      return user.selectedCampingBasics;
+    }
+    
+    // Add the basic ID to the array
+    const updatedBasics = [...user.selectedCampingBasics, basicId];
+    await db
+      .update(users)
+      .set({ 
+        selectedCampingBasics: updatedBasics,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    
+    return updatedBasics;
+  }
+
+  async removeCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    // Remove the basic ID from the array
+    const updatedBasics = user.selectedCampingBasics.filter(id => id !== basicId);
+    await db
+      .update(users)
+      .set({ 
+        selectedCampingBasics: updatedBasics,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    
+    return updatedBasics;
   }
 }
 

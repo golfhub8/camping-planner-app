@@ -72,6 +72,11 @@ export const users = pgTable("users", {
   // Stripe subscription ID for tracking the annual subscription
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   
+  // Camping Basics selection
+  // Array of camping basic IDs that the user has added to their grocery list
+  // Example: ["water", "coffee", "eggs"] - these persist across sessions
+  selectedCampingBasics: text("selected_camping_basics").array().notNull().default(sql`'{}'::text[]`),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -267,3 +272,33 @@ export const searchCampgroundsSchema = z.object({
 // TypeScript types for campgrounds
 export type Campground = z.infer<typeof campgroundSchema>;
 export type SearchCampgroundsRequest = z.infer<typeof searchCampgroundsSchema>;
+
+// Camping Basics feature
+// Static list of common camping groceries that users can quickly add to their lists
+// These are shared across all users and defined once
+// IMPORTANT: To add more basics, simply add new entries to this array with unique IDs
+export const CAMPING_BASICS = [
+  { id: "water", name: "Drinking water / jugs", category: "Pantry" as const },
+  { id: "coffee", name: "Coffee / tea", category: "Pantry" as const },
+  { id: "milk", name: "Milk / creamer", category: "Dairy" as const },
+  { id: "eggs", name: "Eggs", category: "Dairy" as const },
+  { id: "bread", name: "Bread / buns / tortillas", category: "Pantry" as const },
+  { id: "butter", name: "Butter / cooking oil / spray", category: "Dairy" as const },
+  { id: "condiments", name: "Ketchup, mustard, relish", category: "Pantry" as const },
+  { id: "snacks", name: "Trail mix / granola bars / chips", category: "Pantry" as const },
+  { id: "fruit", name: "Apples / oranges / berries", category: "Produce" as const },
+  { id: "veg", name: "Carrots / peppers / onions", category: "Produce" as const },
+  { id: "meat", name: "Protein (hot dogs, burgers, sausage)", category: "Meat" as const },
+  { id: "smores", name: "S'mores kit (graham, chocolate, marshmallows)", category: "Pantry" as const },
+  { id: "spices", name: "Salt, pepper, basic spices", category: "Pantry" as const },
+  { id: "ice", name: "Ice / ice packs", category: "Camping Gear" as const },
+  { id: "foil", name: "Aluminum foil / zip bags", category: "Camping Gear" as const },
+  { id: "paper", name: "Paper towel / napkins", category: "Camping Gear" as const },
+] as const;
+
+// Schema for camping basic operations
+export const addCampingBasicSchema = z.object({
+  basicId: z.string().min(1, "Basic ID is required"),
+});
+
+export type AddCampingBasicRequest = z.infer<typeof addCampingBasicSchema>;
