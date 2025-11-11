@@ -121,8 +121,13 @@ export default function CampingMap() {
             
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {campgrounds.map((campground) => {
-                // Build AllTrails URL with search parameter
+                // Build AllTrails affiliate URL with search parameter
                 const hikesUrl = `${ALLTRAILS_AFFILIATE}?search=${encodeURIComponent(
+                  campground.name ?? activeQuery ?? ""
+                )}`;
+                
+                // Build Hipcamp search URL (main CTA) - searches for campground by name
+                const hipcampSearchUrl = `https://www.hipcamp.com/en-US/search?query=${encodeURIComponent(
                   campground.name ?? activeQuery ?? ""
                 )}`;
 
@@ -158,8 +163,9 @@ export default function CampingMap() {
                         </div>
                       )}
 
-                      {/* Affiliate Buttons */}
+                      {/* Affiliate and Search Links */}
                       <div className="flex flex-col gap-2 pt-2">
+                        {/* AllTrails affiliate - main hiking CTA */}
                         <a
                           href={hikesUrl}
                           target="_blank"
@@ -170,15 +176,30 @@ export default function CampingMap() {
                           <ExternalLink className="w-4 h-4" />
                           Nearby hikes (AllTrails)
                         </a>
+                        
+                        {/* Hipcamp search - main camping CTA */}
                         <a
-                          href={HIPCAMP_REFERRAL}
+                          href={hipcampSearchUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover-elevate active-elevate-2 transition-colors dark:bg-slate-700"
                           data-testid={`link-hipcamp-${campground.id}`}
                         >
                           <ExternalLink className="w-4 h-4" />
-                          Find a campsite (Hipcamp)
+                          Find campsites (Hipcamp)
+                        </a>
+                        
+                        {/* Personal Hipcamp referral link - secondary, optional credit offer */}
+                        {/* This is a personal referral link that gives users $10 credit when they sign up */}
+                        {/* It's intentionally shown as a smaller, secondary link separate from the main search CTA */}
+                        <a
+                          href={HIPCAMP_REFERRAL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-muted-foreground underline hover:text-foreground transition-colors text-center"
+                          data-testid={`link-hipcamp-referral-${campground.id}`}
+                        >
+                          Get $10 credit
                         </a>
                       </div>
                     </CardContent>

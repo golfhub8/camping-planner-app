@@ -1,0 +1,73 @@
+Prompt to Replit:
+
+I want to update the Camping Map / nearby-campgrounds feature to use two separate links for camping:
+
+a normal Hipcamp search link based on the campground name (what users should click)
+
+my personal Hipcamp referral link shown as an optional, smaller link (“Get $10 credit”)
+
+My current code is using my referral link everywhere, which isn’t correct.
+
+Please do the following:
+
+Open the React file that renders the list of nearby campgrounds on the map page (likely client/src/pages/CampingMap.tsx or a component it uses).
+
+In the area where we map over campgrounds (something like campgrounds.map(...)), update the JSX so each campground shows:
+
+const ALLTRAILS_AFFILIATE = "https://alltrails.pxf.io/VxGVyM";
+const HIPCAMP_REFERRAL = import.meta.env.VITE_HIPCAMP_REFERRAL
+  ?? "https://www.hipcamp.com/i/sterlings5d0b1c?utm_source=camper_referral&utm_medium=share&utm_campaign=sterlings5d0b1c";
+const hipcampSearchUrl = `https://www.hipcamp.com/en-US/search?query=${encodeURIComponent(campground.name ?? query ?? "")}`;
+
+
+And in the return:
+
+<div key={campground.id ?? campground.name} className="border rounded p-3 space-y-2">
+  <h3 className="font-medium">{campground.name}</h3>
+  {campground.type ? (
+    <p className="text-xs text-muted-foreground">{campground.type}</p>
+  ) : null}
+
+  <div className="flex flex-wrap gap-2">
+    {/* AllTrails affiliate – main hiking CTA */}
+    <a
+      href={`${ALLTRAILS_AFFILIATE}?search=${encodeURIComponent(campground.name ?? query ?? "")}`}
+      target="_blank"
+      rel="noreferrer"
+      className="text-sm bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded"
+    >
+      Nearby hikes (AllTrails)
+    </a>
+
+    {/* Hipcamp normal search – main camping CTA */}
+    <a
+      href={hipcampSearchUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="text-sm bg-slate-800 hover:bg-slate-900 text-white px-3 py-1 rounded"
+    >
+      Find campsites (Hipcamp)
+    </a>
+
+    {/* Optional personal referral – smaller, secondary */}
+    <a
+      href={HIPCAMP_REFERRAL}
+      target="_blank"
+      rel="noreferrer"
+      className="text-xs text-muted-foreground underline"
+    >
+      Get $10 credit
+    </a>
+  </div>
+</div>
+
+
+Make sure the Hipcamp referral link is not used as the main CTA anymore. The main CTA should be the search link (https://www.hipcamp.com/en-US/search?query=...) so users actually find available camps near the place they entered.
+
+Keep the AllTrails affiliate link exactly as above (https://alltrails.pxf.io/VxGVyM) and continue appending the campground name as a ?search= param to make it more relevant.
+
+If the map page doesn’t have access to the user’s query, fall back to campground.name for both AllTrails and Hipcamp search.
+
+Please add a short comment in the file explaining that the Hipcamp referral link is personal credit and intentionally shown as a secondary link.
+
+Tell me which files you changed.
