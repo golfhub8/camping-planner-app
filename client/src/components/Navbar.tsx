@@ -8,33 +8,42 @@ export default function Navbar() {
   const [location] = useLocation();
 
   const navLinks = [
-    { path: "/", label: "Recipes" },
-    { path: "/trips", label: "Trips" },
-    { path: "/printables", label: "Printables" },
+    { path: "/", label: "Recipes", matchExact: true },
+    { path: "/trips", label: "Trips", matchExact: false },
+    { path: "/printables", label: "Printables", matchExact: false },
   ];
+
+  // Helper to determine if a nav link is active
+  const isActive = (linkPath: string, matchExact: boolean) => {
+    if (matchExact) {
+      return location === linkPath;
+    }
+    // For non-exact matches, check if current location starts with the link path
+    return location === linkPath || location.startsWith(linkPath + "/");
+  };
 
   return (
     <nav className="w-full flex items-center justify-between px-6 py-3 bg-background border-b" data-testid="navbar">
       <div className="flex items-center gap-6">
         <Link href="/">
-          <a className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <a className="flex items-center gap-2 hover:opacity-80 transition-opacity" data-testid="link-logo">
             <img src={bannerImage} alt="The Camping Planner" className="h-8" />
           </a>
         </Link>
         
         <div className="flex items-center gap-1">
           {navLinks.map((link) => (
-            <Link key={link.path} href={link.path}>
-              <a>
-                <Button
-                  variant={location === link.path ? "secondary" : "ghost"}
-                  size="sm"
-                  data-testid={`nav-link-${link.label.toLowerCase()}`}
-                >
-                  {link.label}
-                </Button>
-              </a>
-            </Link>
+            <Button
+              key={link.path}
+              variant={isActive(link.path, link.matchExact) ? "secondary" : "ghost"}
+              size="sm"
+              asChild
+              data-testid={`nav-link-${link.label.toLowerCase()}`}
+            >
+              <Link href={link.path}>
+                <a>{link.label}</a>
+              </Link>
+            </Button>
           ))}
         </div>
       </div>

@@ -19,6 +19,7 @@ import SharedGroceryView from "@/pages/SharedGroceryView";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import Navbar from "@/components/Navbar";
 import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
 // Landing page for logged out users
@@ -104,22 +105,27 @@ function Router() {
             return <Landing />;
           }
 
-          // Show authenticated app routes
+          // Show authenticated app routes with Navbar
           return (
-            <Switch>
-              <Route path="/" component={Home} />
-              <Route path="/recipe/:id" component={RecipeDetail} />
-              <Route path="/search" component={SearchResults} />
-              <Route path="/grocery" component={GrocerySelection} />
-              <Route path="/grocery/list" component={GroceryList} />
-              <Route path="/grocery/share" component={GroceryShare} />
-              <Route path="/trips/:id" component={TripDetail} />
-              <Route path="/trips" component={Trips} />
-              <Route path="/printables" component={Printables} />
-              <Route path="/checkout" component={Checkout} />
-              <Route path="/subscribe" component={Subscribe} />
-              <Route component={NotFound} />
-            </Switch>
+            <div className="min-h-screen bg-background flex flex-col">
+              <Navbar />
+              <main className="flex-1">
+                <Switch>
+                  <Route path="/" component={Home} />
+                  <Route path="/recipe/:id" component={RecipeDetail} />
+                  <Route path="/search" component={SearchResults} />
+                  <Route path="/grocery" component={GrocerySelection} />
+                  <Route path="/grocery/list" component={GroceryList} />
+                  <Route path="/grocery/share" component={GroceryShare} />
+                  <Route path="/trips/:id" component={TripDetail} />
+                  <Route path="/trips" component={Trips} />
+                  <Route path="/printables" component={Printables} />
+                  <Route path="/checkout" component={Checkout} />
+                  <Route path="/subscribe" component={Subscribe} />
+                  <Route component={NotFound} />
+                </Switch>
+              </main>
+            </div>
           );
         }}
       </Route>
