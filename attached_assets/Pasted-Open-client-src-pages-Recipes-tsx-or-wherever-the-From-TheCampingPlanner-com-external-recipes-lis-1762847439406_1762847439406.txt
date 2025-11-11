@@ -1,0 +1,54 @@
+Open client/src/pages/Recipes.tsx (or wherever the “From TheCampingPlanner.com” external recipes list is rendered).
+
+Right now the page is showing some long “blog-type” posts from the feed that aren’t actual recipes. Please filter them out so they don’t show in the external recipes section.
+
+Specifically, remove any external recipe whose title matches any of these strings:
+
+"25 Delicious and Easy Sides For Camping to Elevate Your Outdoor Meals"
+
+"Camping Food: Easy Meal Planning, Campfire Recipes & Must-Have Cooking Gear"
+
+"Snack Ideas for Hiking For Fueling Your Outdoor Adventures"
+
+"Cozy Winter Camping Meals To Keep You Warm & Energized"
+
+"23 Easy Griddle Recipes For Camping"
+
+"22 Must-Try Skillet Meals for Camping: Convenient One-Pot Dinners"
+
+"25 Easy Camping Meals for Kids: Kid-Friendly Campfire Recipes"
+
+"Best Camping Snacks To Make Ahead Or Buy For Your Camping Trip"
+
+"25 Easy Crock Pot Camping Meals To Make For Your Next Trip"
+
+"Best Canned Food For Camping & Easy No-Chill Meal Ideas"
+
+"Outdoor Cooking For Beginners: Tips For Your Camping Trip"
+
+Implementation detail:
+
+After you fetch/build the externalRecipes array, add a filter step:
+
+const blockedTitles = [
+  "25 Delicious and Easy Sides For Camping to Elevate Your Outdoor Meals",
+  "Camping Food: Easy Meal Planning, Campfire Recipes & Must-Have Cooking Gear",
+  "Snack Ideas for Hiking For Fueling Your Outdoor Adventures",
+  "Cozy Winter Camping Meals To Keep You Warm & Energized",
+  "23 Easy Griddle Recipes For Camping",
+  "22 Must-Try Skillet Meals for Camping: Convenient One-Pot Dinners",
+  "25 Easy Camping Meals for Kids: Kid-Friendly Campfire Recipes",
+  "Best Camping Snacks To Make Ahead Or Buy For Your Camping Trip",
+  "25 Easy Crock Pot Camping Meals To Make For Your Next Trip",
+  "Best Canned Food For Camping & Easy No-Chill Meal Ideas",
+  "Outdoor Cooking For Beginners: Tips For Your Camping Trip",
+];
+
+const filteredExternalRecipes = externalRecipes.filter(
+  (r) => !blockedTitles.includes(r.title.trim())
+);
+
+
+Then render filteredExternalRecipes instead of the original list.
+
+Save and re-run the app.

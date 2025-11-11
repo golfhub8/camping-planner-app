@@ -100,11 +100,33 @@ export default function Home() {
 
   // Filter external recipes based on search query
   // Only searches titles since ingredients may not be available
+  // Also filters out blog posts that aren't actual recipes
   const filteredExternalRecipes = useMemo(() => {
-    if (!searchQuery.trim()) return externalRecipes;
+    // List of blog posts to exclude from external recipes
+    const blockedTitles = [
+      "25 Delicious and Easy Sides For Camping to Elevate Your Outdoor Meals",
+      "Camping Food: Easy Meal Planning, Campfire Recipes & Must-Have Cooking Gear",
+      "Snack Ideas for Hiking For Fueling Your Outdoor Adventures",
+      "Cozy Winter Camping Meals To Keep You Warm & Energized",
+      "23 Easy Griddle Recipes For Camping",
+      "22 Must-Try Skillet Meals for Camping: Convenient One-Pot Dinners",
+      "25 Easy Camping Meals for Kids: Kid-Friendly Campfire Recipes",
+      "Best Camping Snacks To Make Ahead Or Buy For Your Camping Trip",
+      "25 Easy Crock Pot Camping Meals To Make For Your Next Trip",
+      "Best Canned Food For Camping & Easy No-Chill Meal Ideas",
+      "Outdoor Cooking For Beginners: Tips For Your Camping Trip",
+    ];
+
+    // First, filter out blocked blog posts
+    const recipesOnly = externalRecipes.filter(
+      (r) => !blockedTitles.includes(r.title.trim())
+    );
+
+    // Then apply search filter if there's a query
+    if (!searchQuery.trim()) return recipesOnly;
     
     const query = searchQuery.toLowerCase();
-    return externalRecipes.filter(recipe =>
+    return recipesOnly.filter(recipe =>
       recipe.title.toLowerCase().includes(query)
     );
   }, [externalRecipes, searchQuery]);
