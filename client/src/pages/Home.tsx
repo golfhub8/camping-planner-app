@@ -105,41 +105,28 @@ export default function Home() {
   // Only searches titles since ingredients may not be available
   // Also filters out blog posts that aren't actual recipes
   const filteredExternalRecipes = useMemo(() => {
-    // Debug: Log what WordPress is returning
-    console.log("externalRecipes from WP:", externalRecipes);
-    
     // List of blog posts to exclude from external recipes
     // Includes both normal and HTML-encoded versions to handle WordPress formatting
     const blockedTitles = [
-      "25 Delicious and Easy Sides For Camping to Elevate Your Outdoor Meals",
       "Camping Food: Easy Meal Planning, Campfire Recipes & Must-Have Cooking Gear",
       "Camping Food: Easy Meal Planning, Campfire Recipes &amp; Must-Have Cooking Gear",
-      "Snack Ideas for Hiking For Fueling Your Outdoor Adventures",
       "Cozy Winter Camping Meals To Keep You Warm & Energized",
       "Cozy Winter Camping Meals To Keep You Warm &amp; Energized",
-      "23 Easy Griddle Recipes For Camping",
-      "22 Must-Try Skillet Meals for Camping: Convenient One-Pot Dinners",
-      "25 Easy Camping Meals for Kids: Kid-Friendly Campfire Recipes",
-      "Best Camping Snacks To Make Ahead Or Buy For Your Camping Trip",
-      "25 Easy Crock Pot Camping Meals To Make For Your Next Trip",
+      "50 Non-Perishable Dry Snacks for Camping To Keep You Satisfied Between Meals",
       "Best Canned Food For Camping & Easy No-Chill Meal Ideas",
       "Best Canned Food For Camping &#038; Easy No-Chill Meal Ideas",
-      "Outdoor Cooking For Beginners: Tips For Your Camping Trip",
     ];
 
-    // First, filter out blocked blog posts
-    const recipesOnly = externalRecipes.filter((r) => {
-      const title = (r.title || "").trim();
-      return !blockedTitles.includes(title);
+    const cleanedExternalRecipes = (externalRecipes || []).filter((r) => {
+      const title = (r?.title || "").trim();
+      return title && !blockedTitles.includes(title);
     });
 
-    console.log("After filtering blockedTitles:", recipesOnly);
-
     // Then apply search filter if there's a query
-    if (!searchQuery.trim()) return recipesOnly;
+    if (!searchQuery.trim()) return cleanedExternalRecipes;
     
     const query = searchQuery.toLowerCase();
-    return recipesOnly.filter(recipe =>
+    return cleanedExternalRecipes.filter(recipe =>
       recipe.title.toLowerCase().includes(query)
     );
   }, [externalRecipes, searchQuery]);
