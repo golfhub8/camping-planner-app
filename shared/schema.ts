@@ -296,9 +296,15 @@ export const CAMPING_BASICS = [
   { id: "paper", name: "Paper towel / napkins", category: "Camping Gear" as const },
 ] as const;
 
+// Extract valid camping basic IDs for validation
+const CAMPING_BASIC_IDS = CAMPING_BASICS.map(basic => basic.id) as [string, ...string[]];
+
 // Schema for camping basic operations
+// Only accepts IDs that exist in the CAMPING_BASICS array
 export const addCampingBasicSchema = z.object({
-  basicId: z.string().min(1, "Basic ID is required"),
+  basicId: z.enum(CAMPING_BASIC_IDS, {
+    errorMap: () => ({ message: "Invalid camping basic ID - must be one of the predefined basics" })
+  }),
 });
 
 export type AddCampingBasicRequest = z.infer<typeof addCampingBasicSchema>;

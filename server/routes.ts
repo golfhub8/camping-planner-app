@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import Stripe from "stripe";
@@ -1020,6 +1020,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching campgrounds:", error);
       res.status(500).json({ error: "Failed to search campgrounds" });
+    }
+  });
+
+  // Camping Basics Routes
+  
+  // GET /api/camping-basics
+  // Get the user's selected camping basics (items to add to grocery list)
+  // Protected route - requires authentication
+  app.get("/api/camping-basics", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const selectedBasics = await storage.getCampingBasics(userId);
+      
+      res.json({ selectedBasics });
+    } catch (error) {
+      console.error("Error fetching camping basics:", error);
+      res.status(500).json({ error: "Failed to fetch camping basics" });
+    }
+  });
+
+  // POST /api/camping-basics
+  // Add a camping basic to the user's selected list
+  // Body: { basicId: string } - must be a valid CAMPING_BASICS ID
+  // Protected route - requires authentication
+  app.post("/api/camping-basics", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate the request body against our schema
+      const validatedData = addCampingBasicSchema.parse(req.body);
+      
+      // Add the camping basic
+      const selectedBasics = await storage.addCampingBasic(userId, validatedData.basicId);
+      
+      res.json({ selectedBasics });
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid camping basic data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error adding camping basic:", error);
+      res.status(500).json({ error: "Failed to add camping basic" });
+    }
+  });
+
+  // DELETE /api/camping-basics/:basicId
+  // Remove a camping basic from the user's selected list
+  // URL param: basicId - must be a valid CAMPING_BASICS ID
+  // Protected route - requires authentication
+  app.delete("/api/camping-basics/:basicId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Validate the basicId parameter against our schema
+      const validatedData = addCampingBasicSchema.parse({ basicId: req.params.basicId });
+      
+      // Remove the camping basic
+      const selectedBasics = await storage.removeCampingBasic(userId, validatedData.basicId);
+      
+      res.json({ selectedBasics });
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid camping basic ID", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error removing camping basic:", error);
+      res.status(500).json({ error: "Failed to remove camping basic" });
     }
   });
 

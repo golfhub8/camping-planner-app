@@ -1,7 +1,16 @@
-import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, users, recipes, trips, sharedGroceryLists } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, users, recipes, trips, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
+
+// Helper to validate camping basic ID
+// Throws an error if the ID is not in the CAMPING_BASICS array
+function validateCampingBasicId(basicId: string): void {
+  const isValid = CAMPING_BASICS.some(basic => basic.id === basicId);
+  if (!isValid) {
+    throw new Error(`Invalid camping basic ID: ${basicId}. Must be one of the predefined camping basics.`);
+  }
+}
 
 // Storage interface definition
 // This defines all the methods we need to store and retrieve data
@@ -458,6 +467,9 @@ export class MemStorage implements IStorage {
   }
 
   async addCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    // Validate that the basicId is a valid CAMPING_BASICS ID
+    validateCampingBasicId(basicId);
+    
     const user = await this.getUser(userId);
     if (!user) {
       throw new Error("User not found");
@@ -477,6 +489,9 @@ export class MemStorage implements IStorage {
   }
 
   async removeCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    // Validate that the basicId is a valid CAMPING_BASICS ID
+    validateCampingBasicId(basicId);
+    
     const user = await this.getUser(userId);
     if (!user) {
       throw new Error("User not found");
@@ -898,6 +913,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    // Validate that the basicId is a valid CAMPING_BASICS ID
+    validateCampingBasicId(basicId);
+    
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) {
       throw new Error("User not found");
@@ -922,6 +940,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeCampingBasic(userId: string, basicId: string): Promise<string[]> {
+    // Validate that the basicId is a valid CAMPING_BASICS ID
+    validateCampingBasicId(basicId);
+    
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) {
       throw new Error("User not found");
