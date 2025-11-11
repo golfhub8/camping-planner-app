@@ -1593,83 +1593,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/trips/:id/weather
-  // Get weather forecast for a trip's dates and location
-  // Returns mock forecast data until WEATHER_API_KEY is configured
+  // Get real weather forecast for a trip using Open-Meteo API
+  // Accepts optional lat/lng query params or uses trip coordinates from database
   // Protected route - requires authentication and trip ownership
   app.get("/api/trips/:id/weather", isAuthenticated, async (req: any, res) => {
     try {
-      const tripId = parseInt(req.params.id);
-      const userId = req.user.claims.sub;
-      
-      // Validate trip ID
-      if (isNaN(tripId)) {
-        return res.status(400).json({ error: "Invalid trip ID" });
-      }
+      const { id } = req.params;
+      const { lat, lng } = req.query;
 
-      // Get the trip (user can only access their own trips)
-      const trip = await storage.getTripById(tripId, userId);
+      // Get trip for current user
+      const trip = await storage.getTripById(parseInt(id), req.user.claims.sub);
       if (!trip) {
         return res.status(404).json({ error: "Trip not found" });
       }
 
-      // TODO: Real weather API integration
-      // When WEATHER_API_KEY environment variable is set, fetch from a real weather provider
-      // Recommended APIs:
-      // - Open-Meteo (free, no API key needed): https://open-meteo.com/
-      // - WeatherAPI: https://www.weatherapi.com/
-      // - OpenWeather: https://openweathermap.org/api
-      //
-      // For real implementation:
-      // 1. Parse lat/lng from query params or geocode trip.location
-      // 2. Calculate date range from trip.startDate to trip.endDate
-      // 3. Fetch forecast for those dates
-      // 4. Transform API response to match our forecast format below
+      // Prefer lat/lng from query params, else from trip database fields
+      // Note: Once trip.lat and trip.lng are populated in the DB via the trip creation/edit forms,
+      // you can drop the ?lat=...&lng=... query parameter approach entirely.
+      const rawLat = lat ?? trip.lat;
+      const rawLng = lng ?? trip.lng;
       
-      if (!process.env.WEATHER_API_KEY) {
-        // Mock weather data for development
-        // Generate forecast for each day of the trip
-        const startDate = new Date(trip.startDate);
-        const endDate = new Date(trip.endDate);
-        const forecastDays = [];
-        
-        // Generate a forecast for each day of the trip
-        const currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-          // Mock weather with some variety
-          const conditions = ["Sunny", "Partly cloudy", "Mostly sunny", "Clear skies"][
-            Math.floor(Math.random() * 4)
-          ];
-          const baseHigh = 20 + Math.floor(Math.random() * 8); // 20-27°C
-          const baseLow = baseHigh - 8 - Math.floor(Math.random() * 4); // 8-12°C lower
-          
-          forecastDays.push({
-            date: currentDate.toISOString().split('T')[0],
-            conditions,
-            high: baseHigh,
-            low: baseLow,
-          });
-          
-          // Move to next day
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        return res.json({
-          location: trip.location,
-          forecast: forecastDays,
-        });
+      // Explicitly check for null/undefined before converting to Number
+      // Important: Number(null) returns 0, not NaN, which would give wrong coordinates!
+      if (rawLat == null || rawLng == null) {
+        return res.status(400).json({ error: "Trip is missing coordinates (lat/lng)" });
+      }
+      
+      const latitude = Number(rawLat);
+      const longitude = Number(rawLng);
+      if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+        return res.status(400).json({ error: "Trip is missing coordinates (lat/lng)" });
       }
 
-      // TODO: Real weather API call would go here
-      // Example structure:
-      // const { lat, lng } = req.query;
-      // const response = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${process.env.WEATHER_API_KEY}&q=${lat},${lng}&days=7`);
-      // const data = await response.json();
-      // Transform and return the forecast
-      
-      res.status(501).json({ error: "Real weather API not yet implemented" });
-    } catch (error) {
-      console.error("Error fetching weather:", error);
-      res.status(500).json({ error: "Failed to fetch weather forecast" });
+      // Fetch weather forecast from Open-Meteo
+      // Open-Meteo is free and requires no API key: https://open-meteo.com/
+      // We fetch daily max/min temperature and weathercode for the forecast
+      const url = new URL("https://api.open-meteo.com/v1/forecast");
+      url.searchParams.set("latitude", latitude.toString());
+      url.searchParams.set("longitude", longitude.toString());
+      url.searchParams.set("daily", "temperature_2m_max,temperature_2m_min,weathercode");
+      url.searchParams.set("timezone", "auto");
+
+      const weatherRes = await fetch(url.toString());
+      if (!weatherRes.ok) {
+        return res.status(500).json({ error: "Failed to fetch weather" });
+      }
+      const weatherJson = await weatherRes.json();
+
+      // Transform Open-Meteo daily data to a simpler array format
+      // Each day includes: date, high temp, low temp, and weathercode
+      const forecast = (weatherJson.daily.time || []).map((date: string, index: number) => ({
+        date,
+        high: weatherJson.daily.temperature_2m_max[index],
+        low: weatherJson.daily.temperature_2m_min[index],
+        weathercode: weatherJson.daily.weathercode[index],
+      }));
+
+      return res.json({
+        location: trip.location,
+        lat: latitude,
+        lng: longitude,
+        forecast,
+      });
+    } catch (err) {
+      console.error("weather error", err);
+      return res.status(500).json({ error: "Could not load weather" });
     }
   });
 

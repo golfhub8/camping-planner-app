@@ -19,6 +19,39 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
 
+// Helper function to convert Open-Meteo weathercode to human-readable description
+// Based on WMO Weather interpretation codes
+// See: https://open-meteo.com/en/docs
+function getWeatherDescription(code: number): string {
+  const weatherCodes: Record<number, string> = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Foggy",
+    48: "Foggy",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    85: "Slight snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with hail",
+    99: "Thunderstorm with heavy hail",
+  };
+  return weatherCodes[code] || "Unknown";
+}
+
 export default function TripDetail() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -52,24 +85,30 @@ export default function TripDetail() {
   });
 
   // Fetch weather forecast for the trip
-  const { data: weather, isLoading: weatherLoading } = useQuery<{
+  const { data: weather, isLoading: weatherLoading, error: weatherError } = useQuery<{
     location: string;
+    lat: number;
+    lng: number;
     forecast: Array<{
       date: string;
-      conditions: string;
       high: number;
       low: number;
+      weathercode: number;
     }>;
   }>({
     queryKey: ["/api/trips", tripId, "weather"],
     queryFn: async () => {
+      // Use trip's stored coordinates from database if available
+      // If trip has no coordinates, the backend will return a 400 error
       const response = await fetch(`/api/trips/${tripId}/weather`);
       if (!response.ok) {
-        throw new Error("Failed to fetch weather");
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to fetch weather");
       }
       return response.json();
     },
     enabled: tripId !== null,
+    retry: false, // Don't retry if coordinates are missing
   });
 
   // Form for adding a collaborator
@@ -387,32 +426,47 @@ export default function TripDetail() {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : weather && weather.forecast.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {weather.forecast.map((day, index) => (
-                  <div
-                    key={day.date}
-                    className="flex flex-col p-3 rounded-md border"
-                    data-testid={`weather-day-${index}`}
-                  >
-                    <span className="font-medium mb-1">
-                      {format(new Date(day.date), 'EEE, MMM d')}
-                    </span>
-                    <span className="text-sm text-muted-foreground mb-2">{day.conditions}</span>
-                    <span className="text-lg font-semibold">
-                      {day.high}° / {day.low}°C
-                    </span>
-                  </div>
-                ))}
+            ) : weatherError ? (
+              <div className="py-4 space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  {(weatherError as Error).message.includes("coordinates") 
+                    ? "This trip doesn't have coordinates set yet." 
+                    : "Unable to load weather forecast."}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Add latitude and longitude to your trip to see the weather forecast for your camping destination.
+                </p>
               </div>
+            ) : weather && weather.forecast.length > 0 ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {weather.forecast.map((day, index) => (
+                    <div
+                      key={day.date}
+                      className="flex flex-col p-3 rounded-md border"
+                      data-testid={`weather-day-${index}`}
+                    >
+                      <span className="font-medium mb-1">
+                        {format(new Date(day.date), 'EEE, MMM d')}
+                      </span>
+                      <span className="text-sm text-muted-foreground mb-2">
+                        {getWeatherDescription(day.weathercode)}
+                      </span>
+                      <span className="text-lg font-semibold">
+                        {day.high}° / {day.low}°C
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-4">
+                  Powered by Open-Meteo ({weather.lat.toFixed(4)}°, {weather.lng.toFixed(4)}°)
+                </p>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground py-4">
                 Weather forecast unavailable
               </p>
             )}
-            <p className="text-xs text-muted-foreground mt-4">
-              Note: Mock weather data for development. Configure WEATHER_API_KEY for real forecasts.
-            </p>
           </CardContent>
         </Card>
 
