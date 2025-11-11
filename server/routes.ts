@@ -1592,6 +1592,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/trips/:id/weather
+  // Get weather forecast for a trip's dates and location
+  // Returns mock forecast data until WEATHER_API_KEY is configured
+  // Protected route - requires authentication and trip ownership
+  app.get("/api/trips/:id/weather", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate trip ID
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      // Get the trip (user can only access their own trips)
+      const trip = await storage.getTripById(tripId, userId);
+      if (!trip) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      // TODO: Real weather API integration
+      // When WEATHER_API_KEY environment variable is set, fetch from a real weather provider
+      // Recommended APIs:
+      // - Open-Meteo (free, no API key needed): https://open-meteo.com/
+      // - WeatherAPI: https://www.weatherapi.com/
+      // - OpenWeather: https://openweathermap.org/api
+      //
+      // For real implementation:
+      // 1. Parse lat/lng from query params or geocode trip.location
+      // 2. Calculate date range from trip.startDate to trip.endDate
+      // 3. Fetch forecast for those dates
+      // 4. Transform API response to match our forecast format below
+      
+      if (!process.env.WEATHER_API_KEY) {
+        // Mock weather data for development
+        // Generate forecast for each day of the trip
+        const startDate = new Date(trip.startDate);
+        const endDate = new Date(trip.endDate);
+        const forecastDays = [];
+        
+        // Generate a forecast for each day of the trip
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          // Mock weather with some variety
+          const conditions = ["Sunny", "Partly cloudy", "Mostly sunny", "Clear skies"][
+            Math.floor(Math.random() * 4)
+          ];
+          const baseHigh = 20 + Math.floor(Math.random() * 8); // 20-27°C
+          const baseLow = baseHigh - 8 - Math.floor(Math.random() * 4); // 8-12°C lower
+          
+          forecastDays.push({
+            date: currentDate.toISOString().split('T')[0],
+            conditions,
+            high: baseHigh,
+            low: baseLow,
+          });
+          
+          // Move to next day
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return res.json({
+          location: trip.location,
+          forecast: forecastDays,
+        });
+      }
+
+      // TODO: Real weather API call would go here
+      // Example structure:
+      // const { lat, lng } = req.query;
+      // const response = await fetch(`https://api.weatherapi.com/v1/forecast.json?key=${process.env.WEATHER_API_KEY}&q=${lat},${lng}&days=7`);
+      // const data = await response.json();
+      // Transform and return the forecast
+      
+      res.status(501).json({ error: "Real weather API not yet implemented" });
+    } catch (error) {
+      console.error("Error fetching weather:", error);
+      res.status(500).json({ error: "Failed to fetch weather forecast" });
+    }
+  });
+
 
   const httpServer = createServer(app);
 

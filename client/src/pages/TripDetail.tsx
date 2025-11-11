@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon } from "lucide-react";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -49,6 +49,27 @@ export default function TripDetail() {
   // Fetch all recipes to map meal IDs to titles
   const { data: recipes = [] } = useQuery<Recipe[]>({
     queryKey: ["/api/recipes"],
+  });
+
+  // Fetch weather forecast for the trip
+  const { data: weather, isLoading: weatherLoading } = useQuery<{
+    location: string;
+    forecast: Array<{
+      date: string;
+      conditions: string;
+      high: number;
+      low: number;
+    }>;
+  }>({
+    queryKey: ["/api/trips", tripId, "weather"],
+    queryFn: async () => {
+      const response = await fetch(`/api/trips/${tripId}/weather`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch weather");
+      }
+      return response.json();
+    },
+    enabled: tripId !== null,
   });
 
   // Form for adding a collaborator
@@ -349,6 +370,51 @@ export default function TripDetail() {
             </div>
           )}
         </div>
+
+        {/* Weather Section */}
+        <Card data-testid="card-weather">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CloudSunIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              Weather Forecast
+            </CardTitle>
+            <CardDescription>
+              {weatherLoading ? "Loading forecast..." : `Forecast for ${weather?.location || trip.location}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {weatherLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : weather && weather.forecast.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {weather.forecast.map((day, index) => (
+                  <div
+                    key={day.date}
+                    className="flex flex-col p-3 rounded-md border"
+                    data-testid={`weather-day-${index}`}
+                  >
+                    <span className="font-medium mb-1">
+                      {format(new Date(day.date), 'EEE, MMM d')}
+                    </span>
+                    <span className="text-sm text-muted-foreground mb-2">{day.conditions}</span>
+                    <span className="text-lg font-semibold">
+                      {day.high}° / {day.low}°C
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-4">
+                Weather forecast unavailable
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-4">
+              Note: Mock weather data for development. Configure WEATHER_API_KEY for real forecasts.
+            </p>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Collaborators Section */}
