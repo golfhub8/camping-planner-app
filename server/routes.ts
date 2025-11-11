@@ -437,14 +437,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/external-recipes
-  // Fetches latest recipes from WordPress "camping-food" category (ID: 174)
+  // Fetches latest recipes from WordPress "camping-food" category (ID: 4)
   // Returns: { recipes: Array<{ id, title, slug, url, excerpt, date }> }
   // Protected route - requires authentication
   app.get("/api/external-recipes", isAuthenticated, async (req: any, res) => {
     try {
-      // Fetch latest posts from the "camping-food" category (category ID: 174)
+      // Fetch latest posts from the "camping-food" category (category ID: 4)
       const wpRes = await fetch(
-        "https://thecampingplanner.com/wp-json/wp/v2/posts?categories=174&per_page=20"
+        "https://thecampingplanner.com/wp-json/wp/v2/posts?categories=4&per_page=20"
       );
       
       if (!wpRes.ok) {
