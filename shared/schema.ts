@@ -194,23 +194,26 @@ export const updateTripSchema = z.object({
   location: z.string().min(1, "Location is required").optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
-  // Transform string inputs, converting empty strings to undefined to avoid NaN
-  // Then validate the numeric range if a value is present
+  // Transform coordinate inputs:
+  // - Empty strings, null, undefined → null (explicit clear)
+  // - Valid numbers → parsed number
+  // - Invalid numbers (NaN) → null
+  // This ensures null is preserved through JSON serialization
   lat: z.preprocess(
     (val) => {
-      if (val === "" || val === null || val === undefined) return undefined;
+      if (val === "" || val === null || val === undefined) return null;
       const num = typeof val === "string" ? parseFloat(val) : val;
-      return isNaN(num) ? undefined : num;
+      return isNaN(num) ? null : num;
     },
-    z.number().min(-90).max(90).optional()
+    z.union([z.number().min(-90).max(90), z.null()]).optional()
   ),
   lng: z.preprocess(
     (val) => {
-      if (val === "" || val === null || val === undefined) return undefined;
+      if (val === "" || val === null || val === undefined) return null;
       const num = typeof val === "string" ? parseFloat(val) : val;
-      return isNaN(num) ? undefined : num;
+      return isNaN(num) ? null : num;
     },
-    z.number().min(-180).max(180).optional()
+    z.union([z.number().min(-180).max(180), z.null()]).optional()
   ),
 }).refine(
   (data) => {

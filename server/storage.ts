@@ -225,8 +225,9 @@ export class MemStorage implements IStorage {
     // Create a new trip with auto-generated ID, timestamp, userId, and empty arrays
     const trip: Trip = {
       ...insertTrip,
-      lat: insertTrip.lat ? insertTrip.lat.toString() : null,
-      lng: insertTrip.lng ? insertTrip.lng.toString() : null,
+      // Use explicit null check to allow valid 0 coordinates (equator/prime meridian)
+      lat: insertTrip.lat !== null && insertTrip.lat !== undefined ? insertTrip.lat.toString() : null,
+      lng: insertTrip.lng !== null && insertTrip.lng !== undefined ? insertTrip.lng.toString() : null,
       id: this.nextTripId++,
       userId,
       meals: [],
@@ -252,9 +253,10 @@ export class MemStorage implements IStorage {
     if (updates.startDate !== undefined) trip.startDate = updates.startDate;
     if (updates.endDate !== undefined) trip.endDate = updates.endDate;
     // Handle coordinates: check if the property exists in updates (even if value is undefined)
-    // This allows clearing coordinates by sending undefined values
-    if ("lat" in updates) trip.lat = updates.lat ? updates.lat.toString() : null;
-    if ("lng" in updates) trip.lng = updates.lng ? updates.lng.toString() : null;
+    // This allows clearing coordinates by sending null/undefined values
+    // Use explicit null check instead of truthiness to allow valid 0 coordinates (equator/prime meridian)
+    if ("lat" in updates) trip.lat = updates.lat !== null && updates.lat !== undefined ? updates.lat.toString() : null;
+    if ("lng" in updates) trip.lng = updates.lng !== null && updates.lng !== undefined ? updates.lng.toString() : null;
 
     return trip;
   }
@@ -671,8 +673,9 @@ export class DatabaseStorage implements IStorage {
       .values({ 
         name: insertTrip.name,
         location: insertTrip.location,
-        lat: insertTrip.lat ? insertTrip.lat.toString() : null,
-        lng: insertTrip.lng ? insertTrip.lng.toString() : null,
+        // Use explicit null check to allow valid 0 coordinates (equator/prime meridian)
+        lat: insertTrip.lat !== null && insertTrip.lat !== undefined ? insertTrip.lat.toString() : null,
+        lng: insertTrip.lng !== null && insertTrip.lng !== undefined ? insertTrip.lng.toString() : null,
         startDate: insertTrip.startDate,
         endDate: insertTrip.endDate,
         userId 
@@ -697,9 +700,10 @@ export class DatabaseStorage implements IStorage {
     if (updates.startDate !== undefined) updateData.startDate = updates.startDate;
     if (updates.endDate !== undefined) updateData.endDate = updates.endDate;
     // Handle coordinates: check if the property exists in updates (even if value is undefined)
-    // This allows clearing coordinates by sending undefined values
-    if ("lat" in updates) updateData.lat = updates.lat?.toString() ?? null;
-    if ("lng" in updates) updateData.lng = updates.lng?.toString() ?? null;
+    // This allows clearing coordinates by sending null/undefined values
+    // Use explicit null check instead of optional chaining to allow valid 0 coordinates (equator/prime meridian)
+    if ("lat" in updates) updateData.lat = updates.lat !== null && updates.lat !== undefined ? updates.lat.toString() : null;
+    if ("lng" in updates) updateData.lng = updates.lng !== null && updates.lng !== undefined ? updates.lng.toString() : null;
 
     // If no fields to update, just return the existing trip
     if (Object.keys(updateData).length === 0) {

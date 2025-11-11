@@ -65,9 +65,9 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
         // Convert Date objects to ISO strings for the API if they exist
         startDate: updates.startDate ? new Date(updates.startDate).toISOString() : undefined,
         endDate: updates.endDate ? new Date(updates.endDate).toISOString() : undefined,
-        // Convert undefined to null for coordinates (JSON.stringify removes undefined)
-        lat: updates.lat === undefined ? null : updates.lat,
-        lng: updates.lng === undefined ? null : updates.lng,
+        // Always include lat/lng, converting undefined/null to explicit null
+        lat: updates.lat ?? null,
+        lng: updates.lng ?? null,
       };
       
       const response = await apiRequest("PUT", `/api/trips/${trip.id}`, payload);
@@ -222,7 +222,8 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
                           {...field}
                           value={field.value ?? ''}
                           onChange={(e) => {
-                            const value = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                            // Use null instead of undefined so JSON.stringify includes it
+                            const value = e.target.value === '' ? null : parseFloat(e.target.value);
                             field.onChange(value);
                           }}
                         />
@@ -248,7 +249,8 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
                           {...field}
                           value={field.value ?? ''}
                           onChange={(e) => {
-                            const value = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                            // Use null instead of undefined so JSON.stringify includes it
+                            const value = e.target.value === '' ? null : parseFloat(e.target.value);
                             field.onChange(value);
                           }}
                         />
