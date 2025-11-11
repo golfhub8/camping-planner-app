@@ -95,7 +95,10 @@ export default function Printables() {
               <p className="text-sm text-muted-foreground mb-4">
                 Become a Pro member to access all printables. Start with a 7-day free trial!
               </p>
-              <SubscribeButton label="Start 7-Day Free Trial ($29.99/year)" />
+              <SubscribeButton
+                label="Start 7-Day Free Trial ($29.99/year)"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-5 py-2 rounded-md shadow-lg hover:shadow-emerald-300/50 transition-transform transform hover:scale-105"
+              />
             </AlertDescription>
           </Alert>
         )}
