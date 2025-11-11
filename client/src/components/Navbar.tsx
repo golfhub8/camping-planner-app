@@ -33,17 +33,16 @@ export default function Navbar() {
         
         <div className="flex items-center gap-1">
           {navLinks.map((link) => (
-            <Button
-              key={link.path}
-              variant={isActive(link.path, link.matchExact) ? "secondary" : "ghost"}
-              size="sm"
-              asChild
-              data-testid={`nav-link-${link.label.toLowerCase()}`}
-            >
-              <Link href={link.path}>
+            <Link key={link.path} href={link.path}>
+              <Button
+                variant={isActive(link.path, link.matchExact) ? "secondary" : "ghost"}
+                size="sm"
+                asChild
+                data-testid={`nav-link-${link.label.toLowerCase()}`}
+              >
                 <a>{link.label}</a>
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           ))}
         </div>
       </div>
