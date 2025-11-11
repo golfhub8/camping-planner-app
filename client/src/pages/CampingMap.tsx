@@ -20,6 +20,16 @@ export default function CampingMap() {
   // Fetch campgrounds based on active search query
   const { data, isLoading, error } = useQuery<{ campgrounds: Campground[] }>({
     queryKey: ["/api/campgrounds", activeQuery],
+    queryFn: async () => {
+      const url = `/api/campgrounds?query=${encodeURIComponent(activeQuery)}`;
+      const response = await fetch(url, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch campgrounds");
+      }
+      return response.json();
+    },
     enabled: activeQuery.length > 0,
   });
 
