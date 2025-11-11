@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent, Copy, Check } from "lucide-react";
 import Header from "@/components/Header";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { GroceryItem, GroceryCategory } from "@shared/schema";
+import { CAMPING_BASICS, type GroceryItem, type GroceryCategory } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
 
 // Category icon and color mapping
@@ -34,6 +34,7 @@ export default function GroceryList() {
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Parse recipe IDs from URL query parameters
   const searchParams = new URLSearchParams(window.location.search);
@@ -121,6 +122,59 @@ export default function GroceryList() {
         description: "Please copy the link manually.",
         variant: "destructive",
       });
+    }
+  }
+
+  // Fetch user's selected camping basics
+  const { data: selectedBasicsData } = useQuery<{ selectedBasics: string[] }>({
+    queryKey: ["/api/camping-basics"],
+  });
+  const selectedBasics = selectedBasicsData?.selectedBasics || [];
+
+  // Add camping basic mutation
+  const addCampingBasicMutation = useMutation({
+    mutationFn: async (basicId: string) => {
+      const response = await apiRequest("POST", "/api/camping-basics", { basicId });
+      const data = await response.json();
+      return data as { selectedBasics: string[] };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/camping-basics"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to add camping basic",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Remove camping basic mutation
+  const removeCampingBasicMutation = useMutation({
+    mutationFn: async (basicId: string) => {
+      const response = await apiRequest("DELETE", `/api/camping-basics/${basicId}`);
+      const data = await response.json();
+      return data as { selectedBasics: string[] };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/camping-basics"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to remove camping basic",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle camping basic selection
+  function toggleCampingBasic(basicId: string) {
+    if (selectedBasics.includes(basicId)) {
+      removeCampingBasicMutation.mutate(basicId);
+    } else {
+      addCampingBasicMutation.mutate(basicId);
     }
   }
 
@@ -220,6 +274,51 @@ export default function GroceryList() {
                 {neededCount} needed
               </Badge>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Camping Basics Section */}
+      <Card className="mb-6" data-testid="card-camping-basics">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Tent className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <span>Camping Basics</span>
+            <Badge variant="outline" className="ml-2">
+              {selectedBasics.length} selected
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Common camping essentials you may want to add to your list. Your selections persist across sessions.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {CAMPING_BASICS.map((basic) => {
+              const isSelected = selectedBasics.includes(basic.id);
+              return (
+                <div
+                  key={basic.id}
+                  className={`flex items-center gap-3 p-2 rounded-md hover-elevate ${
+                    !isSelected ? "opacity-50" : ""
+                  }`}
+                  data-testid={`camping-basic-${basic.id}`}
+                >
+                  <Checkbox
+                    id={`basic-${basic.id}`}
+                    checked={isSelected}
+                    onCheckedChange={() => toggleCampingBasic(basic.id)}
+                    data-testid={`checkbox-basic-${basic.id}`}
+                  />
+                  <label
+                    htmlFor={`basic-${basic.id}`}
+                    className="flex-1 cursor-pointer text-sm"
+                  >
+                    {basic.name}
+                  </label>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
