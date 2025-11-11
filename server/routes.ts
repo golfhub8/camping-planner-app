@@ -5,6 +5,7 @@ import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCol
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import Stripe from "stripe";
+import { load as cheerioLoad } from "cheerio";
 
 // Initialize Stripe client
 // Reference: blueprint:javascript_stripe
@@ -293,8 +294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 2. Extra bullet points (related recipes, tips, etc.)
   // WordPress recipe structure may vary - adjust selectors below if needed
   function parseWordPressRecipe(html: string): ParsedRecipeContent {
-    const cheerio = require('cheerio');
-    const $ = cheerio.load(html);
+    const $ = cheerioLoad(html);
     
     const ingredientsChecklist: IngredientChecklistItem[] = [];
     const extraBullets: string[] = [];
