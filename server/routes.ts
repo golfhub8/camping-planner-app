@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAuthenticatedOptional } from "./replitAuth";
 import Stripe from "stripe";
 import { load as cheerioLoad } from "cheerio";
 
@@ -240,34 +240,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/printables/downloads
-  // Get download links for printables (requires paid access)
-  // Protected route - requires authentication AND printable access
-  app.get('/api/printables/downloads', isAuthenticated, requirePrintableAccess, async (req: any, res) => {
-    // Return download links for all printables
-    // For now, return the external shop URLs
-    // In the future, this could return actual file download URLs from storage
-    const downloads = [
+  // Get list of all printables (free and Pro)
+  // Optional authentication - works for both logged-in and anonymous users
+  // Free users see locked Pro printables, Pro users see download links
+  app.get('/api/printables/downloads', isAuthenticatedOptional, async (req: any, res) => {
+    // Check if user is logged in and has Pro access
+    const user = req.user ?? null;
+    let isPro = false;
+    
+    if (user) {
+      try {
+        const userId = user.claims.sub;
+        const dbUser = await storage.getUser(userId);
+        
+        // Check if user has active Pro membership (proMembershipEndDate is in the future)
+        if (dbUser?.proMembershipEndDate) {
+          const now = new Date();
+          const endDate = new Date(dbUser.proMembershipEndDate);
+          isPro = endDate > now;
+        }
+      } catch (error) {
+        console.error("Error checking Pro status:", error);
+      }
+    }
+
+    const printables = [
       {
-        id: "camping-planner",
-        title: "The Camping Planner",
-        description: "Plan your perfect camping trip with our comprehensive planner",
-        downloadUrl: "https://thecampingplanner.com/shop/",
+        id: "free-food-packing",
+        title: "Free Food Packing List (US Letter)",
+        file: "/printables/THE CAMPING PLANNER - Free Food Packing List US LETTER.pdf",
+        description: "Plan meals easily with this free food packing checklist.",
+        free: true,
       },
       {
-        id: "activity-book",
-        title: "Camping Activity Book",
-        description: "Keep the kids entertained with fun camping-themed activities",
-        downloadUrl: "https://thecampingplanner.com/shop/",
+        id: "free-charades",
+        title: "Free Camping Charades (US Letter)",
+        file: "/printables/FREE CAMPING CHARADES US LETTER.pdf",
+        description: "A fun, family-friendly game for the campfire.",
+        free: true,
+      },
+      {
+        id: "camping-planner-us",
+        title: "The Camping Planner (US Letter)",
+        file: "/printables/THE CAMPING PLANNER US LETTER.pdf",
+        description: "The original planner to organize every camping trip.",
+        requiresPro: true,
+      },
+      {
+        id: "camping-planner-a4",
+        title: "The Camping Planner (A4)",
+        file: "/printables/THE CAMPING PLANNER A4 SIZE.pdf",
+        description: "A4 version of the core planner.",
+        requiresPro: true,
+      },
+      {
+        id: "ultimate-planner",
+        title: "The ULTIMATE Camping Planner",
+        file: "/printables/THE ULTIMATE CAMPING PLANNER US LETTER.pdf",
+        description: "All-in-one planner bundle for serious campers.",
+        requiresPro: true,
       },
       {
         id: "games-bundle",
         title: "Camping Games Bundle",
-        description: "Make your camping trip unforgettable with our complete games bundle",
-        downloadUrl: "https://thecampingplanner.com/shop/",
+        file: "/printables/CAMPING GAMES BUNDLE  US LETTER.pdf",
+        description: "A collection of printable games for every age.",
+        requiresPro: true,
+      },
+      {
+        id: "mega-activity-book",
+        title: "Mega Camping Activity Book (A4)",
+        file: "/printables/MEGA CAMPING ACTIVITY BOOK A4.pdf",
+        description: "Over 70 pages of fun activities for kids and families.",
+        requiresPro: true,
       },
     ];
 
-    res.json({ downloads });
+    // Filter: if not Pro, hide file path for paid ones
+    const visible = printables.map((p) => {
+      if (p.requiresPro && !isPro) {
+        return { ...p, file: null };
+      }
+      return p;
+    });
+
+    res.json({ printables: visible, user: user ? { isPro } : null });
   });
 
   // Recipe Routes

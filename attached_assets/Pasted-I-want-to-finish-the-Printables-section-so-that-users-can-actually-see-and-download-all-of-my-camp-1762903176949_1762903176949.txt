@@ -1,0 +1,80 @@
+I want to finish the “Printables” section so that users can actually see and download all of my camping printables inside the app.  
+Two of them are free; the rest are for Pro (paid) members.
+
+Please do the following:
+
+----------------------------------------------------
+1️⃣  BACKEND
+----------------------------------------------------
+Open the backend routes file (server/routes.ts).
+
+Add a new route:
+```ts
+// GET /api/printables/downloads
+app.get("/api/printables/downloads", isAuthenticatedOptional, async (req: any, res) => {
+  // If a user is logged in, check if they are Pro
+  const user = req.user ?? null;
+  const isPro = user?.isPro ?? false;
+
+  const printables = [
+    {
+      id: "free-food-packing",
+      title: "Free Food Packing List (US Letter)",
+      file: "/printables/THE CAMPING PLANNER - Free Food Packing List US LETTER.pdf",
+      description: "Plan meals easily with this free food packing checklist.",
+      free: true,
+    },
+    {
+      id: "free-charades",
+      title: "Free Camping Charades (US Letter)",
+      file: "/printables/FREE CAMPING CHARADES US LETTER.pdf",
+      description: "A fun, family-friendly game for the campfire.",
+      free: true,
+    },
+    {
+      id: "camping-planner-us",
+      title: "The Camping Planner (US Letter)",
+      file: "/printables/THE CAMPING PLANNER US LETTER.pdf",
+      description: "The original planner to organize every camping trip.",
+      requiresPro: true,
+    },
+    {
+      id: "camping-planner-a4",
+      title: "The Camping Planner (A4)",
+      file: "/printables/THE CAMPING PLANNER A4 SIZE.pdf",
+      description: "A4 version of the core planner.",
+      requiresPro: true,
+    },
+    {
+      id: "ultimate-planner",
+      title: "The ULTIMATE Camping Planner",
+      file: "/printables/THE ULTIMATE CAMPING PLANNER US LETTER.pdf",
+      description: "All-in-one planner bundle for serious campers.",
+      requiresPro: true,
+    },
+    {
+      id: "games-bundle",
+      title: "Camping Games Bundle",
+      file: "/printables/CAMPING GAMES BUNDLE  US LETTER.pdf",
+      description: "A collection of printable games for every age.",
+      requiresPro: true,
+    },
+    {
+      id: "mega-activity-book",
+      title: "Mega Camping Activity Book (A4)",
+      file: "/printables/MEGA CAMPING ACTIVITY BOOK A4.pdf",
+      description: "Over 70 pages of fun activities for kids and families.",
+      requiresPro: true,
+    },
+  ];
+
+  // Filter: if not Pro, hide file path for paid ones
+  const visible = printables.map((p) => {
+    if (p.requiresPro && !isPro) {
+      return { ...p, file: null };
+    }
+    return p;
+  });
+
+  res.json({ printables: visible });
+});

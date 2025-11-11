@@ -180,3 +180,42 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return;
   }
 };
+
+// Middleware for optional authentication - allows both logged-in and anonymous access
+// If user is logged in, their auth info is available in req.user
+// If user is not logged in, the route still proceeds (no 401 error)
+// Usage: app.get("/api/public-or-protected", isAuthenticatedOptional, async (req, res) => {...})
+export const isAuthenticatedOptional: RequestHandler = async (req, res, next) => {
+  const user = req.user as any;
+
+  // If user is not authenticated, just proceed without auth
+  if (!req.isAuthenticated() || !user?.expires_at) {
+    return next();
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Token is still valid, proceed
+  if (now <= user.expires_at) {
+    return next();
+  }
+
+  // Token expired, try to refresh it
+  const refreshToken = user.refresh_token;
+  if (!refreshToken) {
+    // If refresh fails, just clear user and proceed as anonymous
+    (req as any).user = undefined;
+    return next();
+  }
+
+  try {
+    const config = await getOidcConfig();
+    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
+    updateUserSession(user, tokenResponse);
+    return next();
+  } catch (error) {
+    // If refresh fails, just clear user and proceed as anonymous
+    (req as any).user = undefined;
+    return next();
+  }
+};

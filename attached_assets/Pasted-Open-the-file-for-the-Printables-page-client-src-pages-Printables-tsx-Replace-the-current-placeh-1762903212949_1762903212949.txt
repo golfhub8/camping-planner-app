@@ -1,0 +1,100 @@
+Open the file for the Printables page (client/src/pages/Printables.tsx).
+
+Replace the current placeholder with this:
+
+import { useQuery } from "@tanstack/react-query";
+
+export default function PrintablesPage() {
+  const { data, isLoading } = useQuery({ queryKey: ["/api/printables/downloads"] });
+  const printables = data?.printables ?? [];
+  const user = data?.user ?? null;
+
+  if (isLoading) return <p>Loading printables...</p>;
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold">Printable Library</h1>
+        <p className="text-sm text-muted-foreground">
+          Download free and Pro-exclusive printable resources for your next camping trip.
+        </p>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {printables.map((p) => (
+          <div
+            key={p.id}
+            className="border rounded-lg p-4 flex flex-col justify-between shadow-sm"
+          >
+            <div>
+              <h2 className="font-semibold mb-1">{p.title}</h2>
+              <p className="text-sm text-muted-foreground mb-3">{p.description}</p>
+            </div>
+
+            {p.free ? (
+              <a
+                href={p.file}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded text-center"
+              >
+                Download Free
+              </a>
+            ) : p.file ? (
+              <a
+                href={p.file}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded text-center"
+              >
+                Download (Pro)
+              </a>
+            ) : (
+              <p className="text-xs text-muted-foreground italic text-center mt-2">
+                Available with Pro Membership
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {!user?.isPro && (
+        <div className="text-center mt-8">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Want access to all printables? Upgrade to Camping Planner Pro.
+          </p>
+          <SubscribeButton label="Start 7-Day Free Trial ($29.99/year)" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+3️⃣ CLEANUP / NOTES
+
+Verify PDFs are stored in /public/printables/ and accessible.
+
+Free printables show for everyone.
+
+Pro-only printables:
+
+Locked (shows “Available with Pro Membership”) for free users.
+
+Show real download button for Pro users.
+
+Existing subscribers (Stripe) see their library instantly.
+
+Add a small notice: “Already purchased via ThriveCart? Contact us to activate Pro access.”
+
+Tell me which files you changed.
+
+
+---
+
+### ✅ What this gives you
+- A proper **printable library** in the app.  
+- 2 free PDFs anyone can download.  
+- 5 Pro PDFs that unlock automatically for members.  
+- ThriveCart buyers can still contact you for manual access.  
+
+Would you like a short **marketing note** you can drop on your website to transition customers from Th
