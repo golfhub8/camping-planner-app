@@ -619,6 +619,8 @@ export class DatabaseStorage implements IStorage {
 
   async upsertUser(userData: UpsertUser): Promise<User> {
     // Insert or update user on conflict (Replit Auth requirement)
+    // Use id (OIDC sub claim) as conflict target - this is the stable unique identifier
+    // If user logs in again, update their profile data
     const [user] = await db
       .insert(users)
       .values(userData)

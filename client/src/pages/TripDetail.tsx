@@ -80,6 +80,19 @@ export default function TripDetail() {
     enabled: tripId !== null,
   });
 
+  // Fetch trip meals from the trip_meals table
+  const { data: tripMeals = [], isLoading: mealsLoading } = useQuery<any[]>({
+    queryKey: ["/api/trips", tripId, "meals"],
+    queryFn: async () => {
+      const response = await fetch(`/api/trips/${tripId}/meals`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch meals");
+      }
+      return response.json();
+    },
+    enabled: tripId !== null,
+  });
+
   // Fetch all recipes to map meal IDs to titles
   const { data: recipes = [] } = useQuery<Recipe[]>({
     queryKey: ["/api/recipes"],
@@ -159,6 +172,7 @@ export default function TripDetail() {
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
       queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
       setAddMealDialogOpen(false);
       toast({
@@ -168,13 +182,14 @@ export default function TripDetail() {
     },
   });
 
-  // Mutation to remove meal from trip
+  // Mutation to remove meal from trip (mealId is the trip_meals.id, not recipeId)
   const removeMealMutation = useMutation({
-    mutationFn: async (recipeId: number) => {
-      const response = await apiRequest("DELETE", `/api/trips/${tripId}/meals/${recipeId}`);
+    mutationFn: async (mealId: number) => {
+      const response = await apiRequest("DELETE", `/api/trips/${tripId}/meals/${mealId}`);
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
       queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
       toast({
         title: "Meal removed",
@@ -265,7 +280,7 @@ export default function TripDetail() {
     );
   }
 
-  if (tripLoading) {
+  if (tripLoading || mealsLoading) {
     return (
       <main className="container mx-auto px-6 md:px-10 py-12">
         <div className="text-center text-muted-foreground">Loading trip details...</div>
@@ -288,21 +303,40 @@ export default function TripDetail() {
   const totalCost = trip.costTotal ? parseFloat(trip.costTotal) : 0;
   const costPerPerson = totalCost / peopleCount;
 
-  // Get meal titles from recipe IDs
-  const meals = trip.meals?.map(mealId => {
-    const recipe = recipes.find(r => r.id === mealId);
-    return recipe ? { id: mealId, title: recipe.title } : { id: mealId, title: `Recipe #${mealId}` };
-  }) || [];
+  // Get meal titles from trip_meals (supports both internal and external recipes)
+  const meals = tripMeals.map(meal => {
+    if (meal.isExternal) {
+      // External recipe from WordPress
+      return { 
+        id: meal.id, 
+        title: meal.title,
+        isExternal: true,
+        externalRecipeId: meal.externalRecipeId,
+      };
+    } else {
+      // Internal recipe from database
+      const recipe = recipes.find(r => r.id === meal.recipeId);
+      return { 
+        id: meal.id, 
+        title: recipe?.title || `Recipe #${meal.recipeId}`,
+        isExternal: false,
+        recipeId: meal.recipeId,
+      };
+    }
+  });
 
-  // Get recipes that aren't already added to the trip
+  // Get recipes that aren't already added to the trip (only check internal recipes)
+  const addedInternalRecipeIds = tripMeals
+    .filter(m => !m.isExternal && m.recipeId)
+    .map(m => m.recipeId);
   const availableRecipes = recipes.filter(
-    recipe => !trip.meals?.includes(recipe.id)
+    recipe => !addedInternalRecipeIds.includes(recipe.id)
   );
 
   // Handle opening grocery dialog
   const handleOpenGroceryDialog = async () => {
     setGroceryDialogOpen(true);
-    if (trip.meals && trip.meals.length > 0) {
+    if (tripMeals && tripMeals.length > 0) {
       await refetchGrocery();
     }
   };
