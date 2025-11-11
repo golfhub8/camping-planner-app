@@ -251,8 +251,10 @@ export class MemStorage implements IStorage {
     if (updates.location !== undefined) trip.location = updates.location;
     if (updates.startDate !== undefined) trip.startDate = updates.startDate;
     if (updates.endDate !== undefined) trip.endDate = updates.endDate;
-    if (updates.lat !== undefined) trip.lat = updates.lat ? updates.lat.toString() : null;
-    if (updates.lng !== undefined) trip.lng = updates.lng ? updates.lng.toString() : null;
+    // Handle coordinates: check if the property exists in updates (even if value is undefined)
+    // This allows clearing coordinates by sending undefined values
+    if ("lat" in updates) trip.lat = updates.lat ? updates.lat.toString() : null;
+    if ("lng" in updates) trip.lng = updates.lng ? updates.lng.toString() : null;
 
     return trip;
   }
@@ -694,8 +696,10 @@ export class DatabaseStorage implements IStorage {
     if (updates.location !== undefined) updateData.location = updates.location;
     if (updates.startDate !== undefined) updateData.startDate = updates.startDate;
     if (updates.endDate !== undefined) updateData.endDate = updates.endDate;
-    if (updates.lat !== undefined) updateData.lat = updates.lat?.toString() ?? null;
-    if (updates.lng !== undefined) updateData.lng = updates.lng?.toString() ?? null;
+    // Handle coordinates: check if the property exists in updates (even if value is undefined)
+    // This allows clearing coordinates by sending undefined values
+    if ("lat" in updates) updateData.lat = updates.lat?.toString() ?? null;
+    if ("lng" in updates) updateData.lng = updates.lng?.toString() ?? null;
 
     // If no fields to update, just return the existing trip
     if (Object.keys(updateData).length === 0) {

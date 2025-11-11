@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 interface EditTripDialogProps {
   trip: Trip;
@@ -40,15 +41,36 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
     },
   });
 
+  // Reset form when trip data changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: trip.name,
+        location: trip.location,
+        startDate: trip.startDate as any,
+        endDate: trip.endDate as any,
+        lat: trip.lat ? parseFloat(trip.lat) : undefined,
+        lng: trip.lng ? parseFloat(trip.lng) : undefined,
+      });
+    }
+  }, [trip, open, form]);
+
   // Mutation for updating trip
   const updateTripMutation = useMutation({
     mutationFn: async (updates: UpdateTrip) => {
-      const response = await apiRequest("PUT", `/api/trips/${trip.id}`, {
+      // Build payload explicitly including lat/lng
+      // Convert undefined to null because JSON.stringify removes undefined values
+      const payload: any = {
         ...updates,
         // Convert Date objects to ISO strings for the API if they exist
         startDate: updates.startDate ? new Date(updates.startDate).toISOString() : undefined,
         endDate: updates.endDate ? new Date(updates.endDate).toISOString() : undefined,
-      });
+        // Convert undefined to null for coordinates (JSON.stringify removes undefined)
+        lat: updates.lat === undefined ? null : updates.lat,
+        lng: updates.lng === undefined ? null : updates.lng,
+      };
+      
+      const response = await apiRequest("PUT", `/api/trips/${trip.id}`, payload);
       return response.json();
     },
     onSuccess: () => {

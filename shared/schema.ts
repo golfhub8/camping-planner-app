@@ -194,10 +194,24 @@ export const updateTripSchema = z.object({
   location: z.string().min(1, "Location is required").optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
-  // Use z.coerce.number() to handle string inputs from forms
-  // Coordinates must be within valid geographic ranges
-  lat: z.coerce.number().min(-90).max(90).nullable().optional(),
-  lng: z.coerce.number().min(-180).max(180).nullable().optional(),
+  // Transform string inputs, converting empty strings to undefined to avoid NaN
+  // Then validate the numeric range if a value is present
+  lat: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return undefined;
+      const num = typeof val === "string" ? parseFloat(val) : val;
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().min(-90).max(90).optional()
+  ),
+  lng: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return undefined;
+      const num = typeof val === "string" ? parseFloat(val) : val;
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().min(-180).max(180).optional()
+  ),
 }).refine(
   (data) => {
     // If one coordinate is updated, both must be updated together
