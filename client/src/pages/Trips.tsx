@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, PencilIcon } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { useLocation } from "wouter";
 
 export default function Trips() {
@@ -145,7 +145,7 @@ export default function Trips() {
                           <Input 
                             type="date"
                             data-testid="input-trip-start-date"
-                            value={field.value ? (field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : '') : ''}
+                            value={field.value instanceof Date && isValid(field.value) ? format(field.value, 'yyyy-MM-dd') : ''}
                             onChange={(e) => {
                               // Store the exact Date object from the input value
                               // The date string is in YYYY-MM-DD format (ISO date, not datetime)
@@ -170,7 +170,7 @@ export default function Trips() {
                           <Input 
                             type="date"
                             data-testid="input-trip-end-date"
-                            value={field.value ? (field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : '') : ''}
+                            value={field.value instanceof Date && isValid(field.value) ? format(field.value, 'yyyy-MM-dd') : ''}
                             onChange={(e) => {
                               // Store the exact Date object from the input value
                               // The date string is in YYYY-MM-DD format (ISO date, not datetime)

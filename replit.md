@@ -4,6 +4,30 @@
 
 The Camping Planner is a full-stack web application designed to help camping families organize their outdoor adventures. It features a modern, outdoor aesthetic with teal accents and bold typography. The application offers secure user authentication, user-owned data, and robust modules for managing recipes, grocery lists, and camping trips. Key capabilities include creating and searching recipes, generating categorized shopping lists from selected recipes or entire trip meal plans, and comprehensive trip management with collaboration and cost tracking. The project aims to provide a seamless planning experience for outdoor enthusiasts. Pro Membership ($29.99/year with 7-day free trial) grants access to printable camping planners and games. It is built as a single-page application with a REST API, PostgreSQL storage, and session-based authentication.
 
+## Recent Changes (November 2025)
+
+**Printables Page Enhancement:**
+- Added membership message "Your membership includes all current printables in this list." for Pro members
+- Message displays when user has active Pro membership (hasAccess is true)
+
+**Trip Date Input Fix:**
+- Fixed "Invalid time value" error when rendering date inputs on Trips page
+- Added `isValid()` check from date-fns before formatting dates
+- Date inputs now safely handle undefined or invalid Date values
+- Dates stored with 'T00:00:00' appended to prevent timezone interpretation issues
+
+**Trip Meals in Grocery Selection:**
+- Added "Meals from your trips" section above "Select Recipes" on Grocery page
+- Trip dropdown allows selecting a trip to view its meals
+- Meals display with checkboxes for selection
+- Advanced state management separates manual vs trip meal selections:
+  - `manuallySelectedRecipeIds` Set tracks manual checkbox selections
+  - `tripMealRecipeIds` Map tracks meal→recipe associations
+  - `selectedRecipeIds` contains union of both sources
+- Checkbox UI reflects manual selection only (clearer UX)
+- "In trip meals" badge displays when recipe selected via trip meals but not manually
+- All edge cases handled: manual first, trip first, overlapping selections, multiple meals with same recipe
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
