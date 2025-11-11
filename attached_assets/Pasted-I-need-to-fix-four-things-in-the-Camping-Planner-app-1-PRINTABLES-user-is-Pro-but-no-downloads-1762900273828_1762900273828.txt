@@ -1,0 +1,65 @@
+I need to fix four things in the Camping Planner app:
+
+1) PRINTABLES: user is Pro but no downloads show
+------------------------------------------------
+Right now, even after I subscribe, the /printables page only shows the upgrade box and no actual products.
+
+Please do this:
+- On the backend, keep the existing endpoints:
+  - GET /api/printables/access
+  - GET /api/printables/downloads
+- Make sure /api/printables/access actually returns { hasAccess: true } for users who have an active Stripe subscription in our system.
+- On the frontend (client/src/pages/Printables.tsx or wherever the page lives):
+  - If hasAccess === true, DO NOT render the upgrade Alert.
+  - Instead, render the list of printables/downloads below it. We already have the PDFs in the repo (camping planner, activity book, games). Show each one as a card with:
+    - title
+    - short description
+    - “Download PDF” button that points to the downloadUrl from /api/printables/downloads.
+  - If hasAccess === false, keep showing the upgrade box.
+- Add a small line under the heading: “Your membership includes all current printables in this list.”
+
+2) TRIP DATES: stop auto-changing my date
+-----------------------------------------
+On the Trips page, if I type 2025-11-30, it turns into 2025-10-01.
+
+Please fix the trip create form:
+- Open the trip creation form component (the one on /trips that has “Plan a New Trip”).
+- Both Start Date and End Date should be <input type="date" /> inputs.
+- They should be controlled inputs that store the exact value the user picked or typed.
+- Do NOT reformat the date on change.
+- Only convert to ISO on submit, right before calling the API.
+- If there is some defaulting logic (like “if end date is empty, set it to today”), remove it.
+- The date should stay exactly what the user typed or chose.
+
+3) LOCATION FIELD: accept plain text and save it
+------------------------------------------------
+Right now if I type “los angeles” it doesn’t really do anything.
+
+Please update the trip create and trip edit code so that:
+- The location text box always sends whatever the user typed to the backend (even if we couldn’t geocode it).
+- The backend should save location as text even when no coordinates were found.
+- If geocoding is not configured (no MAPBOX_TOKEN, etc.), just skip geocoding and don’t throw.
+- On the trip detail page, when there are no coordinates, show the current friendly message (“This trip doesn’t have coordinates set yet.”) – that part is already good.
+
+4) GROCERY PAGE: suggest meals from planned trips
+--------------------------------------------------
+Now that the Recipes page has an “Add to Trip” button, I want the Grocery page to show those trip meals so the user can pull their ingredients in.
+
+Please do this:
+- Add a new backend endpoint:
+  - GET /api/trips/:tripId/meals
+  - It should return all meals/recipes that were attached to that trip, including external recipes (title + ingredient list if we have it).
+- On the Grocery page (client/src/pages/Grocery.tsx or similar), add a new section ABOVE the current “Select Recipes” box:
+  - Title: “Meals from your trips”
+  - Add a dropdown/select to choose one of the user’s trips (fetch from /api/trips).
+  - When a trip is selected, fetch /api/trips/:tripId/meals and list those meals with checkboxes.
+  - When I check a meal from this list, add its ingredients to the same combined grocery list the page already builds.
+  - For external recipes that don’t have parsed ingredients, show a small link “View recipe” (use the sourceUrl) and a toggle “Add to grocery list anyway” that will just add the title as a line item.
+
+This will let the user:
+- add a recipe to a trip
+- go to Grocery
+- pick that trip
+- pull those meals into the grocery list
+
+Please implement all 4 of these and tell me which files you changed.

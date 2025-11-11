@@ -36,9 +36,10 @@ export default function GroceryList() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Parse recipe IDs from URL query parameters
+  // Parse recipe IDs and external meal titles from URL query parameters
   const searchParams = new URLSearchParams(window.location.search);
   const recipeIds = searchParams.getAll("recipeIds").map(id => parseInt(id));
+  const externalMeals = searchParams.getAll("externalMeals");
 
   // Generate grocery list from selected recipes
   const generateListMutation = useMutation({
@@ -48,14 +49,30 @@ export default function GroceryList() {
       return data as { items: GroceryItem[] };
     },
     onSuccess: (data) => {
-      setGroceryItems(data.items);
+      // Add external meal titles as Pantry items
+      const externalMealItems: GroceryItem[] = externalMeals.map(title => ({
+        name: title + " (see trip for recipe details)",
+        category: "Pantry" as const,
+        checked: false,
+      }));
+      setGroceryItems([...data.items, ...externalMealItems]);
     },
   });
 
   // Generate list on component mount
   useEffect(() => {
-    if (recipeIds.length > 0) {
-      generateListMutation.mutate(recipeIds);
+    if (recipeIds.length > 0 || externalMeals.length > 0) {
+      if (recipeIds.length > 0) {
+        generateListMutation.mutate(recipeIds);
+      } else {
+        // Only external meals, no internal recipes
+        const externalMealItems: GroceryItem[] = externalMeals.map(title => ({
+          name: title + " (see trip for recipe details)",
+          category: "Pantry" as const,
+          checked: false,
+        }));
+        setGroceryItems(externalMealItems);
+      }
     }
   }, []);
 
@@ -196,7 +213,7 @@ export default function GroceryList() {
     ? groceryItems.filter(item => !item.checked)
     : groceryItems;
 
-  if (recipeIds.length === 0) {
+  if (recipeIds.length === 0 && externalMeals.length === 0) {
     return (
       <div className="min-h-screen bg-background">
         <Header />

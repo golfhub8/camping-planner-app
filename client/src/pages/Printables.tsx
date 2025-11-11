@@ -61,6 +61,13 @@ export default function Printables() {
             Enhance your camping experience with our collection of printable planners, activity books, and games
           </p>
           
+          {/* Pro Member Info */}
+          {hasAccess && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Your membership includes all current printables in this list.
+            </p>
+          )}
+          
           {/* Access Status Badge */}
           {accessData && (
             <div className="mt-4 flex justify-center">

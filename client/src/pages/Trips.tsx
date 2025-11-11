@@ -35,21 +35,13 @@ export default function Trips() {
     },
   });
 
-  // Helper function to safely format date for input
-  const formatDateForInput = (date: Date | undefined): string => {
-    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
-      return '';
-    }
-    return format(date, 'yyyy-MM-dd');
-  };
-
   // Mutation for creating a new trip
   const createTripMutation = useMutation({
     mutationFn: async (newTrip: InsertTrip) => {
       const response = await apiRequest("POST", "/api/trips", {
         name: newTrip.name,
         location: newTrip.location,
-        // Convert Date objects to ISO strings for the API
+        // Convert to ISO strings for the API (startDate and endDate are Date objects from the form)
         startDate: newTrip.startDate.toISOString(),
         endDate: newTrip.endDate.toISOString(),
       });
@@ -153,9 +145,11 @@ export default function Trips() {
                           <Input 
                             type="date"
                             data-testid="input-trip-start-date"
-                            value={formatDateForInput(field.value)}
+                            value={field.value ? (field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : '') : ''}
                             onChange={(e) => {
-                              const date = e.target.value ? new Date(e.target.value) : undefined;
+                              // Store the exact Date object from the input value
+                              // The date string is in YYYY-MM-DD format (ISO date, not datetime)
+                              const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined;
                               field.onChange(date);
                             }}
                           />
@@ -176,9 +170,11 @@ export default function Trips() {
                           <Input 
                             type="date"
                             data-testid="input-trip-end-date"
-                            value={formatDateForInput(field.value)}
+                            value={field.value ? (field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : '') : ''}
                             onChange={(e) => {
-                              const date = e.target.value ? new Date(e.target.value) : undefined;
+                              // Store the exact Date object from the input value
+                              // The date string is in YYYY-MM-DD format (ISO date, not datetime)
+                              const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined;
                               field.onChange(date);
                             }}
                           />
