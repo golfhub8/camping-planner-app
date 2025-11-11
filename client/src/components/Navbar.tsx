@@ -25,10 +25,8 @@ export default function Navbar() {
   return (
     <nav className="w-full flex items-center justify-between px-6 py-3 bg-background border-b" data-testid="navbar">
       <div className="flex items-center gap-6">
-        <Link href="/">
-          <a className="flex items-center gap-2 hover:opacity-80 transition-opacity" data-testid="link-logo">
-            <img src={bannerImage} alt="The Camping Planner" className="h-8" />
-          </a>
+        <Link href="/" data-testid="link-logo">
+          <img src={bannerImage} alt="The Camping Planner" className="h-8 hover:opacity-80 transition-opacity cursor-pointer" />
         </Link>
         
         <div className="flex items-center gap-1">
@@ -37,10 +35,9 @@ export default function Navbar() {
               <Button
                 variant={isActive(link.path, link.matchExact) ? "secondary" : "ghost"}
                 size="sm"
-                asChild
                 data-testid={`nav-link-${link.label.toLowerCase()}`}
               >
-                <a>{link.label}</a>
+                {link.label}
               </Button>
             </Link>
           ))}
