@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import Stripe from "stripe";
@@ -991,6 +991,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching shared grocery list:", error);
       res.status(500).json({ error: "Failed to fetch shared list" });
+    }
+  });
+
+  // Campground Search Routes
+  
+  // GET /api/campgrounds
+  // Search for campgrounds by location query
+  // Protected route - requires authentication
+  app.get("/api/campgrounds", isAuthenticated, async (req: any, res) => {
+    try {
+      // Validate query parameter
+      const validation = searchCampgroundsSchema.safeParse({
+        query: req.query.query || ""
+      });
+      
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: validation.error.errors 
+        });
+      }
+      
+      const { query } = validation.data;
+      const campgrounds = await storage.searchCampgrounds(query);
+      
+      res.json({ campgrounds });
+    } catch (error) {
+      console.error("Error searching campgrounds:", error);
+      res.status(500).json({ error: "Failed to search campgrounds" });
     }
   });
 
