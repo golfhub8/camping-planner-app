@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -11,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar, MapPin } from "lucide-react";
 import { format } from "date-fns";
+import type { Trip } from "@shared/schema";
 
 interface TripSelectorProps {
   open: boolean;
@@ -20,7 +20,7 @@ interface TripSelectorProps {
 }
 
 export default function TripSelector({ open, onOpenChange, onSelectTrip, isLoading }: TripSelectorProps) {
-  const { data: trips = [], isLoading: isLoadingTrips } = useQuery({
+  const { data: trips = [], isLoading: isLoadingTrips } = useQuery<Trip[]>({
     queryKey: ["/api/trips"],
     enabled: open, // Only fetch when dialog is open
   });
@@ -46,7 +46,7 @@ export default function TripSelector({ open, onOpenChange, onSelectTrip, isLoadi
         ) : (
           <ScrollArea className="max-h-[400px]">
             <div className="space-y-2">
-              {trips.map((trip: any) => (
+              {trips.map((trip) => (
                 <Button
                   key={trip.id}
                   variant="outline"

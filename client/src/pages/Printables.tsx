@@ -1,4 +1,3 @@
-import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,20 +44,14 @@ export default function Printables() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex items-center justify-center py-24">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
+      <div className="flex items-center justify-center py-24">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <main className="container mx-auto px-6 md:px-10 py-12 max-w-5xl">
+    <main className="container mx-auto px-6 md:px-10 py-12 max-w-5xl">
         {/* Page Header */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4" data-testid="text-page-title">
@@ -149,13 +142,12 @@ export default function Printables() {
           })}
         </div>
 
-        {/* Additional Info */}
-        <div className="mt-12 text-center">
-          <p className="text-sm text-muted-foreground">
-            All products are available as instant digital downloads
-          </p>
-        </div>
-      </main>
-    </div>
+      {/* Additional Info */}
+      <div className="mt-12 text-center">
+        <p className="text-sm text-muted-foreground">
+          All products are available as instant digital downloads
+        </p>
+      </div>
+    </main>
   );
 }
