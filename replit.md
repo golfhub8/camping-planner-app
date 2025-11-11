@@ -14,6 +14,8 @@ Preferred communication style: Simple, everyday language.
 
 The frontend is a React 18 application with TypeScript, utilizing Vite for fast development and Wouter for lightweight routing. State management and data fetching are handled by TanStack Query, incorporating optimistic updates for a responsive UI. The UI is built with Shadcn/ui (New York style) on Radix UI primitives, styled with Tailwind CSS, and features a custom teal-centric color palette and modern typography. The design emphasizes a clean, outdoor aesthetic, responsiveness, and user-friendly interaction patterns. Authentication leverages Replit Auth for seamless OIDC login and protects routes, redirecting unauthenticated users to a landing page.
 
+**Global Navigation**: A persistent Navbar component appears on all authenticated pages, featuring the app logo, primary navigation links (Recipes, Trips, Printables) with smart active state highlighting, a "Go Pro" subscribe button that triggers Stripe checkout, and a logout button. The Navbar uses intelligent path matching to highlight the correct tab even on nested routes (e.g., viewing a specific trip highlights the "Trips" tab).
+
 ### Backend
 
 The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. All API routes are protected by `isAuthenticated` middleware, and user ownership is strictly verified for all data access and mutations. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation, and comprehensive trip management including creation, collaborator management, cost tracking, meal planning, trip-specific grocery list generation, and shareable grocery links for collaborators. Shareable links maintain one persistent token per trip and allow public read-only access to trip grocery lists without requiring authentication. Payment processing is integrated via Stripe Checkout Sessions for Pro Membership ($29.99/year with 7-day free trial), with webhook-based access control ensuring users receive printable access after successful payment. The API also provides public endpoints for fetching external recipes from TheCampingPlanner.com WordPress site (GET /api/recipes/external, /api/recipes/external/:id, /api/recipes/external/:id/ingredients), with HTML parsing to extract ingredient lists from WordPress content. A shared helper function `extractIngredientsFromHtml` parses <li> tags and handles HTML entities for consistent ingredient extraction. Zod is used for schema validation on all request and response payloads, ensuring type safety across the application.
@@ -33,15 +35,20 @@ Data persistence is managed using PostgreSQL with the Neon serverless driver, ac
 
 ## Stripe Integration Setup
 
-The application uses Stripe Checkout Sessions for a secure, hosted payment experience. Required environment variables:
+The application uses Stripe Checkout Sessions for a secure, hosted payment experience using a Price created in the Stripe Dashboard. Required environment variables:
 
-*   `STRIPE_SECRET_KEY`: Your Stripe secret key (starts with `sk_`)
-*   `VITE_STRIPE_PUBLIC_KEY`: Your Stripe publishable key (starts with `pk_`)
+*   `STRIPE_SECRET_KEY`: Your Stripe secret key (starts with `sk_test_` for test mode or `sk_live_` for production)
+*   `VITE_STRIPE_PUBLIC_KEY`: Your Stripe publishable key (starts with `pk_test_` or `pk_live_`)
+*   `STRIPE_PRICE_ID`: The Price ID from your Stripe Dashboard (starts with `price_`, e.g., `price_1SRnQBIEQH0jZmIb2XwrLR5v`)
 *   `STRIPE_WEBHOOK_SECRET`: Webhook signing secret from Stripe Dashboard (starts with `whsec_`)
+
+**Important**: Ensure all Stripe keys match the same mode (test or live). For development, use test mode keys (`sk_test_`, `pk_test_`) with a test Price ID.
+
+Checkout endpoint: `POST /api/billing/create-checkout-session` - Creates a Stripe Checkout Session using the Dashboard Price ID. Dynamic success/cancel URLs automatically adapt to development and production environments.
 
 Webhook endpoint: `POST /api/stripe/webhook` - Configure in Stripe Dashboard to listen for:
 *   `checkout.session.completed` - Grants Pro membership access after successful trial signup or payment
 *   `customer.subscription.updated` - Updates Pro membership end date
 *   `customer.subscription.deleted` - Revokes Pro membership access
 
-Pro Membership pricing: $29.99/year with 7-day free trial. The webhook route is registered before global JSON middleware to ensure raw body is available for signature verification.
+Pro Membership pricing: $29.99/year with 7-day free trial (configured in Stripe Dashboard Price). The webhook route is registered before global JSON middleware to ensure raw body is available for signature verification.
