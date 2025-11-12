@@ -70,18 +70,35 @@ export function registerWebhookRoute(app: Express): void {
     }
 
     try {
+      // Log the event type for debugging
+      console.log(`[Webhook] Received event: ${event.type}`);
+      
       // Handle the event
       switch (event.type) {
         case 'checkout.session.completed': {
+          console.log(`[Webhook] Processing checkout.session.completed`);
           const session = event.data.object as Stripe.Checkout.Session;
-          const userId = session.client_reference_id || session.metadata?.app_user_id;
+          let userId = session.client_reference_id || session.metadata?.app_user_id;
+          let userIdFoundViaEmail = false;
+
+          // If no userId in metadata, try to look up by email from customer
+          if (!userId && session.customer_email) {
+            console.log(`[Webhook] No userId in metadata, looking up by email: ${session.customer_email}`);
+            const user = await storage.getUserByEmail(session.customer_email);
+            if (user) {
+              userId = user.id;
+              userIdFoundViaEmail = true;
+              console.log(`[Webhook] Found user by email: ${userId}`);
+            }
+          }
 
           if (!userId) {
-            console.error("No user ID in checkout session");
+            console.error("[Webhook] No user ID found in checkout session and couldn't look up by email");
             break;
           }
 
           const purchaseType = session.metadata?.purchase_type;
+          console.log(`[Webhook] Purchase type: ${purchaseType || 'not specified'}, User ID: ${userId}`);
 
           if (purchaseType === 'pro_membership_annual') {
             // Handle annual Pro membership subscription - save customer and subscription IDs
@@ -108,6 +125,26 @@ export function registerWebhookRoute(app: Express): void {
               const endDate = new Date(subscriptionResponse.current_period_end * 1000);
               await storage.updateProMembershipEndDate(userId, endDate);
               
+              // Store subscription status for efficient /api/me access
+              await storage.updateSubscriptionStatus(userId, subscriptionResponse.status);
+              
+              // If userId was found via email (not in metadata), update Stripe metadata
+              // This ensures future subscription webhook events can find the user
+              if (userIdFoundViaEmail) {
+                try {
+                  console.log(`[Webhook] Updating Stripe subscription metadata with app_user_id: ${userId}`);
+                  await stripe.subscriptions.update(session.subscription as string, {
+                    metadata: {
+                      app_user_id: userId,
+                    },
+                  });
+                  console.log(`[Webhook] Successfully updated subscription metadata`);
+                } catch (metadataError) {
+                  // Log but don't fail the entire event if metadata update fails
+                  console.error(`[Webhook] Failed to update subscription metadata:`, metadataError);
+                }
+              }
+              
               console.log(`Activated Pro membership for user ${userId} - status: ${subscriptionResponse.status}, expires ${endDate}`);
             }
           }
@@ -124,15 +161,57 @@ export function registerWebhookRoute(app: Express): void {
             break;
           }
           
-          // Find user by Stripe subscription ID
-          const userId = subscription.metadata?.app_user_id;
+          console.log(`[Webhook] Processing ${event.type} for subscription ${subscription.id}, status: ${subscription.status}`);
+          
+          // Find user by Stripe subscription ID metadata
+          let userId = subscription.metadata?.app_user_id;
+          
+          // If no userId in metadata, try to look up by customer email (fallback for legacy subscriptions)
+          if (!userId && subscription.customer) {
+            try {
+              console.log(`[Webhook] No userId in subscription metadata, attempting customer lookup`);
+              const customer = await stripe.customers.retrieve(subscription.customer as string);
+              
+              if (customer && !customer.deleted && customer.email) {
+                console.log(`[Webhook] Looking up user by customer email: ${customer.email}`);
+                const user = await storage.getUserByEmail(customer.email);
+                if (user) {
+                  userId = user.id;
+                  console.log(`[Webhook] Found user by email: ${userId}`);
+                  
+                  // Update the subscription metadata for future events
+                  try {
+                    console.log(`[Webhook] Updating subscription metadata with app_user_id: ${userId}`);
+                    await stripe.subscriptions.update(subscription.id, {
+                      metadata: {
+                        app_user_id: userId,
+                      },
+                    });
+                    console.log(`[Webhook] Successfully updated subscription metadata`);
+                  } catch (metadataError) {
+                    console.error(`[Webhook] Failed to update subscription metadata:`, metadataError);
+                  }
+                }
+              }
+            } catch (customerError) {
+              console.error(`[Webhook] Error fetching customer:`, customerError);
+            }
+          }
+          
           if (!userId) {
-            console.error("No user ID in subscription metadata");
+            console.error(`[Webhook] Could not find user for subscription ${subscription.id}. Skipping update.`);
             break;
           }
 
+          // Store subscription status for efficient /api/me access
+          await storage.updateSubscriptionStatus(userId, subscription.status);
+
           // Update Pro membership status based on Stripe subscription status
-          if (subscription.status === 'active' || subscription.status === 'trialing') {
+          // Grant access for: active, trialing, past_due (grace period)
+          // Revoke access for: canceled, incomplete, incomplete_expired, unpaid, paused
+          const allowedStatuses = ['active', 'trialing', 'past_due'];
+          
+          if (allowedStatuses.includes(subscription.status)) {
             // Type guard: ensure current_period_end exists and is a number
             if (!('current_period_end' in subscription) || 
                 typeof subscription.current_period_end !== 'number') {
@@ -142,11 +221,11 @@ export function registerWebhookRoute(app: Express): void {
             
             const endDate = new Date(subscription.current_period_end * 1000);
             await storage.updateProMembershipEndDate(userId, endDate);
-            console.log(`Updated Pro membership for user ${userId} - expires ${endDate}`);
+            console.log(`[Webhook] Updated Pro membership for user ${userId} - status: ${subscription.status}, expires ${endDate}`);
           } else {
-            // Subscription canceled, expired, or past_due - revoke access
+            // Subscription canceled, expired, or in other non-active state - revoke access
             await storage.updateProMembershipEndDate(userId, null);
-            console.log(`Revoked Pro membership for user ${userId}`);
+            console.log(`[Webhook] Revoked Pro membership for user ${userId} - status: ${subscription.status}`);
           }
           break;
         }
@@ -231,12 +310,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Derive isPro from proMembershipEndDate
       const now = new Date();
       const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+      
+      // Derive isTrialing from stored subscription status (no Stripe API call needed)
+      // Subscription status is updated by webhooks, avoiding per-request Stripe fetches
+      const isTrialing = user.subscriptionStatus === 'trialing';
 
       res.json({
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         isPro,
+        isTrialing,
+        periodEnd: user.proMembershipEndDate,
         proMembershipEndDate: user.proMembershipEndDate,
         tripsCount,
         stripeCustomerId: user.stripeCustomerId,
@@ -1838,8 +1923,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build success and cancel URLs dynamically
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${baseUrl}/printables?payment=success`;
-      const cancelUrl = `${baseUrl}/subscribe?canceled=true`;
+      const successUrl = `${baseUrl}/printables?upgrade=success`;
+      const cancelUrl = `${baseUrl}/printables?upgrade=cancelled`;
 
       // Create checkout session using Dashboard Price ID
       const session = await stripe.checkout.sessions.create({

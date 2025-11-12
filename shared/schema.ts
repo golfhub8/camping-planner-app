@@ -72,6 +72,11 @@ export const users = pgTable("users", {
   // Stripe subscription ID for tracking the annual subscription
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   
+  // Stripe subscription status for efficient access checking
+  // Values: 'active', 'trialing', 'past_due', 'canceled', 'incomplete', etc.
+  // Updated by webhooks to avoid per-request Stripe API calls
+  subscriptionStatus: varchar("subscription_status"),
+  
   // Camping Basics selection
   // Array of camping basic IDs that the user has added to their grocery list
   // Example: ["water", "coffee", "eggs"] - these persist across sessions

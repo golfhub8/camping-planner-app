@@ -17,12 +17,14 @@ function validateCampingBasicId(basicId: string): void {
 export interface IStorage {
   // User methods (IMPORTANT: required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
   // Stripe methods for payment integration
   updateStripeCustomerId(userId: string, customerId: string): Promise<User>;
   updateStripeSubscriptionId(userId: string, subscriptionId: string): Promise<User>;
   updateProMembershipEndDate(userId: string, endDate: Date | null): Promise<User>;
+  updateSubscriptionStatus(userId: string, status: string | null): Promise<User>;
   
   // Recipe methods
   // Get all recipes for a user (returns newest first)
@@ -132,6 +134,11 @@ export class MemStorage implements IStorage {
     return this.users.get(id);
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const allUsers = Array.from(this.users.values());
+    return allUsers.find(user => user.email === email);
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const existingUser = this.users.get(userData.id!);
     const user: User = {
@@ -143,6 +150,7 @@ export class MemStorage implements IStorage {
       proMembershipEndDate: existingUser?.proMembershipEndDate ?? null,
       stripeCustomerId: existingUser?.stripeCustomerId ?? null,
       stripeSubscriptionId: existingUser?.stripeSubscriptionId ?? null,
+      subscriptionStatus: existingUser?.subscriptionStatus ?? null,
       selectedCampingBasics: existingUser?.selectedCampingBasics ?? [],
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date(),
@@ -180,6 +188,17 @@ export class MemStorage implements IStorage {
       throw new Error("User not found");
     }
     user.proMembershipEndDate = endDate;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async updateSubscriptionStatus(userId: string, status: string | null): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.subscriptionStatus = status;
     user.updatedAt = new Date();
     this.users.set(userId, user);
     return user;
@@ -678,6 +697,11 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     // Insert or update user on conflict (Replit Auth requirement)
     // Use id (OIDC sub claim) as conflict target - this is the stable unique identifier
@@ -734,6 +758,22 @@ export class DatabaseStorage implements IStorage {
       .update(users)
       .set({ 
         proMembershipEndDate: endDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async updateSubscriptionStatus(userId: string, status: string | null): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        subscriptionStatus: status,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))
