@@ -7,10 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Separator } from "@/components/ui/separator";
 import { Calendar, CreditCard, Package, AlertCircle, Check, Mail, TrendingUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { Link } from "wouter";
-import { useState } from "react";
-import { useSubscription } from "@/hooks/useSubscription";
+import { Link, useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import SubscribeButton from "@/components/SubscribeButton";
+import { useToast } from "@/hooks/use-toast";
 
 interface UserProfile {
   email: string;
@@ -30,35 +30,56 @@ interface UsageStats {
   groceryListsCount: number;
 }
 
+interface AccountPlan {
+  plan: 'free' | 'pro';
+  tripLimit: number | null;
+  groceryLimit: number | null;
+  hasStripeCustomer: boolean;
+  subscriptionStatus: string | null;
+  membershipEndDate: string | null;
+}
+
 export default function Account() {
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [location] = useLocation();
+  const { toast } = useToast();
   
   const { data: user, isLoading } = useQuery<UserProfile>({
     queryKey: ["/api/me"],
   });
 
-  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+  const { data: accountPlan, isLoading: planLoading, refetch: refetchPlan } = useQuery<AccountPlan>({
+    queryKey: ["/api/account/plan"],
+  });
 
   const { data: usage } = useQuery<UsageStats>({
     queryKey: ["/api/usage/stats"],
   });
 
-  const isPro = subscription?.plan === 'pro' || subscription?.plan === 'trial';
-  const isTrialing = subscription?.plan === 'trial';
-
-  const getTrialDaysRemaining = () => {
-    if (!isTrialing || !subscription?.current_period_end) return null;
-    const endDate = new Date(subscription.current_period_end);
-    const today = new Date();
-    const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return daysRemaining > 0 ? daysRemaining : 0;
-  };
-
-  const getPlanStatus = () => {
-    if (subscription?.plan === 'trial') return "Trial";
-    if (subscription?.plan === 'pro') return "Pro";
-    return "Free";
-  };
+  // Handle return from Stripe checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    
+    if (status === 'success') {
+      toast({
+        title: "Welcome to Pro!",
+        description: "Your subscription is now active. Enjoy unlimited access to all features.",
+      });
+      // Refetch plan data to update UI
+      refetchPlan();
+      // Clean up URL
+      window.history.replaceState({}, '', '/account');
+    } else if (status === 'cancel') {
+      toast({
+        title: "Checkout Canceled",
+        description: "No charges were made. You can subscribe anytime.",
+        variant: "default",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/account');
+    }
+  }, [location, refetchPlan, toast]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "N/A";
@@ -71,20 +92,34 @@ export default function Account() {
 
   const handleManageSubscription = async () => {
     try {
-      const response = await fetch("/api/billing/portal-session", {
+      // Create portal session on-demand
+      const response = await fetch("/api/billing/portal", {
         method: "GET",
         credentials: "include",
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        throw new Error("No portal URL returned");
       }
     } catch (error) {
       console.error("Error creating portal session:", error);
+      toast({
+        title: "Error",
+        description: "Unable to open billing portal. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  if (isLoading) {
+  // Show loading state while fetching user or plan data
+  if (isLoading || planLoading) {
     return (
       <div className="container mx-auto px-6 md:px-10 py-8 max-w-4xl">
         <div className="space-y-6">
@@ -96,7 +131,8 @@ export default function Account() {
     );
   }
 
-  if (!user) {
+  // Ensure both user and plan data are loaded
+  if (!user || !accountPlan) {
     return (
       <div className="container mx-auto px-6 md:px-10 py-8 max-w-4xl">
         <Card>
@@ -110,6 +146,24 @@ export default function Account() {
       </div>
     );
   }
+
+  // Compute plan-derived values after data is loaded
+  const isPro = accountPlan.plan === 'pro';
+  const isTrialing = accountPlan.subscriptionStatus === 'trialing';
+
+  const getTrialDaysRemaining = () => {
+    if (!isTrialing || !accountPlan.membershipEndDate) return null;
+    const endDate = new Date(accountPlan.membershipEndDate);
+    const today = new Date();
+    const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return daysRemaining > 0 ? daysRemaining : 0;
+  };
+
+  const getPlanStatus = () => {
+    if (isTrialing) return "Pro Trial";
+    if (isPro) return "Pro";
+    return "Free";
+  };
 
   const trialDaysRemaining = getTrialDaysRemaining();
 
@@ -132,7 +186,7 @@ export default function Account() {
                 <CardDescription className="mt-1">Your current plan and billing information</CardDescription>
               </div>
               <Badge variant={isPro ? "default" : "secondary"} className="text-base px-4 py-1" data-testid="badge-plan-status">
-                {subscriptionLoading ? "Loading..." : getPlanStatus()}
+                {planLoading ? "Loading..." : getPlanStatus()}
               </Badge>
             </div>
           </CardHeader>
@@ -151,10 +205,10 @@ export default function Account() {
               </div>
             )}
 
-            {isPro && !isTrialing && subscription?.current_period_end && (
+            {isPro && !isTrialing && accountPlan?.membershipEndDate && (
               <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">Renewal Date</span>
-                <span className="font-medium" data-testid="text-renewal-date">{formatDate(subscription.current_period_end)}</span>
+                <span className="font-medium" data-testid="text-renewal-date">{formatDate(accountPlan.membershipEndDate)}</span>
               </div>
             )}
 
@@ -167,7 +221,7 @@ export default function Account() {
               </div>
             )}
 
-            {user.stripeCustomerId && (
+            {accountPlan?.hasStripeCustomer && (
               <div className="pt-4 border-t">
                 <Button 
                   variant="outline" 
@@ -184,37 +238,45 @@ export default function Account() {
 
             <div>
               <h3 className="font-semibold mb-3">Plan Benefits</h3>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm" data-testid="benefit-trip-history-sharing">
-                  <Check className="h-4 w-4 text-primary" />
-                  <span>Trip history & sharing</span>
+              {isPro ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-unlimited-trips">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Unlimited trips</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-unlimited-grocery">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Unlimited grocery lists</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-all-printables">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>All printables & games</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-full-packing-checklists">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Full packing checklists</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-priority-updates">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Priority updates</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm" data-testid="benefit-grocery-list-builder">
-                  <Check className="h-4 w-4 text-primary" />
-                  <span>Grocery list builder</span>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-limited-trips">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Up to {accountPlan?.tripLimit || 5} trips</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-limited-grocery">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Up to {accountPlan?.groceryLimit || 5} grocery lists</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm" data-testid="benefit-free-printables">
+                    <Check className="h-4 w-4 text-primary" />
+                    <span>Free printables</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm" data-testid="benefit-unlimited-printables">
-                  <Check className={`h-4 w-4 ${isPro ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={!isPro ? 'text-muted-foreground' : ''}>
-                    Unlimited printables
-                  </span>
-                  <Badge variant="outline" className="text-xs ml-auto">Pro</Badge>
-                </div>
-                <div className="flex items-center gap-2 text-sm" data-testid="benefit-full-packing-checklists">
-                  <Check className={`h-4 w-4 ${isPro ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={!isPro ? 'text-muted-foreground' : ''}>
-                    Full packing checklists
-                  </span>
-                  <Badge variant="outline" className="text-xs ml-auto">Pro</Badge>
-                </div>
-                <div className="flex items-center gap-2 text-sm" data-testid="benefit-priority-updates">
-                  <Check className={`h-4 w-4 ${isPro ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={!isPro ? 'text-muted-foreground' : ''}>
-                    Priority updates
-                  </span>
-                  <Badge variant="outline" className="text-xs ml-auto">Pro</Badge>
-                </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>

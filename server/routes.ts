@@ -2095,13 +2095,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Checkout] Creating checkout session for user: ${userId} (${user.email})`);
 
-      // Get return path from request body, default to /printables
-      const { returnPath = '/printables' } = req.body || {};
+      // Get return path from request body, default to /account
+      const { returnPath = '/account' } = req.body || {};
       
       // Build success and cancel URLs dynamically based on return path
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${baseUrl}${returnPath}?payment=success`;
-      const cancelUrl = `${baseUrl}${returnPath}?canceled=true`;
+      const successUrl = `${baseUrl}${returnPath}?status=success`;
+      const cancelUrl = `${baseUrl}${returnPath}?status=cancel`;
 
       // Prepare checkout session parameters with promotion code support
       let sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -2191,6 +2191,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating billing portal session:", error);
       return res.status(500).json({ error: "Could not create billing portal session" });
+    }
+  });
+
+  // GET /api/account/plan
+  // Get comprehensive account plan information
+  // Returns plan, limits, and portal URL
+  // Protected route - requires authentication
+  app.get("/api/account/plan", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Determine plan based on subscription status
+      let plan: 'free' | 'pro' = 'free';
+      const status = user.subscriptionStatus;
+
+      // Pro users have active, trialing, or past_due status
+      if (status === 'trialing' || status === 'active' || status === 'past_due') {
+        plan = 'pro';
+      }
+
+      // Define limits based on plan
+      const tripLimit = plan === 'pro' ? null : 5;
+      const groceryLimit = plan === 'pro' ? null : 5;
+
+      // Note: Portal URL is generated on-demand when user clicks "Manage Subscription"
+      // to avoid creating unnecessary one-time-use sessions on every page load
+
+      return res.json({
+        plan,
+        tripLimit,
+        groceryLimit,
+        hasStripeCustomer: !!user.stripeCustomerId,
+        subscriptionStatus: status || null,
+        membershipEndDate: user.proMembershipEndDate?.toISOString() || null,
+      });
+    } catch (error: any) {
+      console.error("Error fetching account plan:", error);
+      return res.status(500).json({ error: "Could not fetch account plan" });
     }
   });
 

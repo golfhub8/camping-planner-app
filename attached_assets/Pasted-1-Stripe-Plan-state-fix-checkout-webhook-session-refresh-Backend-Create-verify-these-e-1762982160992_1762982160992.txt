@@ -1,0 +1,301 @@
+1) Stripe + Plan state: fix checkout, webhook, session refresh
+
+
+
+
+
+Backend
+
+
+
+Create/verify these env vars are present:
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PRICE_YEARLY=price_... (the yearly Pro price)
+STRIPE_WEBHOOK_SECRET=whsec_... (for the dev endpoint you showed)
+APP_BASE_URL=https://<your-dev-host>.replit.dev (private dev URL)
+Implement /api/billing/create-checkout-session:
+Input: none (use logged-in user).
+Create a subscription checkout session with mode: 'subscription', line_items: [{ price: STRIPE_PRICE_YEARLY, quantity: 1 }].
+Include customer if the user has a saved stripeCustomerId; otherwise create a customer with the user’s email and save stripeCustomerId on success.
+Set success_url = ${APP_BASE_URL}/account?status=success and cancel_url = ${APP_BASE_URL}/account?status=cancel.
+Return { url }.
+
+Implement /api/stripe/webhook:
+Verify signature with STRIPE_WEBHOOK_SECRET.
+Handle:
+checkout.session.completed: look up the user by customer or client_reference_id, save stripeSubscriptionId, set plan: 'pro', plan_expires_at: null.
+customer.subscription.updated: if status becomes active → ensure plan: 'pro'; if past_due or unpaid → keep pro but consider banner; if canceled/incomplete_expired → set plan: 'free'.
+customer.subscription.deleted: set plan: 'free', null out subscription id.
+
+Return 200.
+
+Add /api/account/plan:
+Returns { plan, tripLimit, groceryLimit, stripePortalUrl }.
+Trip/Grocery limits: Free: {tripLimit: 5, groceryLimit: 5}, Pro: unlimited.
+Add /api/billing/portal endpoint to create a Stripe customer portal session and return url.
+
+
+
+
+
+Frontend
+
+
+
+In the account page, on load, call /api/account/plan and show:
+Badge: “Free” or “Pro”.
+Benefits list:
+Free: “Up to 5 trips”, “Up to 5 grocery lists”, “Free printables”.
+Pro: “Unlimited trips”, “Unlimited grocery lists”, “All printables & games”, “Full packing checklists”, “Priority updates”.
+
+
+“Start 7-Day Free Trial” button → POST /api/billing/create-checkout-session, then window.location.href = data.url. Handle errors with a toast (“Network error”).
+After returning from Stripe (/account?status=success), call /api/account/plan again and update UI (unlock printables immediately).
+“Manage Subscription” → POST /api/billing/portal, then redirect to returned url.
+
+
+
+
+QA
+
+
+
+From dev app, click “Start 7-Day Free Trial”, complete checkout with test card 4242 4242 4242 4242.
+In Dashboard → Webhooks, ensure events show “200 OK” (no “Failed to connect”).
+Back on /account, badge shows Pro, printables download buttons are enabled.
+
+
+
+
+
+
+
+
+
+2) Fix Account routing + nav order
+
+
+
+
+
+The profile avatar menu → “My Account” must link to /account (not /printables).
+Reorder top nav: Trips, Recipes, Grocery, Printables.
+Increase header height and remove the duplicate secondary header on Grocery.
+
+
+
+
+
+
+
+
+
+3) Save Recipe UX + robust parser
+
+
+
+
+
+Problem: Ingredients/instructions sometimes blank or partial.
+
+
+
+Solution
+
+
+
+Create a server route /api/recipes/parse?url= that:
+Fetches the page (server-side).
+Tries to read JSON-LD @type: "Recipe" first (most reliable).
+Fallback: scrape common selectors:
+Ingredients: ul[class*="ingredient"] li, li[class*="ingredient"].
+Instructions: ol[class*="instruction"] li, li[class*="step"], or paragraphs under .instructions.
+
+Return { title, ingredients: string[] , instructions: string[] }.
+
+Update the “Save Recipe” modal:
+On open, call /api/recipes/parse with the card’s sourceUrl.
+Prefill plain text inputs (not code blocks) for Title, Ingredients (1 per line), Instructions (blank line between steps).
+Show counts (“12 ingredients”, “6 steps”) and a small “Re-parse” button.
+Allow user edits; saving creates a “My Recipe” with stored arrays.
+
+
+
+
+
+
+
+
+
+
+4) Unify ingredient selection UI & make it feed Grocery
+
+
+
+
+
+Extract the checkbox list you liked in Trips → Meals into a reusable <IngredientSelector />. Props:
+ingredients: string[], onAddToGrocery(selected: string[]), onMarkAlreadyHave(selected: string[]).
+
+Use <IngredientSelector /> both inside the recipe modal and in trips → meals.
+
+
+
+
+Grocery “inbox”
+
+
+
+Create a client store grocerySelections in localStorage, keyed by user id:
+
+
+grocerySelections = {
+  pending: [ { recipeId, recipeTitle, items: string[] } ],
+  lastUpdated: ISODate
+}
+
+
+
+
+“Add Selected to Grocery” pushes into pending with a toast: “Added N ingredients from ”.
+In Grocery page, show a “Pending Selections” panel (badge count), letting the user:
+Review items merged by name (normalize to lowercase; aggregate quantities as note if numeric like “cups”, “g”, “tbsp”—don’t over-parse).
+Dedupe identical items; show a small “x3 total (2 recipes)” note.
+“Generate Grocery List” creates a single combined list sectioned by Pantry/Dairy/etc. if tags exist, else a flat list.
+
+
+
+
+
+Share & Email
+
+
+
+Add “Copy to Clipboard”, “Download .txt”, and “Email List” buttons.
+“Email List” opens: mailto:?subject=Camping Grocery List&body=<url-encoded list>.
+
+
+
+
+
+
+
+
+
+
+5) “Add to Trip” when no trips exist
+
+
+
+
+
+When user clicks “Add to Trip” on a recipe and they have 0 trips, show a modal:
+Step 1 (Create Trip): Name, Date range, Location (autocomplete).
+On submit, create trip, then automatically add the recipe to that new trip and navigate to the trip detail scrolled to “Meals”.
+
+If trips exist, show quick selector and add immediately.
+
+
+
+
+
+
+
+
+
+6) Location autocomplete (no manual lat/long)
+
+
+
+
+
+Replace the Location input with an autocomplete powered by a geocoding API (Mapbox, Google Places, or Open-Meteo’s geocoding).
+On select, store { displayName, lat, lon } on the trip.
+Weather panel pulls from Open-Meteo using the saved lat/lon.
+
+
+
+
+
+
+
+
+
+7) AI Trip Assistant (stub)
+
+
+
+
+
+At the top of the Trips page, add a card:
+Textarea: “Tell us about your trip…” with hints (dates, party size, location).
+Button: “Draft My Trip (beta)”.
+For now, on click just create a trip draft with the parsed dates/location if present; leave a placeholder note “AI suggestions coming soon”.
+
+
+
+
+
+
+
+
+
+
+8) Guardrails & limits
+
+
+
+
+
+Enforce Free plan caps: block creating the 6th trip or 6th grocery list with a modal upsell (link to /account).
+Pro plan: unlimited.
+
+
+
+
+
+
+
+
+
+9) Acceptance tests (please run)
+
+
+
+
+
+Account
+Click avatar → My Account. Page shows plan badge and correct benefits.
+“Start 7-Day Free Trial” completes Stripe, returns with Pro badge; printables unlock.
+
+Trips
+Create a trip with location autocomplete; weather shows real forecast.
+From a recipe card with no trips, “Add to Trip” → create trip modal → new trip shows recipe in Meals.
+
+Recipes
+“Save Recipe” pulls full ingredients and all steps; both are editable plain text.
+Use the checkbox list to add 4 items to grocery; toast shows, Grocery badge increments.
+
+Grocery
+Pending items are visible; “Generate Grocery List” merges duplicates (“cheddar” x2 → note shows total).
+Export: copy, download, and email work.
+
+Printables
+Free items download for Free plan; Pro-only cards show “Download” when Pro is active.
+
+Nav
+Order is Trips, Recipes, Grocery, Printables. No duplicate header on Grocery.
+Profile → Account always goes to /account.
+
+
+
+
+
+
+
+
+If anything fails, print the relevant console/server logs and fix in place. Make sure all Stripe webhook events used are subscribed in the Dashboard for your dev endpoint (you already have checkout.session.completed—also include customer.subscription.updated and customer.subscription.deleted).
+
+
+
+That’s it—run the tests above, and the flows you flagged in your screenshots should be solid.
