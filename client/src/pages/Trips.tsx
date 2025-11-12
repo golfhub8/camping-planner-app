@@ -7,6 +7,7 @@ import { insertTripSchema, type Trip, type InsertTrip } from "@shared/schema";
 import EditTripDialog from "@/components/EditTripDialog";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import SubscribeButton from "@/components/SubscribeButton";
+import TripLimitUpsellModal from "@/components/TripLimitUpsellModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -30,6 +31,7 @@ interface Entitlements {
 export default function Trips() {
   const [, navigate] = useLocation();
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [showUpsellModal, setShowUpsellModal] = useState(false);
   const { toast } = useToast();
   
   // Fetch user entitlements to check trip limits
@@ -74,18 +76,20 @@ export default function Trips() {
         lng: newTrip.lng ?? null,
       });
 
-      // Handle 403 trip limit error
-      if (response.status === 403) {
+      // Handle 402 paywall - show upsell modal instead of error toast
+      if (response.status === 402) {
         const errorData = await response.json();
-        if (errorData.code === "TRIP_LIMIT") {
-          throw new Error(errorData.error || "You've reached your trip limit");
+        if (errorData.code === "PAYWALL") {
+          // Throw a special error that we'll catch in onError to show modal
+          throw new Error("PAYWALL");
         }
-        throw new Error(errorData.error || "Failed to create trip");
+        // If it's 402 but not PAYWALL, treat as generic error
+        throw new Error(errorData.message || errorData.error || "Failed to create trip");
       }
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create trip");
+        throw new Error(errorData.message || errorData.error || "Failed to create trip");
       }
 
       return response.json();
@@ -101,6 +105,13 @@ export default function Trips() {
       });
     },
     onError: (error: Error) => {
+      // Check if this is a paywall error - show modal instead of toast
+      if (error.message === "PAYWALL") {
+        setShowUpsellModal(true);
+        return;
+      }
+      
+      // Show toast for all other errors
       toast({
         title: "Error",
         description: error.message,
@@ -420,6 +431,12 @@ export default function Trips() {
           }}
         />
       )}
+
+      {/* Trip Limit Upsell Modal */}
+      <TripLimitUpsellModal 
+        open={showUpsellModal} 
+        onOpenChange={setShowUpsellModal} 
+      />
     </div>
   );
 }

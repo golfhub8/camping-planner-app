@@ -1396,11 +1396,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const tripsCount = trips.length;
 
         if (tripsCount >= FREE_TRIP_LIMIT) {
-          return res.status(403).json({ 
-            code: "TRIP_LIMIT",
-            error: `You've reached the free limit of ${FREE_TRIP_LIMIT} trips. Upgrade to Pro for unlimited trips.`,
-            limit: FREE_TRIP_LIMIT,
-            currentCount: tripsCount
+          return res.status(402).json({ 
+            code: "PAYWALL",
+            message: "You've reached the free limit of 5 trips. Start a free trial to create unlimited trips."
           });
         }
       }

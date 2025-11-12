@@ -2,7 +2,14 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, LogOut } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Search, LogOut, User, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import SubscribeButton from "./SubscribeButton";
@@ -84,22 +91,37 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <SubscribeButton label="Go Pro" />
             
-            <Avatar className="h-9 w-9" data-testid="avatar-user">
-              <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || "User"} />
-              <AvatarFallback>{getUserInitials()}</AvatarFallback>
-            </Avatar>
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              asChild
-              title="Log out"
-              data-testid="button-logout"
-            >
-              <a href="/api/auth/logout">
-                <LogOut className="h-5 w-5" />
-              </a>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0" data-testid="button-user-menu">
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || "User"} />
+                    <AvatarFallback>{getUserInitials()}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild>
+                  <Link href="/account" className="flex items-center cursor-pointer" data-testid="menu-item-account">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>My Account</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/manage-subscription" className="flex items-center cursor-pointer" data-testid="menu-item-subscription">
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    <span>Manage Subscription</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href="/api/auth/logout" className="flex items-center cursor-pointer" data-testid="menu-item-logout">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sign out</span>
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

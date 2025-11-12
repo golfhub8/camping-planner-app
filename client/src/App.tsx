@@ -18,6 +18,8 @@ import Checkout from "@/pages/Checkout";
 import Subscribe from "@/pages/Subscribe";
 import SharedGroceryView from "@/pages/SharedGroceryView";
 import CampingMap from "@/pages/CampingMap";
+import Account from "@/pages/Account";
+import ManageSubscription from "@/pages/ManageSubscription";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -126,6 +128,8 @@ function Router() {
                   <Route path="/printables" component={Printables} />
                   <Route path="/checkout" component={Checkout} />
                   <Route path="/subscribe" component={Subscribe} />
+                  <Route path="/account" component={Account} />
+                  <Route path="/manage-subscription" component={ManageSubscription} />
                   <Route component={NotFound} />
                 </Switch>
               </main>
