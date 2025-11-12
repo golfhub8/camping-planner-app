@@ -2194,6 +2194,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/billing/sync-subscription
+  // Manually sync subscription status from Stripe
+  // Called after successful checkout to immediately update user's Pro status
+  // Protected route - requires authentication
+  app.post("/api/billing/sync-subscription", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Payment system not configured" });
+    }
+
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log(`[Sync] Syncing subscription for user ${userId}`);
+
+      // If user has a subscription ID, fetch it from Stripe
+      if (user.stripeSubscriptionId) {
+        console.log(`[Sync] Fetching subscription ${user.stripeSubscriptionId} from Stripe`);
+        const subscriptionResponse = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+
+        // Type guard: ensure this is a subscription object
+        if (!subscriptionResponse || subscriptionResponse.object !== 'subscription') {
+          console.error(`Expected subscription object but got: ${subscriptionResponse?.object || 'null'}`);
+          return res.status(500).json({ error: "Invalid subscription data" });
+        }
+
+        // Update local database with latest subscription data
+        await storage.updateSubscriptionStatus(userId, subscriptionResponse.status);
+        
+        if ('current_period_end' in subscriptionResponse && typeof subscriptionResponse.current_period_end === 'number') {
+          const endDate = new Date(subscriptionResponse.current_period_end * 1000);
+          await storage.updateProMembershipEndDate(userId, endDate);
+        }
+
+        console.log(`[Sync] Updated user ${userId} - status: ${subscriptionResponse.status}`);
+        
+        return res.json({ 
+          success: true, 
+          status: subscriptionResponse.status,
+          message: "Subscription synced successfully" 
+        });
+      }
+
+      // If no subscription ID but has customer ID, try to find subscription
+      if (user.stripeCustomerId) {
+        console.log(`[Sync] Searching for subscriptions for customer ${user.stripeCustomerId}`);
+        const subscriptions = await stripe.subscriptions.list({
+          customer: user.stripeCustomerId,
+          limit: 1,
+        });
+
+        if (subscriptions.data.length > 0) {
+          const subscription = subscriptions.data[0];
+          console.log(`[Sync] Found subscription ${subscription.id}`);
+          
+          // Save subscription ID
+          await storage.updateStripeSubscriptionId(userId, subscription.id);
+          await storage.updateSubscriptionStatus(userId, subscription.status);
+          
+          if ('current_period_end' in subscription && typeof subscription.current_period_end === 'number') {
+            const endDate = new Date(subscription.current_period_end * 1000);
+            await storage.updateProMembershipEndDate(userId, endDate);
+          }
+
+          console.log(`[Sync] Updated user ${userId} - status: ${subscription.status}`);
+          
+          return res.json({ 
+            success: true, 
+            status: subscription.status,
+            message: "Subscription found and synced" 
+          });
+        }
+      }
+
+      // No subscription found
+      console.log(`[Sync] No subscription found for user ${userId}`);
+      return res.json({ 
+        success: false, 
+        message: "No active subscription found" 
+      });
+    } catch (error: any) {
+      console.error("[Sync] Error syncing subscription:", error);
+      return res.status(500).json({ error: "Failed to sync subscription" });
+    }
+  });
+
   // GET /api/account/plan
   // Get comprehensive account plan information
   // Returns plan, limits, and portal URL

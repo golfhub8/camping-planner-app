@@ -225,8 +225,21 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
         {scrapeError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {scrapeError}. You can still fill in the recipe details manually below.
+            <AlertDescription className="flex items-center justify-between">
+              <span>{scrapeError}. You can still fill in the recipe details manually below.</span>
+              {externalRecipe.sourceUrl && (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleAutoScrape}
+                  disabled={isParsing}
+                  data-testid="button-reparse"
+                >
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  Retry
+                </Button>
+              )}
             </AlertDescription>
           </Alert>
         )}

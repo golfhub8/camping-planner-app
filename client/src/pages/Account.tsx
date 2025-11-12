@@ -62,12 +62,32 @@ export default function Account() {
     const status = params.get('status');
     
     if (status === 'success') {
-      toast({
-        title: "Welcome to Pro!",
-        description: "Your subscription is now active. Enjoy unlimited access to all features.",
-      });
-      // Refetch plan data to update UI
-      refetchPlan();
+      // Sync subscription status from Stripe before showing success
+      const syncSubscription = async () => {
+        try {
+          const response = await fetch('/api/billing/sync-subscription', {
+            method: 'POST',
+            credentials: 'include',
+          });
+          
+          if (response.ok) {
+            console.log('Subscription synced successfully');
+          } else {
+            console.error('Failed to sync subscription');
+          }
+        } catch (error) {
+          console.error('Error syncing subscription:', error);
+        } finally {
+          // Always refetch plan data and show success toast
+          refetchPlan();
+          toast({
+            title: "Welcome to Pro!",
+            description: "Your subscription is now active. Enjoy unlimited access to all features.",
+          });
+        }
+      };
+      
+      syncSubscription();
       // Clean up URL
       window.history.replaceState({}, '', '/account');
     } else if (status === 'cancel') {
