@@ -6,7 +6,48 @@ The Camping Planner is a full-stack web application designed to help camping fam
 
 ## Recent Changes (November 2025)
 
-**Printables Page Redesign (Latest):**
+**UX Enhancement Suite (Latest):**
+Six major features implemented and E2E tested to improve user experience across recipes, groceries, trips, and printables:
+
+1. **Recipe Detail Ingredient Selection:**
+   - Added "Select All" button to recipe modal for quick ingredient selection
+   - "Add selected to grocery list" now redirects to grocery builder with pre-selected ingredients
+   - Uses sessionStorage for clean recipe-to-grocery handoff, cleared after use to prevent stale data
+
+2. **Grocery Builder Confirmation Step:**
+   - Two-step grocery flow: recipe selection → ingredient confirmation
+   - Individual ingredient checkboxes allow fine-grained control
+   - "Already Have It" toggle for each ingredient with strikethrough/dimmed styling
+   - Smart ingredient deduplication and amount aggregation across multiple recipes
+
+3. **Single Navbar Consolidation:**
+   - Removed duplicate headers across all pages
+   - Single persistent Navbar on all authenticated pages
+   - Smart active state highlighting for current route (including nested routes like /trips/:id)
+
+4. **Location Autocomplete for Trips:**
+   - Replaced plain text location input with Nominatim-powered autocomplete
+   - Auto-fills location display name, latitude, and longitude when user selects suggestion
+   - Coordinates automatically saved to database for weather forecast integration
+   - EditTripDialog displays read-only coordinates in styled box (bg-muted/50, border, monospace font)
+   - IIFE pattern used for TypeScript-safe null checking in coordinate display
+
+5. **"What to Pack" Teaser in Trip Detail:**
+   - New card appears after meals section with 6 essential camping items teaser
+   - "Unlock Full List" button with SubscribeButton for Stripe checkout
+   - Displays Pro membership benefits with pricing ($29.99/year with 7-day free trial)
+
+6. **Printables Pro Access Logic:**
+   - Conditional rendering based on user Pro membership status
+   - Free printables (2): Always show "Download Free" button for all users
+   - Pro printables (5): Show download for Pro members, locked message + trial button for free users
+   - Pro members see "Your membership includes all current printables" confirmation
+   - Non-Pro users see upgrade section with SubscribeButton
+
+**Comprehensive E2E Testing:**
+All 6 features validated via Playwright tests covering authentication, recipe workflows, grocery builder, navbar consolidation, trip location autocomplete with coordinate persistence, "What to Pack" teaser display, and printables Pro logic differentiation.
+
+**Printables Page Redesign:**
 - Complete redesign to support both free and Pro printables accessible to all users
 - Added `isAuthenticatedOptional` middleware allowing both logged-in and anonymous access
 - GET /api/printables/downloads returns all 7 printables (2 free, 5 Pro) for everyone
