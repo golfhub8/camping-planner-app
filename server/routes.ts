@@ -7,6 +7,14 @@ import { setupAuth, isAuthenticated, isAuthenticatedOptional } from "./replitAut
 import Stripe from "stripe";
 import { load as cheerioLoad } from "cheerio";
 
+// Free tier trip limit configuration
+// Can be overridden via environment variable
+// Defaults to 5 if not set or if parsing fails
+const FREE_TRIP_LIMIT = (() => {
+  const parsed = parseInt(process.env.FREE_TRIP_LIMIT || '5', 10);
+  return Number.isNaN(parsed) ? 5 : parsed;
+})();
+
 // Initialize Stripe client
 // Reference: blueprint:javascript_stripe
 let stripe: Stripe | null = null;
@@ -200,6 +208,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // GET /api/me
+  // Returns user profile with derived Pro status and trip count
+  // Protected route - requires authentication
+  app.get('/api/me', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Count user's trips
+      const trips = await storage.getAllTrips(userId);
+      const tripsCount = trips.length;
+
+      // Derive isPro from proMembershipEndDate
+      const now = new Date();
+      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+
+      res.json({
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isPro,
+        proMembershipEndDate: user.proMembershipEndDate,
+        tripsCount,
+        stripeCustomerId: user.stripeCustomerId,
+      });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ message: "Failed to fetch user profile" });
+    }
+  });
+
+  // GET /api/entitlements
+  // Returns user entitlements for trip creation and feature access
+  // Protected route - requires authentication
+  app.get('/api/entitlements', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Count user's trips
+      const trips = await storage.getAllTrips(userId);
+      const tripsCount = trips.length;
+
+      // Derive isPro from proMembershipEndDate
+      const now = new Date();
+      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+
+      // Pro users have unlimited trips, free users are limited to FREE_TRIP_LIMIT
+      const canCreateTrip = isPro || tripsCount < FREE_TRIP_LIMIT;
+      // Use null for unlimited trips instead of Infinity (JSON serialization safe)
+      const remainingTrips = isPro ? null : Math.max(0, FREE_TRIP_LIMIT - tripsCount);
+
+      res.json({
+        canCreateTrip,
+        remainingTrips, // null = unlimited, number = trips remaining
+        limit: isPro ? null : FREE_TRIP_LIMIT,
+        isPro,
+        tripsCount,
+      });
+    } catch (error) {
+      console.error("Error fetching entitlements:", error);
+      res.status(500).json({ message: "Failed to fetch entitlements" });
     }
   });
 
@@ -1203,9 +1284,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Optional geocoding: If location is provided but coordinates are not, and geocoding API key exists,
   // the server will attempt to geocode the location and save coordinates for weather forecasts
   // Protected route - requires authentication
+  // Free tier: Limited to FREE_TRIP_LIMIT trips (default 5)
   app.post("/api/trips", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      
+      // Check if user has reached the free tier trip limit
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Derive isPro from proMembershipEndDate
+      const now = new Date();
+      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+
+      // If not Pro, check trip limit
+      if (!isPro) {
+        const trips = await storage.getAllTrips(userId);
+        const tripsCount = trips.length;
+
+        if (tripsCount >= FREE_TRIP_LIMIT) {
+          return res.status(403).json({ 
+            code: "TRIP_LIMIT",
+            error: `You've reached the free limit of ${FREE_TRIP_LIMIT} trips. Upgrade to Pro for unlimited trips.`,
+            limit: FREE_TRIP_LIMIT,
+            currentCount: tripsCount
+          });
+        }
+      }
       
       // Validate the request body against our schema
       const validatedData = insertTripSchema.parse(req.body);
@@ -1749,6 +1856,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating checkout session:", error);
       return res.status(500).json({ error: "Could not create Stripe checkout session" });
+    }
+  });
+
+  // GET /api/billing/portal
+  // Create a Stripe Customer Portal session for managing subscription
+  // Allows users to view invoices, update payment methods, and cancel subscription
+  // Protected route - requires authentication
+  app.get("/api/billing/portal", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
+    }
+
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.stripeCustomerId) {
+        return res.status(400).json({ error: "No billing account found. Please subscribe first." });
+      }
+
+      // Build return URL dynamically
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const returnUrl = `${baseUrl}/account`;
+
+      // Create billing portal session
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: returnUrl,
+      });
+
+      return res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Error creating billing portal session:", error);
+      return res.status(500).json({ error: "Could not create billing portal session" });
     }
   });
 

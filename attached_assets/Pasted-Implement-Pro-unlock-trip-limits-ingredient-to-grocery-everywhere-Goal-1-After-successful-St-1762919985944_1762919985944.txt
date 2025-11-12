@@ -1,0 +1,116 @@
+Implement Pro unlock + trip limits + ingredient-to-grocery everywhere
+
+Goal:
+	1.	After successful Stripe checkout, immediately unlock Pro (printables + full packing list) and show it in the UI.
+	2.	Gate free tier to a configurable number of trips (use FREE_TRIP_LIMIT=5).
+	3.	Add a working Profile menu (status, trip count, manage billing, password reset).
+	4.	Let users select ingredients from any recipe (Recipe page and Trip Meals) and add only the needed items to Grocery; unchecked items go to “Already have it.”
+	5.	When multiple recipes share an item, aggregate quantities and show the total (e.g., “cheddar: 3 cups”).
+	6.	Fix Grocery page header duplication (keep a single global header).
+	7.	Make the “Unlock full list” (What to Pack) truly unlock for Pro users.
+	8.	Ensure Trip Meals expand to show real ingredients pulled from the saved recipe, with “Add selected to Grocery.”
+
+⸻
+
+0) Config & types
+	•	Add an env flag and default:
+	•	FREE_TRIP_LIMIT=5 (can be overridden later from Secrets)
+	•	Ensure user schema includes:
+	•	isPro: boolean
+	•	proSince: Date | null
+	•	tripsCount: number (optional; or compute via query when needed)
+
+⸻
+
+1) Stripe → Pro unlock (server + client)
+
+Server
+	•	In server/routes.ts (or wherever Stripe webhook is handled):
+	•	Ensure checkout.session.completed sets the user to Pro:
+	•	Look up user via session.client_reference_id or session.metadata.userId.
+	•	users.update({ isPro: true, proSince: new Date(), stripeCustomerId: session.customer }).
+	•	Add an endpoint GET /api/me that returns { email, isPro, proSince, tripsCount }.
+	•	Add an endpoint GET /api/entitlements that returns { canCreateTrip: boolean, remainingTrips: number, limit: number } for UX banners.
+	•	Add an endpoint GET /api/printables that returns the list of printables with isFree and requiresPro.
+
+Client
+	•	On landing back from Stripe success: in client/src/pages/Printables.tsx and client/src/components/SubscribeButton.tsx, after successful POST to /api/billing/create-checkout-session and redirect back, call /api/me to refresh state.
+	•	Show a toast: “Pro unlocked—enjoy your printables!”
+	•	Re-render the Printables grid to unlock the Pro download buttons if isPro.
+
+⸻
+
+2) Free tier gating (limit trip creation to 5 for non-Pro)
+
+Server
+	•	In POST /api/trips (trip creation route), check if !user.isPro and user.tripsCount >= FREE_TRIP_LIMIT → return 403 with { code: "TRIP_LIMIT" }.
+
+Client
+	•	In client/src/pages/Trips.tsx:
+	•	On load, fetch /api/entitlements.
+	•	If !canCreateTrip, disable the Create button and render an upsell banner:
+“You’ve reached the free limit of {limit} trips. Go Pro to create unlimited trips and unlock all printables.”
+	•	Keep the number (FREE_TRIP_LIMIT) editable from Secrets without code changes.
+
+⸻
+
+3) Profile menu & Account page
+
+UI
+	•	In client/src/components/Navbar.tsx:
+	•	Replace current non-working profile button with a dropdown:
+	•	My Account → /account
+	•	Manage Billing → opens Stripe billing portal (/api/billing/portal)
+	•	Plan: shows “Free”, “Trial”, or “Pro” (based on /api/me)
+	•	Trips planned: show count
+	•	Password / Sign out
+	•	Create client/src/pages/Account.tsx:
+	•	Shows email, plan status (Free/Pro), proSince, trips planned, a button “Open Billing Portal”, and “Reset password” (whatever your auth supports).
+
+Server
+	•	Add /api/billing/portal that creates Stripe Customer Portal session and returns url.
+
+⸻
+
+4) Ingredient selection → Grocery (Recipe page & Trip Meals)
+
+A. Recipe page modal
+	•	In client/src/components/RecipeDetail.tsx:
+	•	Ensure each ingredient has a checkbox and a “Select All.”
+	•	Primary action buttons:
+	•	“Add selected to Grocery”
+	•	“Mark others as Already Have”
+	•	When user confirms:
+	•	POST to /api/grocery/merge with normalized ingredient items (see Normalization below) and a alreadyHave array.
+
+B. Trip Meals list → show ingredients & add to grocery
+	•	In client/src/pages/TripDetail.tsx (or wherever the trip page is):
+	•	Each meal expands to show the same ingredient table UI used in RecipeDetail.
+	•	Add the same buttons: “Add selected to Grocery” and “Mark others as Already Have”.
+	•	Data source: for each trip meal, store either:
+	•	a reference to recipeId (internal) OR
+	•	the canonical scraped payload { title, ingredients: [{ name, qty, unit, note }] } saved when you added the meal to the trip.
+	•	If you currently only stored a URL/title, update trip save to persist a normalized ingredient array so Trip pages never need to re-scrape.
+
+C. Grocery list page UX
+	•	At the top: a banner switch “Show only needed” (keeps your current behavior).
+	•	Merge function must aggregate duplicates (see Normalization).
+
+⸻
+
+5) Quantity aggregation + normalization
+
+Create a small shared util (e.g., client/src/lib/units.ts + mirror on server if needed):
+	•	Normalize names: lowercase, trim, strip punctuation, map aliases:
+	•	e.g., “cheddar cheese” → “cheddar” (keep displayName as original)
+	•	Normalize units (best-effort): cup, tbsp, tsp, g, ml.
+	•	Aggregate same item+unit:
+	•	1 cup cheddar + 2 cups cheddar → 3 cups cheddar
+	•	When units differ and you cannot safely convert (e.g., 200 g + 1 cup):
+	•	keep both lines under one grouped item:
+	•	cheddar
+	•	needed: 1 cup (from X)
+	•	also: 200 g (from Y)
+	•	Render a “⚠︎ mixed units” pill so it’s obvious.
+
+Server endpoint /api/grocery/merge should accept:
