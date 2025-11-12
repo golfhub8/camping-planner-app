@@ -114,7 +114,8 @@ function Router() {
               <Navbar />
               <main className="flex-1">
                 <Switch>
-                  <Route path="/" component={Home} />
+                  <Route path="/" component={Trips} />
+                  <Route path="/recipes" component={Home} />
                   <Route path="/recipe/:id" component={RecipeDetail} />
                   <Route path="/search" component={SearchResults} />
                   <Route path="/grocery" component={GrocerySelection} />

@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, LogOut, User, FileText } from "lucide-react";
+import { Search, LogOut, User, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import SubscribeButton from "./SubscribeButton";
@@ -21,9 +21,9 @@ export default function Navbar() {
   const { user } = useAuth();
 
   const navLinks = [
-    { path: "/", label: "Recipes", matchExact: true },
-    { path: "/grocery", label: "Grocery", matchExact: false },
     { path: "/trips", label: "Trips", matchExact: false },
+    { path: "/recipes", label: "Recipes", matchExact: true },
+    { path: "/grocery", label: "Grocery", matchExact: false },
     { path: "/printables", label: "Printables", matchExact: false },
   ];
 
@@ -55,7 +55,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" data-testid="navbar">
       <div className="container mx-auto px-6 md:px-10">
         <div className="flex h-24 items-center justify-between gap-4">
-          <Link href="/" className="flex items-center hover-elevate rounded-lg px-2 py-1" data-testid="link-logo">
+          <Link href="/trips" className="flex items-center hover-elevate rounded-lg px-2 py-1" data-testid="link-logo">
             <img src={bannerImage} alt="The Camping Planner" className="h-16" />
           </Link>
 
@@ -103,13 +103,13 @@ export default function Navbar() {
                 <DropdownMenuItem asChild>
                   <Link href="/account" className="flex items-center cursor-pointer" data-testid="menu-item-account">
                     <User className="mr-2 h-4 w-4" />
-                    <span>Account</span>
+                    <span>My Account</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/printables" className="flex items-center cursor-pointer" data-testid="menu-item-printables">
-                    <FileText className="mr-2 h-4 w-4" />
-                    <span>Printables</span>
+                  <Link href="/account" className="flex items-center cursor-pointer" data-testid="menu-item-subscription">
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    <span>Manage Subscription</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
