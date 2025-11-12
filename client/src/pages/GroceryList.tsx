@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,16 +27,19 @@ const categoryConfig: Record<GroceryCategory, { Icon: LucideIcon; color: string 
 // Shows items grouped by category with checkboxes to mark items as "already have"
 export default function GroceryList() {
   const [location, setLocation] = useLocation();
+  const params = useParams<{ token?: string }>();
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
   const [showOnlyNeeded, setShowOnlyNeeded] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [listToken, setListToken] = useState<string | null>(params.token || null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Parse recipe IDs and external meal titles from URL query parameters
+  // Parse recipe IDs and external meal titles from URL query parameters (for backward compatibility)
   const searchParams = new URLSearchParams(window.location.search);
   const recipeIds = searchParams.getAll("recipeIds").map(id => parseInt(id));
   const externalMeals = searchParams.getAll("externalMeals");
@@ -59,61 +62,116 @@ export default function GroceryList() {
     },
   });
 
-  // Generate list on component mount
-  // Try to read confirmedGroceryData from sessionStorage first (preserves "already have" state)
+  // Load or save grocery list on component mount
   useEffect(() => {
-    const confirmedData = sessionStorage.getItem('confirmedGroceryData');
-    
-    if (confirmedData) {
-      // User came from GrocerySelection confirmation step with selected ingredients
-      try {
-        const { needed, pantry, externalMeals: extMeals } = JSON.parse(confirmedData);
-        
-        // Convert needed items to GroceryItems (unchecked - user needs these)
-        const neededItems: GroceryItem[] = (needed || []).map((ing: any) => ({
-          name: ing.name,
-          category: ing.category || "Pantry" as GroceryCategory,
-          checked: false,
-        }));
-        
-        // Convert pantry items to GroceryItems (checked - user already has these)
-        const pantryItems: GroceryItem[] = (pantry || []).map((ing: any) => ({
-          name: ing.name,
-          category: ing.category || "Pantry" as GroceryCategory,
-          checked: true,
-        }));
-        
-        // Add external meals as unchecked Pantry items
-        const externalItems: GroceryItem[] = (extMeals || []).map((title: string) => ({
-          name: title + " (see trip for recipe details)",
-          category: "Pantry" as const,
-          checked: false,
-        }));
-        
-        setGroceryItems([...neededItems, ...pantryItems, ...externalItems]);
-        
-        // Clear sessionStorage to prevent stale data on page refresh
-        sessionStorage.removeItem('confirmedGroceryData');
-      } catch (e) {
-        console.error('Failed to parse confirmedGroceryData:', e);
-        // Fall back to API fetch on parse error
-        if (recipeIds.length > 0) {
-          generateListMutation.mutate(recipeIds);
-        } else if (externalMeals.length > 0) {
-          const externalMealItems: GroceryItem[] = externalMeals.map(title => ({
+    async function loadOrSaveList() {
+      // CASE 1: Viewing a saved list by token
+      if (listToken) {
+        console.log(`[GroceryList] Loading saved list from token: ${listToken}`);
+        try {
+          const response = await fetch(`/api/grocery-lists/${listToken}`);
+          if (response.ok) {
+            const savedList = await response.json();
+            // Extract items from the saved list
+            const items = savedList.items as GroceryItem[];
+            setGroceryItems(items);
+            console.log(`[GroceryList] Loaded ${items.length} items from saved list`);
+            return;
+          } else {
+            console.error('[GroceryList] Failed to load saved list:', await response.text());
+            toast({
+              title: "Error loading list",
+              description: "The grocery list could not be found. It may have expired.",
+              variant: "destructive",
+            });
+            setLocation("/grocery");
+          }
+        } catch (error) {
+          console.error('[GroceryList] Error loading saved list:', error);
+        }
+        return;
+      }
+
+      // CASE 2: User came from GrocerySelection with confirmed data - SAVE TO DATABASE
+      const confirmedData = sessionStorage.getItem('confirmedGroceryData');
+      if (confirmedData && !isSaving) {
+        try {
+          setIsSaving(true);
+          const { needed, pantry, externalMeals: extMeals, tripId, tripName } = JSON.parse(confirmedData);
+          
+          // Convert to GroceryItems
+          const neededItems: GroceryItem[] = (needed || []).map((ing: any) => ({
+            name: ing.name,
+            category: ing.category || "Pantry" as GroceryCategory,
+            checked: false,
+          }));
+          
+          const pantryItems: GroceryItem[] = (pantry || []).map((ing: any) => ({
+            name: ing.name,
+            category: ing.category || "Pantry" as GroceryCategory,
+            checked: true,
+          }));
+          
+          const externalItems: GroceryItem[] = (extMeals || []).map((title: string) => ({
             name: title + " (see trip for recipe details)",
             category: "Pantry" as const,
             checked: false,
           }));
-          setGroceryItems(externalMealItems);
+          
+          const allItems = [...neededItems, ...pantryItems, ...externalItems];
+          
+          console.log(`[GroceryList] Saving ${allItems.length} items to database${tripId ? ` for trip ${tripName} (ID: ${tripId})` : ''}...`);
+          
+          // Save to database
+          const response = await apiRequest("POST", "/api/grocery-lists", {
+            items: allItems,
+            tripId: tripId || undefined,
+            tripName: tripName || undefined,
+          });
+          
+          const data = await response.json();
+          const token = data.token;
+          
+          console.log(`[GroceryList] Successfully saved list with token: ${token}`);
+          
+          // Clear sessionStorage
+          sessionStorage.removeItem('confirmedGroceryData');
+          
+          // Invalidate queries to refresh usage stats
+          queryClient.invalidateQueries({ queryKey: ["/api/account/usage"] });
+          
+          // Redirect to token-based URL
+          setLocation(`/grocery/list/${token}`);
+          
+        } catch (error: any) {
+          console.error('[GroceryList] Error saving list:', error);
+          setIsSaving(false);
+          
+          // Check if it's a paywall error
+          if (error.status === 402) {
+            const errorData = await error.response?.json();
+            toast({
+              title: "Upgrade Required",
+              description: errorData.message || "You've reached the free limit. Start a free trial to create unlimited lists.",
+              variant: "destructive",
+            });
+            setLocation("/subscribe");
+            return;
+          }
+          
+          toast({
+            title: "Failed to save list",
+            description: "Your list could not be saved. Please try again.",
+            variant: "destructive",
+          });
         }
+        return;
       }
-    } else if (recipeIds.length > 0 || externalMeals.length > 0) {
-      // No confirmation data - fall back to API fetch (legacy behavior or direct link)
+
+      // CASE 3: Legacy behavior - load from query params (backward compatibility)
       if (recipeIds.length > 0) {
         generateListMutation.mutate(recipeIds);
-      } else {
-        // Only external meals, no internal recipes
+      } else if (externalMeals.length > 0) {
         const externalMealItems: GroceryItem[] = externalMeals.map(title => ({
           name: title + " (see trip for recipe details)",
           category: "Pantry" as const,
@@ -122,7 +180,9 @@ export default function GroceryList() {
         setGroceryItems(externalMealItems);
       }
     }
-  }, []);
+
+    loadOrSaveList();
+  }, [listToken]);
 
   // Toggle item checked state
   function toggleItem(index: number) {

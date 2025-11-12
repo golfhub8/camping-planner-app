@@ -378,21 +378,23 @@ export default function GrocerySelection() {
     const needed = confirmedIngredients.filter(ing => ing.isNeeded);
     const pantry = confirmedIngredients.filter(ing => !ing.isNeeded);
     
+    // Get trip info if a trip was selected
+    const selectedTrip = selectedTripId ? trips.find(t => t.id.toString() === selectedTripId) : null;
+    
     // Store in sessionStorage for GroceryList page
     // Always store pantry items - they were marked as "already have" by the user
     const groceryData = {
       needed,
       pantry,  // Always include pantry items (needed for TripDetail extended payload)
       externalMeals: externalMealsTitles,
+      tripId: selectedTrip?.id,
+      tripName: selectedTrip?.name,
     };
     
     sessionStorage.setItem('confirmedGroceryData', JSON.stringify(groceryData));
     
-    // Navigate to grocery list page
-    const params = new URLSearchParams();
-    selectedRecipeIds.forEach(id => params.append("recipeIds", id.toString()));
-    externalMealsTitles.forEach(title => params.append("externalMeals", title));
-    setLocation(`/grocery/list?${params.toString()}`);
+    // Navigate to grocery list page (no query params needed - all data is in sessionStorage)
+    setLocation('/grocery/list');
   }
 
   function backToSelection() {

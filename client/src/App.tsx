@@ -119,6 +119,7 @@ function Router() {
                   <Route path="/recipe/:id" component={RecipeDetail} />
                   <Route path="/search" component={SearchResults} />
                   <Route path="/grocery" component={GrocerySelection} />
+                  <Route path="/grocery/list/:token" component={GroceryList} />
                   <Route path="/grocery/list" component={GroceryList} />
                   <Route path="/grocery/share" component={GroceryShare} />
                   <Route path="/grocery/my-list" component={MyGroceryList} />
