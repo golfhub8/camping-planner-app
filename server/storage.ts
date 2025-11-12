@@ -26,6 +26,12 @@ export interface IStorage {
   updateProMembershipEndDate(userId: string, endDate: Date | null): Promise<User>;
   updateSubscriptionStatus(userId: string, status: string | null): Promise<User>;
   
+  // Usage counter methods for free plan limits
+  incrementTripsCount(userId: string): Promise<User>;
+  decrementTripsCount(userId: string): Promise<User>;
+  incrementGroceryCount(userId: string): Promise<User>;
+  decrementGroceryCount(userId: string): Promise<User>;
+  
   // Recipe methods
   // Get all recipes for a user (returns newest first)
   getAllRecipes(userId: string): Promise<Recipe[]>;
@@ -152,6 +158,8 @@ export class MemStorage implements IStorage {
       stripeSubscriptionId: existingUser?.stripeSubscriptionId ?? null,
       subscriptionStatus: existingUser?.subscriptionStatus ?? null,
       selectedCampingBasics: existingUser?.selectedCampingBasics ?? [],
+      tripsCount: existingUser?.tripsCount ?? 0,
+      groceryCount: existingUser?.groceryCount ?? 0,
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date(),
     };
@@ -204,6 +212,51 @@ export class MemStorage implements IStorage {
     return user;
   }
 
+  // Usage counter methods for free plan limits
+  async incrementTripsCount(userId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.tripsCount += 1;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async decrementTripsCount(userId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.tripsCount = Math.max(0, user.tripsCount - 1);
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async incrementGroceryCount(userId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.groceryCount += 1;
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
+  async decrementGroceryCount(userId: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.groceryCount = Math.max(0, user.groceryCount - 1);
+    user.updatedAt = new Date();
+    this.users.set(userId, user);
+    return user;
+  }
+
   // Recipe methods
   async getAllRecipes(userId: string): Promise<Recipe[]> {
     // Return all recipes for this user, sorted by creation date (newest first)
@@ -225,6 +278,8 @@ export class MemStorage implements IStorage {
     // Create a new recipe with auto-generated ID, timestamp, and userId
     const recipe: Recipe = {
       ...insertRecipe,
+      imageUrl: insertRecipe.imageUrl ?? null,
+      sourceUrl: insertRecipe.sourceUrl ?? null,
       id: this.nextRecipeId++,
       userId,
       createdAt: new Date(),
@@ -774,6 +829,71 @@ export class DatabaseStorage implements IStorage {
       .update(users)
       .set({ 
         subscriptionStatus: status,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  // Usage counter methods for free plan limits
+  async incrementTripsCount(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        tripsCount: sql`${users.tripsCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async decrementTripsCount(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        tripsCount: sql`GREATEST(0, ${users.tripsCount} - 1)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async incrementGroceryCount(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        groceryCount: sql`${users.groceryCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return user;
+  }
+
+  async decrementGroceryCount(userId: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        groceryCount: sql`GREATEST(0, ${users.groceryCount} - 1)`,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))
