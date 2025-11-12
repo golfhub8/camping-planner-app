@@ -192,10 +192,22 @@ export default function GroceryList() {
 
   // Send grocery list via email using mailto link
   function sendViaEmail() {
-    if (!emailAddress || !emailAddress.includes('@')) {
+    // Validate email address using HTML5 email validation
+    const emailInput = document.getElementById('email-input') as HTMLInputElement;
+    if (!emailAddress || !emailInput?.checkValidity()) {
       toast({
         title: "Invalid email address",
         description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Guard against empty share URL
+    if (!shareUrl) {
+      toast({
+        title: "Share link not available",
+        description: "Please create a share link first.",
         variant: "destructive",
       });
       return;
@@ -206,14 +218,14 @@ export default function GroceryList() {
       `Hi!\n\nI'm sharing our grocery list for the upcoming camping trip. You can view it here:\n\n${shareUrl}\n\nThis list includes all the items we need. Check it out and let me know if I missed anything!\n\nHappy camping!\n- Sent from The Camping Planner`
     );
     
-    const mailtoLink = `mailto:${emailAddress}?subject=${subject}&body=${body}`;
+    const mailtoLink = `mailto:${emailAddress.trim()}?subject=${subject}&body=${body}`;
     
     // Open email client
     window.location.href = mailtoLink;
     
     toast({
       title: "Email client opened",
-      description: `Opening your email client to send to ${emailAddress}`,
+      description: `Opening your email client to send to ${emailAddress.trim()}`,
     });
     
     // Clear email input after sending
