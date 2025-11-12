@@ -12,6 +12,7 @@ import {
 import { Search, LogOut, User, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLogout } from "@/hooks/useLogout";
 import SubscribeButton from "./SubscribeButton";
 import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
@@ -19,6 +20,7 @@ export default function Navbar() {
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuth();
+  const { handleLogout } = useLogout();
 
   const navLinks = [
     { path: "/trips", label: "Trips", matchExact: false },
@@ -113,11 +115,9 @@ export default function Navbar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <a href="/api/auth/logout" className="flex items-center cursor-pointer" data-testid="menu-item-logout">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Logout</span>
-                  </a>
+                <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer" data-testid="menu-item-logout">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Logout</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

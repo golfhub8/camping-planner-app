@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLogout } from "@/hooks/useLogout";
 import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
 export default function Header() {
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuth();
+  const { handleLogout } = useLogout();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,13 +102,11 @@ export default function Header() {
             <Button
               variant="ghost"
               size="icon"
-              asChild
+              onClick={handleLogout}
               title="Log out"
               data-testid="button-logout"
             >
-              <a href="/api/logout">
-                <LogOut className="h-5 w-5" />
-              </a>
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
