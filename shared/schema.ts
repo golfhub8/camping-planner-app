@@ -505,3 +505,47 @@ export const addCampingBasicSchema = z.object({
 });
 
 export type AddCampingBasicRequest = z.infer<typeof addCampingBasicSchema>;
+
+// Trip Assistant schemas for AI-powered trip planning suggestions
+// Request schema for trip assistant endpoint
+export const tripAssistantRequestSchema = z.object({
+  tripId: z.number().optional(),
+  prompt: z.string().min(1, "Please describe what you're looking for"),
+  season: z.enum(["spring", "summer", "fall", "winter"]).optional(),
+  groupSize: z.number().min(1).optional(),
+});
+
+export type TripAssistantRequest = z.infer<typeof tripAssistantRequestSchema>;
+
+// Campground suggestion schema
+export const campgroundSuggestionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  location: z.string(),
+  distanceHours: z.number(),
+  highlights: z.array(z.string()),
+  recommendedSeasons: z.array(z.string()),
+});
+
+export type CampgroundSuggestion = z.infer<typeof campgroundSuggestionSchema>;
+
+// Meal plan suggestion schema
+export const mealPlanSuggestionSchema = z.object({
+  mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+  title: z.string(),
+  description: z.string(),
+  requiredGear: z.array(z.string()),
+  prepTime: z.string(),
+  ingredients: z.array(z.string()),
+});
+
+export type MealPlanSuggestion = z.infer<typeof mealPlanSuggestionSchema>;
+
+// Response schema for trip assistant endpoint
+export const tripAssistantResponseSchema = z.object({
+  campgrounds: z.array(campgroundSuggestionSchema),
+  mealPlan: z.array(mealPlanSuggestionSchema),
+  packingTips: z.array(z.string()),
+});
+
+export type TripAssistantResponse = z.infer<typeof tripAssistantResponseSchema>;

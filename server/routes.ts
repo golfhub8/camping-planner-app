@@ -2482,6 +2482,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/trip-assistant
+  // Get AI-powered trip planning suggestions (stubbed for now)
+  // Body: { tripId?: number, prompt: string, season?: string, groupSize?: number }
+  // Protected route - requires authentication
+  app.post("/api/trip-assistant", isAuthenticated, async (req: any, res) => {
+    try {
+      const { tripAssistantRequestSchema } = await import("@shared/schema");
+      
+      // Validate request
+      const data = tripAssistantRequestSchema.parse(req.body);
+      
+      // Extract keywords from prompt for basic keyword matching
+      const promptLower = data.prompt.toLowerCase();
+      const hasFamily = promptLower.includes("family") || promptLower.includes("kids") || promptLower.includes("children");
+      const hasMountain = promptLower.includes("mountain") || promptLower.includes("hiking");
+      const hasBeach = promptLower.includes("beach") || promptLower.includes("ocean") || promptLower.includes("coast");
+      const hasEasy = promptLower.includes("easy") || promptLower.includes("beginner");
+      
+      // Stubbed campground suggestions with keyword awareness
+      const campgrounds = hasBeach ? [
+        {
+          id: "coastal-haven-1",
+          name: "Coastal Haven State Park",
+          location: "Pacific Coast, Oregon",
+          distanceHours: 3.5,
+          highlights: ["Ocean views", "Beach access", "Tide pools", "Family-friendly"],
+          recommendedSeasons: ["Spring", "Summer", "Fall"],
+        },
+        {
+          id: "sunset-beach-2",
+          name: "Sunset Beach Campground",
+          location: "Northern California Coast",
+          distanceHours: 5,
+          highlights: ["Sandy beaches", "Dunes", "Fishing", "Wildlife viewing"],
+          recommendedSeasons: ["Summer", "Fall"],
+        },
+      ] : hasMountain ? [
+        {
+          id: "alpine-peaks-1",
+          name: "Alpine Peaks Wilderness",
+          location: "Rocky Mountains, Colorado",
+          distanceHours: 6,
+          highlights: ["Mountain trails", "Alpine lakes", "Wildlife", "Scenic views"],
+          recommendedSeasons: ["Summer", "Fall"],
+        },
+        {
+          id: "mountain-ridge-2",
+          name: "Mountain Ridge Campground",
+          location: "Sierra Nevada, California",
+          distanceHours: 4.5,
+          highlights: ["Hiking trails", "Rock climbing", "Forest scenery", "Stargazing"],
+          recommendedSeasons: ["Spring", "Summer", "Fall"],
+        },
+      ] : [
+        {
+          id: "riverside-retreat-1",
+          name: "Riverside Retreat",
+          location: "Cascade Range, Washington",
+          distanceHours: 2.5,
+          highlights: ["River access", "Fishing", "Easy trails", "Family sites"],
+          recommendedSeasons: ["Spring", "Summer", "Fall"],
+        },
+        {
+          id: "forest-grove-2",
+          name: "Forest Grove Campground",
+          location: "Olympic National Park, Washington",
+          distanceHours: 4,
+          highlights: ["Old growth forest", "Wildlife", "Scenic drives", "Quiet sites"],
+          recommendedSeasons: ["Summer", "Fall"],
+        },
+      ];
+      
+      // Stubbed meal suggestions with keyword awareness
+      const mealPlan = hasFamily && hasEasy ? [
+        {
+          mealType: "breakfast" as const,
+          title: "Campfire Pancakes",
+          description: "Easy pancakes cooked on a camp stove, perfect for kids",
+          requiredGear: ["Camp stove", "Griddle or pan", "Spatula"],
+          prepTime: "20 minutes",
+          ingredients: ["Pancake mix", "Water", "Butter", "Syrup", "Fresh berries"],
+        },
+        {
+          mealType: "lunch" as const,
+          title: "Walking Tacos",
+          description: "Fun, hands-on lunch that kids love - no cleanup needed",
+          requiredGear: ["Camp stove", "Pot"],
+          prepTime: "15 minutes",
+          ingredients: ["Small chip bags", "Ground beef", "Taco seasoning", "Cheese", "Lettuce", "Salsa"],
+        },
+        {
+          mealType: "dinner" as const,
+          title: "Foil Packet Dinners",
+          description: "Individual foil packets with protein and veggies - customizable for picky eaters",
+          requiredGear: ["Campfire or grill", "Heavy-duty foil"],
+          prepTime: "30 minutes",
+          ingredients: ["Chicken or beef", "Potatoes", "Carrots", "Onions", "Seasoning"],
+        },
+      ] : [
+        {
+          mealType: "breakfast" as const,
+          title: "Campfire Breakfast Burritos",
+          description: "Hearty scrambled eggs with veggies wrapped in tortillas",
+          requiredGear: ["Camp stove", "Large pan", "Spatula"],
+          prepTime: "25 minutes",
+          ingredients: ["Eggs", "Bell peppers", "Onions", "Cheese", "Tortillas", "Salsa"],
+        },
+        {
+          mealType: "lunch" as const,
+          title: "Trail Mix & Sandwiches",
+          description: "No-cook option for active days on the trail",
+          requiredGear: ["Cooler"],
+          prepTime: "10 minutes",
+          ingredients: ["Bread", "Deli meat", "Cheese", "Trail mix", "Fresh fruit"],
+        },
+        {
+          mealType: "dinner" as const,
+          title: "Campfire Chili",
+          description: "One-pot hearty chili perfect for cool evenings",
+          requiredGear: ["Dutch oven or large pot", "Campfire or stove"],
+          prepTime: "45 minutes",
+          ingredients: ["Ground beef", "Beans", "Tomatoes", "Onions", "Chili spices"],
+        },
+      ];
+      
+      // Stubbed packing tips with keyword awareness
+      const packingTips = hasFamily ? [
+        "Pack extra layers for kids - they get cold easier than adults",
+        "Bring activities like cards, books, or nature scavenger hunt lists",
+        "Don't forget sunscreen and bug spray - family sizes are more economical",
+        "Pack a first aid kit with kids' pain reliever and band-aids",
+        "Bring headlamps for everyone - makes evening bathroom trips safer",
+      ] : [
+        "Layer your clothing - temperature can vary 20-30 degrees from day to night",
+        "Pack a headlamp or flashlight with extra batteries",
+        "Bring a waterproof bag for electronics and important documents",
+        "Don't forget fire starters - matches, lighter, and tinder",
+        "Pack out what you pack in - bring trash bags for Leave No Trace camping",
+      ];
+      
+      return res.json({
+        campgrounds,
+        mealPlan,
+        packingTips,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Trip assistant error:", error);
+      return res.status(500).json({ error: "Failed to generate suggestions" });
+    }
+  });
+
   // GET /api/billing/status
   // Get Pro membership status for current user
   app.get("/api/billing/status", isAuthenticated, async (req: any, res) => {
