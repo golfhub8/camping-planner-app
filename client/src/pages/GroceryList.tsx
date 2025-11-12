@@ -363,10 +363,39 @@ export default function GroceryList() {
     ? groceryItems.filter(item => !item.checked)
     : groceryItems;
 
-  if (recipeIds.length === 0 && externalMeals.length === 0) {
+  // Show loading state when saving the list
+  if (isSaving) {
     return (
       <div className="min-h-screen bg-background">
-        
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground">Saving your grocery list...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show loading state when generating list from API
+  if (generateListMutation.isPending) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Show empty state when no items are loaded
+  if (groceryItems.length === 0) {
+    return (
+      <div className="min-h-screen bg-background">
         <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-4xl">
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-2">No Recipes Selected</h2>
@@ -376,19 +405,6 @@ export default function GroceryList() {
             <Button onClick={() => setLocation("/grocery")} data-testid="button-select-recipes">
               Select Recipes
             </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (generateListMutation.isPending) {
-    return (
-      <div className="min-h-screen bg-background">
-        
-        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
-          <div className="flex items-center justify-center min-h-[50vh]">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         </main>
       </div>
