@@ -1822,6 +1822,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // POST /api/grocery/from-recipe
+  // Add ingredients from a recipe to user's personal grocery list
+  app.post("/api/grocery/from-recipe", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { recipeId, recipeTitle, ingredients } = req.body;
+
+      if (!Array.isArray(ingredients) || ingredients.length === 0) {
+        return res.status(400).json({ message: "No ingredients provided" });
+      }
+
+      await storage.addIngredientsToPersonalList(userId, recipeId, recipeTitle, ingredients);
+      
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("Error adding ingredients to personal list:", err);
+      return res.status(500).json({ message: err.message || "Failed to add ingredients" });
+    }
+  });
+
+  // GET /api/grocery/my-list
+  // Get user's personal grocery list
+  app.get("/api/grocery/my-list", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const items = await storage.getPersonalGroceryList(userId);
+      
+      return res.json({ items });
+    } catch (err: any) {
+      console.error("Error getting personal grocery list:", err);
+      return res.status(500).json({ message: err.message || "Failed to get grocery list" });
+    }
+  });
+
+  // DELETE /api/grocery/my-list
+  // Clear user's personal grocery list
+  app.delete("/api/grocery/my-list", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      await storage.clearPersonalGroceryList(userId);
+      
+      return res.json({ ok: true });
+    } catch (err: any) {
+      console.error("Error clearing personal grocery list:", err);
+      return res.status(500).json({ message: err.message || "Failed to clear grocery list" });
+    }
+  });
+
+  // GET /api/geocode
+  // Geocoding proxy using Open-Meteo (no API key required)
+  app.get("/api/geocode", async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      if (!q) {
+        return res.status(400).json({ error: "Missing query" });
+      }
+
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`;
+      const geoRes = await fetch(url);
+      
+      if (!geoRes.ok) {
+        return res.status(500).json({ error: "Geocoding service unavailable" });
+      }
+
+      const data = await geoRes.json();
+      const results = (data.results || []).map((r: any) => ({
+        name: r.name,
+        country: r.country,
+        lat: r.latitude,
+        lon: r.longitude,
+      }));
+
+      return res.json({ results });
+    } catch (err) {
+      console.error("Geocoding error:", err);
+      return res.status(500).json({ error: "Failed to geocode" });
+    }
+  });
+
+  // GET /api/billing/status
+  // Get Pro membership status for current user
+  app.get("/api/billing/status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const isPro = user.proMembershipEndDate 
+        ? new Date(user.proMembershipEndDate) > new Date()
+        : false;
+
+      return res.json({
+        isPro,
+        email: user.email || null,
+        membershipEndDate: user.proMembershipEndDate || null,
+      });
+    } catch (err) {
+      console.error("Billing status error:", err);
+      return res.status(500).json({ error: "Failed to get billing status" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

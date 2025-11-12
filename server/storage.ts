@@ -93,6 +93,16 @@ export interface IStorage {
   
   // Remove a camping basic from user's selection
   removeCampingBasic(userId: string, basicId: string): Promise<string[]>;
+  
+  // Personal Grocery List methods
+  // Add ingredients from a recipe to user's personal grocery list (with merging)
+  addIngredientsToPersonalList(userId: string, recipeId: number, recipeTitle: string, ingredients: { name: string; amount?: string }[]): Promise<void>;
+  
+  // Get all items in user's personal grocery list
+  getPersonalGroceryList(userId: string): Promise<import("@shared/schema").PersonalGroceryItemDB[]>;
+  
+  // Clear all items from user's personal grocery list
+  clearPersonalGroceryList(userId: string): Promise<void>;
 }
 
 // In-memory storage implementation
@@ -604,6 +614,57 @@ export class MemStorage implements IStorage {
     this.users.set(userId, user);
     
     return user.selectedCampingBasics;
+  }
+
+  // Personal Grocery List methods
+  private personalGroceryItems: Map<string, any[]> = new Map();
+  private nextPersonalGroceryId: number = 1;
+
+  async addIngredientsToPersonalList(
+    userId: string,
+    recipeId: number,
+    recipeTitle: string,
+    ingredients: { name: string; amount?: string }[]
+  ): Promise<void> {
+    const userItems = this.personalGroceryItems.get(userId) || [];
+
+    for (const ing of ingredients) {
+      const key = ing.name.toLowerCase().trim();
+      const existingItem = userItems.find((item: any) => item.ingredientKey === key);
+
+      if (existingItem) {
+        // Merge: add amount, recipeId, and title if not already present
+        if (ing.amount && !existingItem.amounts.includes(ing.amount)) {
+          existingItem.amounts.push(ing.amount);
+        }
+        if (!existingItem.recipeIds.includes(recipeId)) {
+          existingItem.recipeIds.push(recipeId);
+          existingItem.recipeTitles.push(recipeTitle);
+        }
+      } else {
+        // New item
+        userItems.push({
+          id: this.nextPersonalGroceryId++,
+          userId,
+          ingredientKey: key,
+          displayName: ing.name,
+          amounts: ing.amount ? [ing.amount] : [],
+          recipeIds: [recipeId],
+          recipeTitles: [recipeTitle],
+          createdAt: new Date(),
+        });
+      }
+    }
+
+    this.personalGroceryItems.set(userId, userItems);
+  }
+
+  async getPersonalGroceryList(userId: string): Promise<any[]> {
+    return this.personalGroceryItems.get(userId) || [];
+  }
+
+  async clearPersonalGroceryList(userId: string): Promise<void> {
+    this.personalGroceryItems.delete(userId);
   }
 }
 
@@ -1180,6 +1241,60 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId));
     
     return updatedBasics;
+  }
+
+  // Personal Grocery List methods
+  async addIngredientsToPersonalList(
+    userId: string,
+    recipeId: number,
+    recipeTitle: string,
+    ingredients: { name: string; amount?: string }[]
+  ): Promise<void> {
+    const { personalGroceryItems } = await import("@shared/schema");
+    
+    for (const ing of ingredients) {
+      const key = ing.name.toLowerCase().trim();
+      
+      // Use upsert with onConflict to handle merging safely
+      // This relies on the unique index on (userId, ingredientKey)
+      await db
+        .insert(personalGroceryItems)
+        .values({
+          userId,
+          ingredientKey: key,
+          displayName: ing.name,
+          amounts: ing.amount ? [ing.amount] : [],
+          recipeIds: [recipeId],
+          recipeTitles: [recipeTitle],
+        })
+        .onConflictDoUpdate({
+          target: [personalGroceryItems.userId, personalGroceryItems.ingredientKey],
+          set: {
+            amounts: sql`${personalGroceryItems.amounts} || ARRAY[${ing.amount || ''}]::text[]`,
+            recipeIds: sql`${personalGroceryItems.recipeIds} || ARRAY[${recipeId}]::integer[]`,
+            recipeTitles: sql`${personalGroceryItems.recipeTitles} || ARRAY[${recipeTitle}]::text[]`,
+          },
+        });
+    }
+  }
+
+  async getPersonalGroceryList(userId: string): Promise<any[]> {
+    const { personalGroceryItems } = await import("@shared/schema");
+    
+    const items = await db
+      .select()
+      .from(personalGroceryItems)
+      .where(eq(personalGroceryItems.userId, userId));
+    
+    return items;
+  }
+
+  async clearPersonalGroceryList(userId: string): Promise<void> {
+    const { personalGroceryItems } = await import("@shared/schema");
+    
+    await db
+      .delete(personalGroceryItems)
+      .where(eq(personalGroceryItems.userId, userId));
   }
 }
 

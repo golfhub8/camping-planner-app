@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, numeric, boolean, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, numeric, boolean, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -98,6 +98,50 @@ export const groceryItemSchema = z.object({
 });
 
 export type GroceryItem = z.infer<typeof groceryItemSchema>;
+
+// Personal grocery item (for "My Grocery List" feature)
+export const personalGroceryItemSchema = z.object({
+  name: z.string(),
+  amount: z.string().optional(),
+  recipeIds: z.array(z.number()).default([]),
+  recipeTitles: z.array(z.string()).default([]),
+});
+
+export type PersonalGroceryItem = z.infer<typeof personalGroceryItemSchema>;
+
+// Personal Grocery Items table
+// Stores user's personal grocery list items with recipe tracking and merging
+export const personalGroceryItems = pgTable("personal_grocery_items", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  
+  // User who owns this grocery item
+  userId: varchar("user_id").notNull().references(() => users.id),
+  
+  // Normalized ingredient key for merging (lowercase, trimmed)
+  ingredientKey: text("ingredient_key").notNull(),
+  
+  // Display name (original casing)
+  displayName: text("display_name").notNull(),
+  
+  // Array of amounts from different recipes
+  amounts: text("amounts").array().notNull().default(sql`'{}'::text[]`),
+  
+  // Array of recipe IDs that use this ingredient
+  recipeIds: integer("recipe_ids").array().notNull().default(sql`'{}'::integer[]`),
+  
+  // Array of recipe titles for display
+  recipeTitles: text("recipe_titles").array().notNull().default(sql`'{}'::text[]`),
+  
+  // When the item was added
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  // Composite unique index to ensure one row per user-ingredient combination
+  uniqueIndex("personal_grocery_items_user_ingredient_idx").on(table.userId, table.ingredientKey),
+]);
+
+// TypeScript types for personal grocery items
+export type PersonalGroceryItemDB = typeof personalGroceryItems.$inferSelect;
+export type InsertPersonalGroceryItem = typeof personalGroceryItems.$inferInsert;
 
 // Request to generate grocery list from selected recipes
 export const generateGroceryListSchema = z.object({
@@ -202,16 +246,18 @@ export const updateTripSchema = z.object({
   lat: z.preprocess(
     (val) => {
       if (val === "" || val === null || val === undefined) return null;
-      const num = typeof val === "string" ? parseFloat(val) : val;
-      return isNaN(num) ? null : num;
+      const raw = typeof val === "string" ? parseFloat(val) : val;
+      if (typeof raw !== "number" || Number.isNaN(raw)) return null;
+      return raw;
     },
     z.union([z.number().min(-90).max(90), z.null()]).optional()
   ),
   lng: z.preprocess(
     (val) => {
       if (val === "" || val === null || val === undefined) return null;
-      const num = typeof val === "string" ? parseFloat(val) : val;
-      return isNaN(num) ? null : num;
+      const raw = typeof val === "string" ? parseFloat(val) : val;
+      if (typeof raw !== "number" || Number.isNaN(raw)) return null;
+      return raw;
     },
     z.union([z.number().min(-180).max(180), z.null()]).optional()
   ),

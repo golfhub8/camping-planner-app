@@ -1,18 +1,22 @@
-import { Link, useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { Link, useParams, useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Calendar, Printer, ChefHat } from "lucide-react";
+import { ArrowLeft, Calendar, Printer, ChefHat, ShoppingCart } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import Header from "@/components/Header";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { Recipe } from "@shared/schema";
 
 export default function RecipeDetail() {
   const params = useParams();
   const recipeId = parseInt(params.id || "1");
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
   
   // Fetch the specific recipe from the API
   const { data: recipe, isLoading } = useQuery<Recipe>({
@@ -41,6 +45,50 @@ export default function RecipeDetail() {
   const handlePrint = () => {
     window.print();
   };
+
+  // Send unchecked ingredients to grocery list
+  const sendToGroceryMutation = useMutation({
+    mutationFn: async () => {
+      if (!recipe) return;
+      
+      // Get only unchecked ingredients (the ones user still needs)
+      const neededIngredients = recipe.ingredients
+        .filter((_, idx) => !checkedIngredients.has(idx))
+        .map(ing => ({ name: ing }));
+      
+      if (neededIngredients.length === 0) {
+        throw new Error("No ingredients selected. Uncheck the ingredients you need to add to your grocery list.");
+      }
+
+      const response = await apiRequest("POST", "/api/grocery/from-recipe", {
+        recipeId: recipe.id,
+        recipeTitle: recipe.title,
+        ingredients: neededIngredients,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to add to grocery list");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Added to Grocery List",
+        description: "Ingredients have been added to your grocery list",
+      });
+      // Navigate to grocery list
+      setLocation("/grocery/my-list");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -113,8 +161,11 @@ export default function RecipeDetail() {
                   <ChefHat className="h-5 w-5 text-primary" />
                   Ingredients
                 </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Check off what you already have
+                </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <ul className="space-y-3">
                   {recipe.ingredients.map((ingredient, idx) => (
                     <li key={idx} className="flex items-start gap-3" data-testid={`ingredient-${idx}`}>
@@ -136,6 +187,15 @@ export default function RecipeDetail() {
                     </li>
                   ))}
                 </ul>
+                <Button
+                  onClick={() => sendToGroceryMutation.mutate()}
+                  disabled={sendToGroceryMutation.isPending}
+                  className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"
+                  data-testid="button-send-to-grocery"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  {sendToGroceryMutation.isPending ? "Adding..." : "Send to Grocery List"}
+                </Button>
               </CardContent>
             </Card>
 
