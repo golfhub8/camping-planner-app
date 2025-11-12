@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2Icon } from "lucide-react";
-import Header from "@/components/Header";
 
 // Main Pro Membership signup page
 export default function Subscribe() {
@@ -79,7 +78,7 @@ export default function Subscribe() {
   if (isLoadingUser) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <div className="container mx-auto px-6 md:px-10 py-12 max-w-2xl">
           <Card>
             <CardHeader>
@@ -101,7 +100,7 @@ export default function Subscribe() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      
       
       <div className="container mx-auto px-6 md:px-10 py-12 max-w-2xl">
         <Card>

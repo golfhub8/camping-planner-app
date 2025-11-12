@@ -9,7 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent, Copy, Check } from "lucide-react";
-import Header from "@/components/Header";
 import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { CAMPING_BASICS, type GroceryItem, type GroceryCategory } from "@shared/schema";
@@ -216,7 +215,7 @@ export default function GroceryList() {
   if (recipeIds.length === 0 && externalMeals.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-2">No Recipes Selected</h2>
@@ -235,7 +234,7 @@ export default function GroceryList() {
   if (generateListMutation.isPending) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <main className="container mx-auto px-6 md:px-10 py-12">
           <div className="flex items-center justify-center min-h-[50vh]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -249,7 +248,7 @@ export default function GroceryList() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      
       <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
       {/* Header Section */}
       <div className="mb-8">

@@ -5,7 +5,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileTextIcon, GamepadIcon, BookOpenIcon, DownloadIcon, LockIcon, CheckCircle2Icon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import SubscribeButton from "../components/SubscribeButton";
-import Header from "@/components/Header";
 
 interface Printable {
   id: string;
@@ -33,7 +32,7 @@ export default function Printables() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <main className="container mx-auto px-6 md:px-10 py-12">
           <div className="flex items-center justify-center py-24">
             <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -45,7 +44,7 @@ export default function Printables() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      
       
       <main className="container mx-auto px-6 md:px-10 py-12 max-w-6xl">
         {/* Page Header */}

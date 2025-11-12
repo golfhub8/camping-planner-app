@@ -2,7 +2,6 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import RecipeCard from "@/components/RecipeCard";
 import EmptyState from "@/components/EmptyState";
-import Header from "@/components/Header";
 import { Search } from "lucide-react";
 import type { Recipe } from "@shared/schema";
 
@@ -30,7 +29,7 @@ export default function SearchResults() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <main className="container mx-auto px-6 md:px-10 py-12">
           <div className="text-center text-muted-foreground">Searching...</div>
         </main>
@@ -40,7 +39,7 @@ export default function SearchResults() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      
       
       <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
         <div className="space-y-3">

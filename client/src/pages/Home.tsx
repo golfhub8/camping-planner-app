@@ -4,7 +4,6 @@ import { queryClient } from "@/lib/queryClient";
 import RecipeCard from "@/components/RecipeCard";
 import RecipeForm from "@/components/RecipeForm";
 import EmptyState from "@/components/EmptyState";
-import Header from "@/components/Header";
 import ExternalRecipeViewer from "@/components/ExternalRecipeViewer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -143,7 +142,7 @@ export default function Home() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <main className="container mx-auto px-6 md:px-10 py-12">
           <div className="text-center text-muted-foreground">Loading recipes...</div>
         </main>
@@ -153,7 +152,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      
       
       <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
         <div className="text-center space-y-3">

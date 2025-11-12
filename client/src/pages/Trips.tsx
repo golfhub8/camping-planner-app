@@ -4,7 +4,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTripSchema, type Trip, type InsertTrip } from "@shared/schema";
-import Header from "@/components/Header";
 import EditTripDialog from "@/components/EditTripDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +60,7 @@ export default function Trips() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+        
         <main className="container mx-auto px-6 md:px-10 py-12">
           <div className="text-center text-muted-foreground">Loading trips...</div>
         </main>
@@ -71,7 +70,7 @@ export default function Trips() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      
       
       <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
         {/* Page Header */}
