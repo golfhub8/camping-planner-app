@@ -30,6 +30,22 @@ if (process.env.STRIPE_SECRET_KEY) {
   console.error('[Stripe] STRIPE_SECRET_KEY not found in environment');
 }
 
+// In-memory cache for processed webhook event IDs (idempotency)
+// This prevents duplicate processing of the same webhook event
+// Store event IDs for 24 hours to handle Stripe retry attempts
+const processedWebhookEvents = new Map<string, number>();
+
+// Clean up old processed event IDs every hour
+setInterval(() => {
+  const now = Date.now();
+  const oneDay = 24 * 60 * 60 * 1000;
+  processedWebhookEvents.forEach((timestamp, eventId) => {
+    if (now - timestamp > oneDay) {
+      processedWebhookEvents.delete(eventId);
+    }
+  });
+}, 60 * 60 * 1000);
+
 // Register Stripe webhook route BEFORE global JSON middleware
 // This is critical for proper signature verification
 export function registerWebhookRoute(app: Express): void {
@@ -69,9 +85,15 @@ export function registerWebhookRoute(app: Express): void {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
+    // Check if we've already processed this event (idempotency)
+    if (processedWebhookEvents.has(event.id)) {
+      console.log(`[Webhook] Event ${event.id} already processed, skipping duplicate`);
+      return res.status(200).send("Duplicate event - already processed");
+    }
+
     try {
       // Log the event type for debugging
-      console.log(`[Webhook] Received event: ${event.type}`);
+      console.log(`[Webhook] Received event: ${event.type} (${event.id})`);
       
       // Handle the event
       switch (event.type) {
@@ -234,6 +256,9 @@ export function registerWebhookRoute(app: Express): void {
           console.log(`Unhandled event type: ${event.type}`);
       }
 
+      // Mark event as successfully processed (idempotency)
+      processedWebhookEvents.set(event.id, Date.now());
+      
       res.json({ received: true });
     } catch (error) {
       console.error("Error processing webhook:", error);
@@ -2011,30 +2036,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stripe Payment Routes
   // Reference: blueprint:javascript_stripe
 
+  // GET /api/billing/config
+  // Check if Stripe is properly configured
+  // Public route - no authentication required
+  app.get("/api/billing/config", (req, res) => {
+    const configured = !!(stripe && process.env.STRIPE_PRICE_ID);
+    res.json({ configured });
+  });
+
   // POST /api/billing/create-checkout-session
   // Create a Stripe Checkout session for Pro Membership using Dashboard Price
   // Uses STRIPE_PRICE_ID environment variable (price_1SRnQBIEQH0jZmIb2XwrLR5v)
   // Protected route - requires authentication
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
+      console.error("[Checkout] Stripe not configured - missing STRIPE_SECRET_KEY");
       return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
     }
 
     if (!process.env.STRIPE_PRICE_ID) {
-      console.error("Missing STRIPE_PRICE_ID environment variable");
+      console.error("[Checkout] Missing STRIPE_PRICE_ID environment variable");
       return res.status(500).json({ error: "Stripe price not configured" });
     }
 
     try {
       const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        console.error(`[Checkout] User not found: ${userId}`);
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log(`[Checkout] Creating checkout session for user: ${userId} (${user.email})`);
 
       // Build success and cancel URLs dynamically
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${baseUrl}/printables?upgrade=success`;
-      const cancelUrl = `${baseUrl}/printables?upgrade=cancelled`;
+      const successUrl = `${baseUrl}/printables?payment=success`;
+      const cancelUrl = `${baseUrl}/printables?canceled=true`;
 
-      // Create checkout session using Dashboard Price ID
-      const session = await stripe.checkout.sessions.create({
+      // Prepare checkout session parameters
+      let sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "subscription",
         line_items: [
           {
@@ -2045,15 +2087,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         client_reference_id: userId,
         metadata: { 
           app_user_id: userId,
+          purchase_type: 'pro_membership_annual',
         },
         success_url: successUrl,
         cancel_url: cancelUrl,
-      });
+      };
 
+      // If user already has a Stripe customer ID, reuse it
+      // Otherwise, create a new customer with metadata
+      if (user.stripeCustomerId) {
+        console.log(`[Checkout] Reusing existing customer: ${user.stripeCustomerId}`);
+        sessionParams.customer = user.stripeCustomerId;
+      } else {
+        console.log(`[Checkout] Creating new customer for email: ${user.email}`);
+        
+        // Create new customer first with metadata
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: {
+            userId: userId,
+            app_user_id: userId,
+          },
+        });
+        
+        console.log(`[Checkout] Created customer: ${customer.id}`);
+        
+        // Save customer ID to database
+        await storage.updateStripeCustomerId(userId, customer.id);
+        
+        // Use the new customer in the session
+        sessionParams.customer = customer.id;
+      }
+
+      // Create checkout session using Dashboard Price ID
+      const session = await stripe.checkout.sessions.create(sessionParams);
+
+      console.log(`[Checkout] Created session: ${session.id}, URL: ${session.url}`);
       return res.json({ url: session.url });
     } catch (error: any) {
-      console.error("Error creating checkout session:", error);
-      return res.status(500).json({ error: "Could not create Stripe checkout session" });
+      console.error("[Checkout] Error creating checkout session:", error);
+      const errorMessage = error?.message || "Could not create Stripe checkout session";
+      return res.status(500).json({ error: errorMessage });
     }
   });
 

@@ -26,8 +26,15 @@ export default function Printables() {
     queryKey: ['/api/printables/downloads'],
   });
 
+  // Check if Stripe is configured
+  const { data: configData } = useQuery<{ configured: boolean }>({
+    queryKey: ['/api/billing/config'],
+    retry: false,
+  });
+
   const printables = data?.printables || [];
   const isPro = data?.user?.isPro || false;
+  const isStripeConfigured = configData?.configured !== false;
 
   if (isLoading) {
     return (
@@ -47,6 +54,15 @@ export default function Printables() {
       
       
       <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-6xl">
+        {/* Configuration Warning Banner */}
+        {!isStripeConfigured && (
+          <Alert className="mb-6" data-testid="alert-stripe-not-configured">
+            <AlertDescription>
+              Payments not configured. Stripe checkout is unavailable until STRIPE_SECRET_KEY and STRIPE_PRICE_ID are set.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Page Header */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4" data-testid="text-page-title">

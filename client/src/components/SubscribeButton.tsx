@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { ExternalLinkIcon } from "lucide-react";
 
 interface SubscribeButtonProps {
   label?: string;
@@ -12,6 +13,7 @@ export default function SubscribeButton({
   className = "",
 }: SubscribeButtonProps) {
   const [loading, setLoading] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleClick = async () => {
@@ -43,7 +45,22 @@ export default function SubscribeButton({
       
       if (data?.url && typeof data.url === "string" && data.url.trim().length > 0) {
         console.log("[SubscribeButton] Redirecting to:", data.url);
+        
+        // Save URL for fallback link
+        setCheckoutUrl(data.url);
+        
+        // Show toast while redirecting
+        toast({
+          title: "Redirecting to checkout...",
+          description: "You'll be redirected to Stripe in a moment.",
+        });
+        
         // Redirect to Stripe checkout
+        // Set a timeout to reset loading state if redirect is blocked/fails
+        setTimeout(() => {
+          setLoading(false);
+        }, 3000);
+        
         window.location.href = data.url;
       } else {
         console.error("[SubscribeButton] Invalid or missing URL in response:", data);
@@ -65,16 +82,34 @@ export default function SubscribeButton({
     }
   };
 
+  const handleOpenInNewTab = () => {
+    if (checkoutUrl) {
+      window.open(checkoutUrl, "_blank");
+    }
+  };
+
   return (
-    <Button
-      onClick={handleClick}
-      disabled={loading}
-      variant="outline"
-      size="sm"
-      className={className}
-      data-testid="button-subscribe-nav"
-    >
-      {loading ? "Redirecting..." : label}
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        onClick={handleClick}
+        disabled={loading}
+        variant="outline"
+        size="sm"
+        className={className}
+        data-testid="button-subscribe-nav"
+      >
+        {loading ? "Redirecting..." : label}
+      </Button>
+      {checkoutUrl && (
+        <button
+          onClick={handleOpenInNewTab}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          data-testid="link-open-checkout-new-tab"
+        >
+          <ExternalLinkIcon className="w-3 h-3" />
+          Open in new tab
+        </button>
+      )}
+    </div>
   );
 }
