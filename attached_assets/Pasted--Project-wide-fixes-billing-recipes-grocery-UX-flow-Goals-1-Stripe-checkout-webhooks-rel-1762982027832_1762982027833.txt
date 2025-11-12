@@ -1,0 +1,89 @@
+🔧 Project-wide fixes: billing, recipes → grocery, UX flow
+
+Goals
+	1.	Stripe checkout + webhooks reliably upgrade/downgrade the user’s plan (Free ↔ Pro), immediately unlocking printables and removing trip/grocery caps.
+	2.	Saving external recipes pre-fills ingredients and full instructions (no “grey code box”), and the same checkbox UI used in Trips → Meals appears in recipe modals.
+	3.	“Add to Trip” works even when there are no trips yet (create trip inline, then add).
+	4.	“Add Selected to Grocery” collects into a single, visible grocery list that can be reviewed, exported, or emailed.
+	5.	Clean routing: Profile → Account, nav order = Trips, Recipes, Grocery, Printables.
+	6.	Add an “AI Trip Assistant (beta)” card at the top of Trips (stub only—no model calls yet).
+
+⸻
+
+1) Stripe + Plan state: fix checkout, webhook, session refresh
+
+Backend
+	•	Create/verify these env vars are present:
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PRICE_YEARLY=price_... (the yearly Pro price)
+STRIPE_WEBHOOK_SECRET=whsec_... (for the dev endpoint you showed)
+APP_BASE_URL=https://<your-dev-host>.replit.dev (private dev URL)
+	•	Implement /api/billing/create-checkout-session:
+	•	Input: none (use logged-in user).
+	•	Create a subscription checkout session with mode: 'subscription', line_items: [{ price: STRIPE_PRICE_YEARLY, quantity: 1 }].
+	•	Include customer if the user has a saved stripeCustomerId; otherwise create a customer with the user’s email and save stripeCustomerId on success.
+	•	Set success_url = ${APP_BASE_URL}/account?status=success and cancel_url = ${APP_BASE_URL}/account?status=cancel.
+	•	Return { url }.
+	•	Implement /api/stripe/webhook:
+	•	Verify signature with STRIPE_WEBHOOK_SECRET.
+	•	Handle:
+	•	checkout.session.completed: look up the user by customer or client_reference_id, save stripeSubscriptionId, set plan: 'pro', plan_expires_at: null.
+	•	customer.subscription.updated: if status becomes active → ensure plan: 'pro'; if past_due or unpaid → keep pro but consider banner; if canceled/incomplete_expired → set plan: 'free'.
+	•	customer.subscription.deleted: set plan: 'free', null out subscription id.
+	•	Return 200.
+	•	Add /api/account/plan:
+	•	Returns { plan, tripLimit, groceryLimit, stripePortalUrl }.
+	•	Trip/Grocery limits: Free: {tripLimit: 5, groceryLimit: 5}, Pro: unlimited.
+	•	Add /api/billing/portal endpoint to create a Stripe customer portal session and return url.
+
+Frontend
+	•	In the account page, on load, call /api/account/plan and show:
+	•	Badge: “Free” or “Pro”.
+	•	Benefits list:
+	•	Free: “Up to 5 trips”, “Up to 5 grocery lists”, “Free printables”.
+	•	Pro: “Unlimited trips”, “Unlimited grocery lists”, “All printables & games”, “Full packing checklists”, “Priority updates”.
+	•	“Start 7-Day Free Trial” button → POST /api/billing/create-checkout-session, then window.location.href = data.url. Handle errors with a toast (“Network error”).
+	•	After returning from Stripe (/account?status=success), call /api/account/plan again and update UI (unlock printables immediately).
+	•	“Manage Subscription” → POST /api/billing/portal, then redirect to returned url.
+
+QA
+	•	From dev app, click “Start 7-Day Free Trial”, complete checkout with test card 4242 4242 4242 4242.
+	•	In Dashboard → Webhooks, ensure events show “200 OK” (no “Failed to connect”).
+	•	Back on /account, badge shows Pro, printables download buttons are enabled.
+
+⸻
+
+2) Fix Account routing + nav order
+	•	The profile avatar menu → “My Account” must link to /account (not /printables).
+	•	Reorder top nav: Trips, Recipes, Grocery, Printables.
+	•	Increase header height and remove the duplicate secondary header on Grocery.
+
+⸻
+
+3) Save Recipe UX + robust parser
+
+Problem: Ingredients/instructions sometimes blank or partial.
+
+Solution
+	•	Create a server route /api/recipes/parse?url= that:
+	•	Fetches the page (server-side).
+	•	Tries to read JSON-LD @type: "Recipe" first (most reliable).
+	•	Fallback: scrape common selectors:
+	•	Ingredients: ul[class*="ingredient"] li, li[class*="ingredient"].
+	•	Instructions: ol[class*="instruction"] li, li[class*="step"], or paragraphs under .instructions.
+	•	Return { title, ingredients: string[] , instructions: string[] }.
+	•	Update the “Save Recipe” modal:
+	•	On open, call /api/recipes/parse with the card’s sourceUrl.
+	•	Prefill plain text inputs (not code blocks) for Title, Ingredients (1 per line), Instructions (blank line between steps).
+	•	Show counts (“12 ingredients”, “6 steps”) and a small “Re-parse” button.
+	•	Allow user edits; saving creates a “My Recipe” with stored arrays.
+
+⸻
+
+4) Unify ingredient selection UI & make it feed Grocery
+	•	Extract the checkbox list you liked in Trips → Meals into a reusable <IngredientSelector />. Props:
+	•	ingredients: string[], onAddToGrocery(selected: string[]), onMarkAlreadyHave(selected: string[]).
+	•	Use <IngredientSelector /> both inside the recipe modal and in trips → meals.
+
+Grocery “inbox”
+	•	Create a client store grocerySelections in localStorage, keyed by user id:
