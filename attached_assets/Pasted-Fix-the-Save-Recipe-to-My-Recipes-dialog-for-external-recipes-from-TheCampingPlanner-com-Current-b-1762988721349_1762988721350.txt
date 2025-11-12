@@ -1,0 +1,42 @@
+Fix the Save Recipe to My Recipes dialog for external recipes from TheCampingPlanner.com.
+
+Current behaviour
+	•	From the Recipes page, under the “From TheCampingPlanner.com” section, click Save Recipe on any external recipe (e.g., “Campfire Truffle Mac with Bacon”).
+	•	A dialog appears:
+	•	It says “Recipe parsed successfully”, but shows 0 ingredients and 0 steps.
+	•	The Ingredients and Instructions textareas look greyed out / monospaced, as if they’re read-only or not the same style as other inputs.
+	•	Only the first part of the instructions appears, not the full recipe instructions from the source page.
+
+Goal
+	•	Make the modal:
+	•	Pre-fill all ingredients and all instructions from the source URL.
+	•	Show them as normal editable textareas (not code blocks or disabled fields).
+	•	Correctly update the “X ingredients / Y steps” badges after parsing.
+	•	These saved recipes must then behave exactly like user-created recipes in:
+	•	My Recipes,
+	•	the Meals for this Trip section,
+	•	and the Grocery List builder.
+
+Implementation details
+	•	Find the component that renders this dialog (something like SaveExternalRecipeModal or similar).
+	•	Fix the form fields:
+	•	Ensure the textarea components for ingredients and instructions are using the standard input styling and are editable (disabled={false}, readOnly={false}).
+	•	Confirm their value is bound to component state and that onChange updates that state.
+	•	Fix the parsing logic for TheCampingPlanner.com:
+	•	Locate the function that fetches and parses external recipe content (e.g., by scraping HTML or reading JSON-LD Recipe schema).
+	•	For URLs under thecampingplanner.com, add explicit selectors that match how those pages are structured:
+	•	Ingredients: likely a list under an “Ingredients” heading.
+	•	Instructions: step list under “Instructions” or “Steps”.
+	•	Guarantee all steps are concatenated with a blank line between steps, so they will map to separate steps in the app.
+	•	After parsing, populate the ingredients and instructions state arrays and update the “X ingredients / Y steps” counters.
+	•	If parsing fails, show a clear error state:
+	•	E.g. “We couldn’t auto-import this recipe. You can paste ingredients and steps manually.”
+	•	But do not claim “Recipe parsed successfully” when counts are 0.
+
+Validation
+	•	For at least 2–3 different TheCampingPlanner.com recipes:
+	•	Click Save Recipe.
+	•	Verify ingredients and ALL instruction steps are pre-filled and editable.
+	•	Save the recipe.
+	•	Open it from My Recipes and add it as a meal to a trip.
+	•	Confirm that the Meals for this Trip section shows the same ingredients list and that those ingredients can go into a grocery list.

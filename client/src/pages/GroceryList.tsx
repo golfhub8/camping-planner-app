@@ -156,6 +156,10 @@ export default function GroceryList() {
           // Invalidate queries to refresh usage stats
           queryClient.invalidateQueries({ queryKey: ["/api/account/usage"] });
           
+          // Reset saving state before navigation
+          setIsSaving(false);
+          setSaveAttempted(false);
+          
           // Redirect to token-based URL
           setLocation(`/grocery/list/${token}`);
           

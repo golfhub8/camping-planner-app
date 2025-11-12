@@ -88,38 +88,38 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
       
       const scraped = await response.json();
       
+      // Validate that we got meaningful data (both ingredients AND steps required)
+      if (!scraped.title || !scraped.ingredients || scraped.ingredients.length === 0 || 
+          !scraped.steps || scraped.steps.length === 0) {
+        throw new Error("We couldn't auto-import this recipe. You can paste ingredients and steps manually.");
+      }
+      
+      // Only set scrapedData if validation passed
       setScrapedData({
         ...scraped,
         sourceUrl: externalRecipe.sourceUrl,
       });
       
       // Update form with scraped data
-      if (scraped.title) {
-        form.setValue("title", scraped.title);
-      }
-      if (scraped.ingredients && scraped.ingredients.length > 0) {
-        form.setValue("ingredientsText", scraped.ingredients.join("\n"));
-      }
-      if (scraped.steps && scraped.steps.length > 0) {
-        form.setValue("stepsText", scraped.steps.join("\n\n"));
-      }
+      form.setValue("title", scraped.title);
+      form.setValue("ingredientsText", scraped.ingredients.join("\n"));
+      form.setValue("stepsText", scraped.steps.join("\n\n"));
+      
       if (scraped.imageUrl) {
         form.setValue("imageUrl", scraped.imageUrl);
       }
       
-      // Show success or partial success message
-      if (scraped.title && scraped.ingredients && scraped.ingredients.length > 0) {
-        toast({
-          title: "Recipe parsed successfully",
-          description: `Found ${scraped.ingredients.length} ingredients and ${scraped.steps?.length || 0} steps`,
-        });
-      } else {
-        // Parsing returned empty data - show error
-        throw new Error("Could not extract recipe data from URL");
-      }
+      // Show success message
+      toast({
+        title: "Recipe parsed successfully",
+        description: `Found ${scraped.ingredients.length} ingredients and ${scraped.steps.length} steps`,
+      });
     } catch (error) {
       console.error("Auto-scrape failed:", error);
       setScrapError(error instanceof Error ? error.message : "Failed to parse recipe");
+      
+      // Clear any stale scraped data
+      setScrapedData(null);
       
       // Fall back to provided data
       if (externalRecipe.ingredients) {
@@ -259,13 +259,13 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
           </Alert>
         )}
 
-        {scrapedData && !scrapeError && (
+        {scrapedData && !scrapeError && scrapedData.ingredients.length > 0 && (
           <Alert>
             <CheckCircle className="h-4 w-4 text-primary" />
             <AlertDescription className="flex items-center gap-2">
               <span>Recipe parsed successfully</span>
               <Badge variant="outline">{scrapedData.ingredients.length} ingredients</Badge>
-              <Badge variant="outline">{scrapedData.steps.length} steps</Badge>
+              <Badge variant="outline">{scrapedData.steps?.length || 0} steps</Badge>
             </AlertDescription>
           </Alert>
         )}
@@ -314,7 +314,6 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
                       {...field}
                       placeholder="2 cups flour&#10;1 cup sugar&#10;3 eggs"
                       rows={8}
-                      className="font-mono text-sm"
                       data-testid="textarea-ingredients"
                     />
                   </FormControl>

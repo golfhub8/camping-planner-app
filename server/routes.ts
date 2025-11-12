@@ -1381,7 +1381,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // If JSON-LD extraction failed, return empty data for manual entry
+      // If JSON-LD extraction failed, try HTML scraping for TheCampingPlanner.com
+      const urlObj = new URL(url);
+      const isTheCampingPlanner = urlObj.hostname.includes('thecampingplanner.com');
+      
+      if (isTheCampingPlanner) {
+        console.log('[Recipe Parser] JSON-LD failed for TheCampingPlanner.com, trying HTML scraping...');
+        
+        try {
+          const $ = cheerioLoad(html);
+          
+          // Extract title from h1 or .entry-title
+          let title = '';
+          const h1Text = $('h1.entry-title').first().text().trim();
+          if (h1Text) {
+            title = h1Text;
+          } else {
+            title = $('h1').first().text().trim();
+          }
+          
+          // Extract ingredients from list under "Ingredients" heading
+          // Only process the FIRST ingredients section to avoid duplicates
+          const ingredients: string[] = [];
+          let foundIngredients = false;
+          
+          $('h2, h3, h4').each((_, elem) => {
+            if (foundIngredients) return; // Stop after first section
+            
+            const headingText = $(elem).text().toLowerCase();
+            if (headingText.includes('ingredient')) {
+              foundIngredients = true;
+              
+              // Get the next ul or ol list after this heading
+              let list = $(elem).next('ul, ol');
+              if (list.length === 0) {
+                // Try finding the list in the next sibling(s)
+                list = $(elem).nextAll('ul, ol').first();
+              }
+              
+              if (list.length > 0) {
+                list.find('li').each((_, li) => {
+                  const text = $(li).text().trim();
+                  if (text) {
+                    ingredients.push(text);
+                  }
+                });
+              }
+            }
+          });
+          
+          // Extract instructions/steps
+          // Only process the FIRST instructions section to avoid duplicates
+          const steps: string[] = [];
+          let foundSteps = false;
+          
+          $('h2, h3, h4').each((_, elem) => {
+            if (foundSteps) return; // Stop after first section
+            
+            const headingText = $(elem).text().toLowerCase();
+            if (headingText.includes('instruction') || headingText.includes('direction') || headingText.includes('step')) {
+              foundSteps = true;
+              
+              // Get the next ol or ul list
+              let list = $(elem).next('ol, ul');
+              if (list.length === 0) {
+                list = $(elem).nextAll('ol, ul').first();
+              }
+              
+              if (list.length > 0) {
+                list.find('li').each((_, li) => {
+                  const text = $(li).text().trim();
+                  if (text && text.length > 10) {
+                    steps.push(text);
+                  }
+                });
+              }
+              // Remove paragraph fallback to avoid capturing narrative text
+            }
+          });
+          
+          // Extract image from .entry-content img or first img
+          let imageUrl: string | undefined;
+          const firstImg = $('.entry-content img, .post-content img, article img').first();
+          if (firstImg.length > 0) {
+            const src = firstImg.attr('src') || firstImg.attr('data-src');
+            if (src && src.startsWith('http')) {
+              imageUrl = src;
+            }
+          }
+          
+          console.log(`[Recipe Parser] HTML scraping found: ${ingredients.length} ingredients, ${steps.length} steps`);
+          
+          // Return scraped data if we found at least title and ingredients
+          if (title && ingredients.length > 0) {
+            return res.json({
+              title,
+              ingredients,
+              steps,
+              imageUrl,
+            });
+          }
+        } catch (scrapeError) {
+          console.warn('[Recipe Parser] HTML scraping failed:', scrapeError);
+        }
+      }
+      
+      // If all parsing methods failed, return empty data for manual entry
       return res.json({
         title: '',
         ingredients: [],
@@ -2218,8 +2323,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Trip not found" });
       }
 
+      // Get all meals for this trip
+      const tripMeals = await storage.getTripMeals(tripId, userId);
+      
       // Check if trip has any meals
-      if (trip.meals.length === 0) {
+      if (tripMeals.length === 0) {
+        return res.json({ items: [], grouped: {
+          "Produce": [],
+          "Dairy": [],
+          "Meat": [],
+          "Pantry": [],
+          "Camping Gear": [],
+        }});
+      }
+
+      // Filter out external meals (we only process internal recipes for now)
+      const internalMeals = tripMeals.filter(meal => !meal.isExternal && meal.recipeId !== null);
+      
+      if (internalMeals.length === 0) {
         return res.json({ items: [], grouped: {
           "Produce": [],
           "Dairy": [],
@@ -2231,7 +2352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch all recipes for the trip's meals (user can only access their own recipes)
       const recipes = await Promise.all(
-        trip.meals.map(id => storage.getRecipeById(id, userId))
+        internalMeals.map(meal => storage.getRecipeById(meal.recipeId!, userId))
       );
       
       // Filter out any null recipes (in case some IDs don't exist)
