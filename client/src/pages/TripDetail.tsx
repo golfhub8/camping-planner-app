@@ -11,14 +11,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon, PackageIcon } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon, PackageIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
+import { parseIngredient } from "@/lib/ingredients";
 
 // Helper function to convert Open-Meteo weathercode to human-readable description
 // Based on WMO Weather interpretation codes
@@ -53,8 +56,138 @@ function getWeatherDescription(code: number): string {
   return weatherCodes[code] || "Unknown";
 }
 
+// Component to display meal ingredients with checkboxes
+interface MealIngredientsProps {
+  meal: { 
+    id: number; 
+    title: string; 
+    isExternal: boolean; 
+    recipeId?: number; 
+    externalRecipeId?: string 
+  };
+  selectedIngredients: Set<string>;
+  onToggleIngredient: (ingredient: string) => void;
+  onSelectAll: (ingredients: string[]) => void;
+  onAddToGrocery: (recipeTitle: string, allIngredients: string[]) => void;
+  onMarkAlreadyHave: (ingredients: string[]) => void;
+}
+
+function MealIngredients({
+  meal,
+  selectedIngredients,
+  onToggleIngredient,
+  onSelectAll,
+  onAddToGrocery,
+  onMarkAlreadyHave,
+}: MealIngredientsProps) {
+  // Fetch ingredients based on meal type (internal vs external)
+  const { data: ingredientsData, isLoading } = useQuery<{ ingredients: string[] }>({
+    queryKey: meal.isExternal 
+      ? ["/api/recipes/external", meal.externalRecipeId, "ingredients"]
+      : ["/api/recipes", meal.recipeId],
+    queryFn: async () => {
+      if (meal.isExternal) {
+        // Fetch external recipe ingredients
+        const response = await fetch(`/api/recipes/external/${meal.externalRecipeId}/ingredients`);
+        if (!response.ok) throw new Error("Failed to fetch external recipe ingredients");
+        return response.json();
+      } else {
+        // Fetch internal recipe (includes ingredients array)
+        const response = await fetch(`/api/recipes/${meal.recipeId}`);
+        if (!response.ok) throw new Error("Failed to fetch recipe");
+        return response.json();
+      }
+    },
+    enabled: !!(meal.recipeId || meal.externalRecipeId), // Only fetch if we have an ID
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const ingredients = ingredientsData?.ingredients || [];
+
+  if (ingredients.length === 0) {
+    return (
+      <div className="p-4 text-sm text-muted-foreground">
+        No ingredients found for this meal
+      </div>
+    );
+  }
+
+  const allSelected = ingredients.length > 0 && ingredients.every(ing => selectedIngredients.has(ing));
+
+  return (
+    <div className="p-4 space-y-4 border-t">
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onSelectAll(allSelected ? [] : ingredients)}
+          data-testid="button-meal-select-all"
+        >
+          {allSelected ? "Deselect All" : "Select All"}
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => onAddToGrocery(meal.title, ingredients)}
+          data-testid="button-meal-add-to-grocery"
+        >
+          <ShoppingCartIcon className="w-4 h-4 mr-2" />
+          Add Selected to Grocery
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onMarkAlreadyHave(ingredients)}
+          data-testid="button-meal-mark-already-have"
+        >
+          Mark Others as Already Have
+        </Button>
+      </div>
+
+      {/* Ingredients List with Checkboxes */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-muted-foreground">
+          Ingredients ({ingredients.length})
+        </p>
+        <div className="space-y-1">
+          {ingredients.map((ingredient, idx) => {
+            const isChecked = selectedIngredients.has(ingredient);
+            return (
+              <div
+                key={idx}
+                className="flex items-center gap-2"
+                data-testid={`meal-ingredient-${idx}`}
+              >
+                <Checkbox
+                  checked={isChecked}
+                  onCheckedChange={() => onToggleIngredient(ingredient)}
+                  data-testid={`checkbox-meal-ingredient-${idx}`}
+                />
+                <label
+                  className="text-sm cursor-pointer flex-1"
+                  onClick={() => onToggleIngredient(ingredient)}
+                >
+                  {ingredient}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TripDetail() {
-  const { toast } = useToast();
+  const { toast} = useToast();
   const [, navigate] = useLocation();
   const [match, params] = useRoute("/trips/:id");
   const tripId = params?.id ? parseInt(params.id) : null;
@@ -67,6 +200,10 @@ export default function TripDetail() {
   const [copied, setCopied] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
+  
+  // State for expanded meals and selected ingredients
+  const [expandedMeals, setExpandedMeals] = useState<Set<number>>(new Set());
+  const [selectedIngredients, setSelectedIngredients] = useState<Map<number, Set<string>>>(new Map());
 
   // Fetch trip data
   const { data: trip, isLoading: tripLoading, error: tripError } = useQuery<Trip>({
@@ -839,27 +976,162 @@ export default function TripDetail() {
           <CardContent>
             {meals.length > 0 ? (
               <div className="space-y-2" data-testid="list-meals">
-                {meals.map((meal, idx) => (
-                  <div 
-                    key={meal.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover-elevate"
-                    data-testid={`meal-item-${idx}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <UtensilsIcon className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">{meal.title}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeMealMutation.mutate(meal.id)}
-                      disabled={removeMealMutation.isPending}
-                      data-testid={`button-remove-meal-${idx}`}
+                {meals.map((meal, idx) => {
+                  const isExpanded = expandedMeals.has(meal.id);
+                  const selectedIngs = selectedIngredients.get(meal.id) || new Set();
+                  
+                  // Handler to toggle expansion
+                  const toggleExpanded = () => {
+                    setExpandedMeals(prev => {
+                      const next = new Set(prev);
+                      if (next.has(meal.id)) {
+                        next.delete(meal.id);
+                      } else {
+                        next.add(meal.id);
+                      }
+                      return next;
+                    });
+                  };
+                  
+                  // Handler to toggle individual ingredient checkbox
+                  const toggleIngredient = (ingredient: string) => {
+                    setSelectedIngredients(prev => {
+                      const next = new Map(prev);
+                      const mealIngs = new Set(next.get(meal.id) || []);
+                      if (mealIngs.has(ingredient)) {
+                        mealIngs.delete(ingredient);
+                      } else {
+                        mealIngs.add(ingredient);
+                      }
+                      next.set(meal.id, mealIngs);
+                      return next;
+                    });
+                  };
+                  
+                  // Handler to select all ingredients
+                  const selectAllIngredients = (ingredients: string[]) => {
+                    setSelectedIngredients(prev => {
+                      const next = new Map(prev);
+                      next.set(meal.id, new Set(ingredients));
+                      return next;
+                    });
+                  };
+                  
+                  // Handler to add selected ingredients to grocery  
+                  const addSelectedToGrocery = (recipeTitle: string, allIngredients: string[]) => {
+                    const selected = Array.from(selectedIngs);
+                    if (selected.length === 0) {
+                      toast({
+                        title: "No ingredients selected",
+                        description: "Please select at least one ingredient to add to your grocery list.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    
+                    // Compute "already have" normalized keys for unchecked ingredients
+                    const uncheckedIngredients = allIngredients.filter(ing => !selectedIngs.has(ing));
+                    const alreadyHaveNormalized = uncheckedIngredients.map(ing => parseIngredient(ing).normalized);
+                    
+                    // Store extended payload in sessionStorage for GrocerySelection handoff
+                    // Extended payload includes ALL ingredients + selected subset + already-have metadata
+                    const groceryData = {
+                      recipeId: meal.recipeId || null,
+                      externalRecipeId: meal.externalRecipeId || null,
+                      recipeTitle,
+                      allIngredients,  // ALL ingredients (needed + pantry)
+                      selectedIngredients: selected,  // ONLY checked ingredients
+                      alreadyHaveNormalized,  // Normalized keys for unchecked ingredients
+                    };
+                    sessionStorage.setItem('pendingGroceryItems', JSON.stringify(groceryData));
+                    
+                    toast({
+                      title: "Added to grocery selection!",
+                      description: `${selected.length} ${selected.length === 1 ? 'ingredient' : 'ingredients'} from ${recipeTitle}`,
+                    });
+                    
+                    // Navigate to grocery page
+                    navigate("/grocery");
+                  };
+                  
+                  // Handler to mark unchecked ingredients as already have
+                  const markOthersAsAlreadyHave = (ingredients: string[]) => {
+                    const uncheckedIngredients = ingredients.filter(ing => !selectedIngs.has(ing));
+                    
+                    if (uncheckedIngredients.length === 0) {
+                      toast({
+                        title: "All ingredients are selected",
+                        description: "Uncheck some ingredients first to mark them as already owned.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    
+                    // Store unchecked ingredients using normalized keys (parseIngredient strips amounts/units)
+                    const alreadyHaveData = {
+                      normalizedKeys: uncheckedIngredients.map(ing => parseIngredient(ing).normalized)
+                    };
+                    sessionStorage.setItem('alreadyHaveIngredients', JSON.stringify(alreadyHaveData));
+                    
+                    toast({
+                      title: "Marked as already owned!",
+                      description: `${uncheckedIngredients.length} ${uncheckedIngredients.length === 1 ? 'ingredient' : 'ingredients'} marked as pantry items`,
+                    });
+                  };
+                  
+                  return (
+                    <Collapsible
+                      key={meal.id}
+                      open={isExpanded}
+                      onOpenChange={toggleExpanded}
+                      className="border rounded-lg"
                     >
-                      <XIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <div className="flex items-center justify-between p-3" data-testid={`meal-item-${idx}`}>
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="flex-1 justify-start gap-2 hover-elevate"
+                            data-testid={`button-toggle-meal-${idx}`}
+                          >
+                            {isExpanded ? (
+                              <ChevronDownIcon className="w-4 h-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRightIcon className="w-4 h-4 text-muted-foreground" />
+                            )}
+                            <UtensilsIcon className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-medium">{meal.title}</span>
+                            {meal.isExternal && (
+                              <Badge variant="secondary" className="ml-2">External</Badge>
+                            )}
+                          </Button>
+                        </CollapsibleTrigger>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeMealMutation.mutate(meal.id);
+                          }}
+                          disabled={removeMealMutation.isPending}
+                          data-testid={`button-remove-meal-${idx}`}
+                        >
+                          <XIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      
+                      <CollapsibleContent>
+                        <MealIngredients
+                          meal={meal}
+                          selectedIngredients={selectedIngs}
+                          onToggleIngredient={toggleIngredient}
+                          onSelectAll={selectAllIngredients}
+                          onAddToGrocery={addSelectedToGrocery}
+                          onMarkAlreadyHave={markOthersAsAlreadyHave}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-8">

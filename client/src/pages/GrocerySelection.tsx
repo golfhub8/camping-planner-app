@@ -35,12 +35,12 @@ export default function GrocerySelection() {
   const [confirmedIngredients, setConfirmedIngredients] = useState<ConfirmedIngredient[]>([]);
   const [moveUncheckedToPantry, setMoveUncheckedToPantry] = useState(false);
   
-  // Store ingredients from RecipeDetail modal
-  const [recipeDetailIngredients, setRecipeDetailIngredients] = useState<{
-    recipeId: number;
-    recipeTitle: string;
-    ingredients: string[];
-  } | null>(null);
+  // Discriminated union for ingredients from RecipeDetail or TripDetail
+  type RecipeDetailPayload = 
+    | { kind: "minimal"; recipeId: number; recipeTitle: string; ingredients: string[] }
+    | { kind: "extended"; recipeId: number; recipeTitle: string; allIngredients: string[]; selectedIngredients: string[]; alreadyHaveNormalized: string[] };
+  
+  const [recipeDetailIngredients, setRecipeDetailIngredients] = useState<RecipeDetailPayload | null>(null);
 
   const { data: recipes, isLoading } = useQuery<Recipe[]>({
     queryKey: ["/api/recipes"],
@@ -62,10 +62,28 @@ export default function GrocerySelection() {
     if (pendingData) {
       try {
         const data = JSON.parse(pendingData);
-        // Check if it's from RecipeDetail (has recipeId and ingredients array)
-        if (data.recipeId && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
-          // Store the selected ingredients from RecipeDetail
+        
+        // Detect extended payload from TripDetail (has allIngredients + selectedIngredients + alreadyHaveNormalized)
+        if (data.allIngredients && data.selectedIngredients && data.alreadyHaveNormalized) {
+          // Extended payload from TripDetail: preserve ALL ingredients with pantry metadata
           setRecipeDetailIngredients({
+            kind: "extended",
+            recipeId: data.recipeId,
+            recipeTitle: data.recipeTitle,
+            allIngredients: data.allIngredients,  // ALL ingredients (needed + pantry)
+            selectedIngredients: data.selectedIngredients,  // ONLY checked ingredients
+            alreadyHaveNormalized: data.alreadyHaveNormalized,  // Normalized pantry keys
+          });
+          
+          // Auto-select the recipe from TripDetail
+          if (data.recipeId && !selectedRecipeIds.includes(data.recipeId)) {
+            setSelectedRecipeIds(prev => [...prev, data.recipeId]);
+            setManuallySelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
+          }
+        } else if (data.recipeId && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+          // Minimal payload from RecipeDetail: use ONLY selected ingredients
+          setRecipeDetailIngredients({
+            kind: "minimal",
             recipeId: data.recipeId,
             recipeTitle: data.recipeTitle,
             ingredients: data.ingredients
@@ -164,16 +182,30 @@ export default function GrocerySelection() {
   function proceedToConfirmation() {
     if (selectedRecipeIds.length === 0 && externalMealsTitles.length === 0) return;
     
+    // Build alreadyHaveSet from session storage and extended payload
+    let alreadyHaveSet = new Set<string>();
+    
     // Gather ingredients from selected recipes
     const recipeIngredients = selectedRecipeIds
       .map(id => {
-        // Check if this is the recipe from RecipeDetail with user-selected ingredients
+        // Check if this is the recipe from RecipeDetail/TripDetail
         if (recipeDetailIngredients && recipeDetailIngredients.recipeId === id) {
-          return {
-            recipeId: recipeDetailIngredients.recipeId,
-            recipeTitle: recipeDetailIngredients.recipeTitle,
-            ingredients: recipeDetailIngredients.ingredients, // Use ONLY selected ingredients
-          };
+          if (recipeDetailIngredients.kind === "extended") {
+            // Extended payload from TripDetail: use ALL ingredients, seed pantry metadata
+            alreadyHaveSet = new Set([...alreadyHaveSet, ...recipeDetailIngredients.alreadyHaveNormalized]);
+            return {
+              recipeId: recipeDetailIngredients.recipeId,
+              recipeTitle: recipeDetailIngredients.recipeTitle,
+              ingredients: recipeDetailIngredients.allIngredients,  // ALL ingredients (needed + pantry)
+            };
+          } else {
+            // Minimal payload from RecipeDetail: use ONLY selected ingredients
+            return {
+              recipeId: recipeDetailIngredients.recipeId,
+              recipeTitle: recipeDetailIngredients.recipeTitle,
+              ingredients: recipeDetailIngredients.ingredients,  // ONLY selected ingredients
+            };
+          }
         }
         
         // Otherwise use full recipe from the list
@@ -190,22 +222,24 @@ export default function GrocerySelection() {
     // Merge ingredients
     const merged = mergeIngredients(recipeIngredients);
     
-    // Read "already have" ingredients from sessionStorage (set by RecipeDetail.tsx)
-    let alreadyHaveSet = new Set<string>();
-    try {
-      const alreadyHaveData = sessionStorage.getItem('alreadyHaveIngredients');
-      if (alreadyHaveData) {
-        const parsed = JSON.parse(alreadyHaveData);
-        // RecipeDetail stores normalized keys for robust matching (handles amounts, punctuation, etc.)
-        if (Array.isArray(parsed.normalizedKeys)) {
-          alreadyHaveSet = new Set(parsed.normalizedKeys);
+    // Read "already have" ingredients from sessionStorage ONLY for minimal flows (RecipeDetail standalone)
+    if (recipeDetailIngredients?.kind === "minimal" || !recipeDetailIngredients) {
+      try {
+        const alreadyHaveData = sessionStorage.getItem('alreadyHaveIngredients');
+        if (alreadyHaveData) {
+          const parsed = JSON.parse(alreadyHaveData);
+          // RecipeDetail stores normalized keys for robust matching (handles amounts, punctuation, etc.)
+          if (Array.isArray(parsed.normalizedKeys)) {
+            alreadyHaveSet = new Set([...alreadyHaveSet, ...parsed.normalizedKeys]);
+          }
+          // Clear after reading to prevent stale data
+          sessionStorage.removeItem('alreadyHaveIngredients');
         }
-        // Clear after reading to prevent stale data
-        sessionStorage.removeItem('alreadyHaveIngredients');
+      } catch (err) {
+        console.error('Failed to parse alreadyHaveIngredients:', err);
       }
-    } catch (err) {
-      console.error('Failed to parse alreadyHaveIngredients:', err);
     }
+    // For extended payloads, alreadyHaveSet was already seeded above - don't clear it
     
     // Initialize confirmed ingredients, marking alreadyHave items as not needed
     const confirmed: ConfirmedIngredient[] = merged.map(ing => {
@@ -244,9 +278,10 @@ export default function GrocerySelection() {
     const pantry = confirmedIngredients.filter(ing => !ing.isNeeded);
     
     // Store in sessionStorage for GroceryList page
+    // Always store pantry items - they were marked as "already have" by the user
     const groceryData = {
       needed,
-      pantry: moveUncheckedToPantry ? pantry : [],
+      pantry,  // Always include pantry items (needed for TripDetail extended payload)
       externalMeals: externalMealsTitles,
     };
     

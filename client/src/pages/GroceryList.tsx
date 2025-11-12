@@ -59,8 +59,56 @@ export default function GroceryList() {
   });
 
   // Generate list on component mount
+  // Try to read confirmedGroceryData from sessionStorage first (preserves "already have" state)
   useEffect(() => {
-    if (recipeIds.length > 0 || externalMeals.length > 0) {
+    const confirmedData = sessionStorage.getItem('confirmedGroceryData');
+    
+    if (confirmedData) {
+      // User came from GrocerySelection confirmation step with selected ingredients
+      try {
+        const { needed, pantry, externalMeals: extMeals } = JSON.parse(confirmedData);
+        
+        // Convert needed items to GroceryItems (unchecked - user needs these)
+        const neededItems: GroceryItem[] = (needed || []).map((ing: any) => ({
+          name: ing.name,
+          category: ing.category || "Pantry" as GroceryCategory,
+          checked: false,
+        }));
+        
+        // Convert pantry items to GroceryItems (checked - user already has these)
+        const pantryItems: GroceryItem[] = (pantry || []).map((ing: any) => ({
+          name: ing.name,
+          category: ing.category || "Pantry" as GroceryCategory,
+          checked: true,
+        }));
+        
+        // Add external meals as unchecked Pantry items
+        const externalItems: GroceryItem[] = (extMeals || []).map((title: string) => ({
+          name: title + " (see trip for recipe details)",
+          category: "Pantry" as const,
+          checked: false,
+        }));
+        
+        setGroceryItems([...neededItems, ...pantryItems, ...externalItems]);
+        
+        // Clear sessionStorage to prevent stale data on page refresh
+        sessionStorage.removeItem('confirmedGroceryData');
+      } catch (e) {
+        console.error('Failed to parse confirmedGroceryData:', e);
+        // Fall back to API fetch on parse error
+        if (recipeIds.length > 0) {
+          generateListMutation.mutate(recipeIds);
+        } else if (externalMeals.length > 0) {
+          const externalMealItems: GroceryItem[] = externalMeals.map(title => ({
+            name: title + " (see trip for recipe details)",
+            category: "Pantry" as const,
+            checked: false,
+          }));
+          setGroceryItems(externalMealItems);
+        }
+      }
+    } else if (recipeIds.length > 0 || externalMeals.length > 0) {
+      // No confirmation data - fall back to API fetch (legacy behavior or direct link)
       if (recipeIds.length > 0) {
         generateListMutation.mutate(recipeIds);
       } else {

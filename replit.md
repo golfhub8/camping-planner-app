@@ -2,83 +2,7 @@
 
 ## Overview
 
-The Camping Planner is a full-stack web application designed to help camping families organize their outdoor adventures. It features a modern, outdoor aesthetic with teal accents and bold typography. The application offers secure user authentication, user-owned data, and robust modules for managing recipes, grocery lists, and camping trips. Key capabilities include creating and searching recipes, generating categorized shopping lists from selected recipes or entire trip meal plans, and comprehensive trip management with collaboration and cost tracking. The project aims to provide a seamless planning experience for outdoor enthusiasts. Pro Membership ($29.99/year with 7-day free trial) grants access to printable camping planners and games. It is built as a single-page application with a REST API, PostgreSQL storage, and session-based authentication.
-
-## Recent Changes (November 2025)
-
-**UX Enhancement Suite (Latest):**
-Six major features implemented and E2E tested to improve user experience across recipes, groceries, trips, and printables:
-
-1. **Recipe Detail Ingredient Selection:**
-   - Added "Select All" button to recipe modal for quick ingredient selection
-   - "Add selected to grocery list" now redirects to grocery builder with pre-selected ingredients
-   - Uses sessionStorage for clean recipe-to-grocery handoff, cleared after use to prevent stale data
-
-2. **Grocery Builder Confirmation Step:**
-   - Two-step grocery flow: recipe selection → ingredient confirmation
-   - Individual ingredient checkboxes allow fine-grained control
-   - "Already Have It" toggle for each ingredient with strikethrough/dimmed styling
-   - Smart ingredient deduplication and amount aggregation across multiple recipes
-
-3. **Single Navbar Consolidation:**
-   - Removed duplicate headers across all pages
-   - Single persistent Navbar on all authenticated pages
-   - Smart active state highlighting for current route (including nested routes like /trips/:id)
-
-4. **Location Autocomplete for Trips:**
-   - Replaced plain text location input with Nominatim-powered autocomplete
-   - Auto-fills location display name, latitude, and longitude when user selects suggestion
-   - Coordinates automatically saved to database for weather forecast integration
-   - EditTripDialog displays read-only coordinates in styled box (bg-muted/50, border, monospace font)
-   - IIFE pattern used for TypeScript-safe null checking in coordinate display
-
-5. **"What to Pack" Teaser in Trip Detail:**
-   - New card appears after meals section with 6 essential camping items teaser
-   - "Unlock Full List" button with SubscribeButton for Stripe checkout
-   - Displays Pro membership benefits with pricing ($29.99/year with 7-day free trial)
-
-6. **Printables Pro Access Logic:**
-   - Conditional rendering based on user Pro membership status
-   - Free printables (2): Always show "Download Free" button for all users
-   - Pro printables (5): Show download for Pro members, locked message + trial button for free users
-   - Pro members see "Your membership includes all current printables" confirmation
-   - Non-Pro users see upgrade section with SubscribeButton
-
-**Comprehensive E2E Testing:**
-All 6 features validated via Playwright tests covering authentication, recipe workflows, grocery builder, navbar consolidation, trip location autocomplete with coordinate persistence, "What to Pack" teaser display, and printables Pro logic differentiation.
-
-**Printables Page Redesign:**
-- Complete redesign to support both free and Pro printables accessible to all users
-- Added `isAuthenticatedOptional` middleware allowing both logged-in and anonymous access
-- GET /api/printables/downloads returns all 7 printables (2 free, 5 Pro) for everyone
-- Free printables display green "Download Free" buttons for all users
-- Pro printables show download buttons for Pro members, locked message for free users
-- Membership message "Your membership includes all current printables in this list." appears only for Pro members
-- Upgrade section with ThriveCart contact option appears only for free users
-- Created public/printables directory with 7 placeholder PDF files ready for upload
-- E2E tested: Free user sees 2 downloads + 5 locked, Pro user sees all 7 downloads
-
-**Printables Page Enhancement:**
-- Added membership message "Your membership includes all current printables in this list." for Pro members
-- Message displays when user has active Pro membership (hasAccess is true)
-
-**Trip Date Input Fix:**
-- Fixed "Invalid time value" error when rendering date inputs on Trips page
-- Added `isValid()` check from date-fns before formatting dates
-- Date inputs now safely handle undefined or invalid Date values
-- Dates stored with 'T00:00:00' appended to prevent timezone interpretation issues
-
-**Trip Meals in Grocery Selection:**
-- Added "Meals from your trips" section above "Select Recipes" on Grocery page
-- Trip dropdown allows selecting a trip to view its meals
-- Meals display with checkboxes for selection
-- Advanced state management separates manual vs trip meal selections:
-  - `manuallySelectedRecipeIds` Set tracks manual checkbox selections
-  - `tripMealRecipeIds` Map tracks meal→recipe associations
-  - `selectedRecipeIds` contains union of both sources
-- Checkbox UI reflects manual selection only (clearer UX)
-- "In trip meals" badge displays when recipe selected via trip meals but not manually
-- All edge cases handled: manual first, trip first, overlapping selections, multiple meals with same recipe
+The Camping Planner is a full-stack web application designed to help camping families organize outdoor adventures. It offers secure user authentication, user-owned data, and robust modules for managing recipes, grocery lists, and camping trips. Key capabilities include creating and searching recipes, generating categorized shopping lists from selected recipes or entire trip meal plans, and comprehensive trip management with collaboration and cost tracking. The project aims to provide a seamless planning experience for outdoor enthusiasts. A Pro Membership ($29.99/year with 7-day free trial) grants access to printable camping planners and games. The application is built as a single-page application with a REST API, PostgreSQL storage, and session-based authentication.
 
 ## User Preferences
 
@@ -88,45 +12,23 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend
 
-The frontend is a React 18 application with TypeScript, utilizing Vite for fast development and Wouter for lightweight routing. State management and data fetching are handled by TanStack Query, incorporating optimistic updates for a responsive UI. The UI is built with Shadcn/ui (New York style) on Radix UI primitives, styled with Tailwind CSS, and features a custom teal-centric color palette and modern typography. The design emphasizes a clean, outdoor aesthetic, responsiveness, and user-friendly interaction patterns. Authentication leverages Replit Auth for seamless OIDC login and protects routes, redirecting unauthenticated users to a landing page.
-
-**Global Navigation**: A persistent Navbar component appears on all authenticated pages, featuring the app logo, primary navigation links (Recipes, Trips, Printables) with smart active state highlighting, a "Go Pro" subscribe button that triggers Stripe checkout, and a logout button. The Navbar uses intelligent path matching to highlight the correct tab even on nested routes (e.g., viewing a specific trip highlights the "Trips" tab).
+The frontend is a React 18 application with TypeScript, Vite, and Wouter for routing. State management and data fetching are handled by TanStack Query, incorporating optimistic updates. The UI is built with Shadcn/ui (New York style) on Radix UI primitives, styled with Tailwind CSS, featuring a custom teal-centric color palette and modern typography. The design emphasizes a clean, outdoor aesthetic, responsiveness, and user-friendly interaction. Authentication leverages Replit Auth for seamless OIDC login and protects routes. A persistent Navbar component appears on all authenticated pages, featuring the app logo, primary navigation links (Recipes, Trips, Printables) with smart active state highlighting, a "Go Pro" subscribe button for Stripe checkout, and a logout button.
 
 ### Backend
 
-The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. Most API routes are protected by `isAuthenticated` middleware, with some routes using `isAuthenticatedOptional` to support both logged-in and anonymous access. User ownership is strictly verified for all data access and mutations. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation, and comprehensive trip management including creation, collaborator management, cost tracking, meal planning, trip-specific grocery list generation, and shareable grocery links for collaborators. Weather forecasting is integrated via GET /api/trips/:id/weather endpoint fetching real-time data from Open-Meteo API (free, no API key required) using trip coordinates stored in the database. The endpoint returns daily forecasts with temperature highs/lows (Celsius) and WMO weathercodes converted to human-readable descriptions (Clear sky, Rain, Snow, etc.). Coordinate validation ensures trips without lat/lng receive helpful error messages prompting users to add location data. Shareable links maintain one persistent token per trip and allow public read-only access to trip grocery lists without requiring authentication. Payment processing is integrated via Stripe Checkout Sessions for Pro Membership ($29.99/year with 7-day free trial), with webhook-based access control ensuring users receive printable access after successful payment. The API provides live WordPress integration via GET /api/external-recipes endpoint that fetches the latest 20 recipes from the "camping-food" category (ID: 4) on TheCampingPlanner.com, automatically updating when new recipes are published. Additional endpoints for individual recipe viewing (GET /api/recipes/external/:id) and ingredient extraction (GET /api/recipes/external/:id/ingredients) use HTML parsing to extract structured data from WordPress content. A shared helper function `extractIngredientsFromHtml` parses <li> tags and handles HTML entities for consistent ingredient extraction. Frontend implements smart phrase-based filtering using case-insensitive partial matching to exclude blog-style posts (12 blocked phrases) while displaying actual camping recipes. Users can refresh external recipes on-demand via a "Refresh Recipes" button. Zod is used for schema validation on all request and response payloads, ensuring type safety across the application.
+The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. Most API routes are protected by `isAuthenticated` middleware. User ownership is strictly verified for all data access. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation (including from trip meal plans with pantry item preservation), and comprehensive trip management (creation, collaborators, cost tracking, meal planning, shareable grocery links). Weather forecasting is integrated via Open-Meteo API using trip coordinates. Payment processing is integrated via Stripe Checkout Sessions for Pro Membership, with webhook-based access control. Live WordPress integration provides external recipes from TheCampingPlanner.com, automatically updating with new content. Zod is used for schema validation on all request and response payloads.
 
 ### Data Layer
 
-Data persistence is managed using PostgreSQL with the Neon serverless driver, accessed via Drizzle ORM. A robust database schema defines tables for users, sessions, recipes, trips, and shared_grocery_lists, with `userId` foreign keys enforcing user ownership. The trips table includes optional `lat` (latitude) and `lng` (longitude) columns (NUMERIC(10,6)) storing decimal degree coordinates for weather forecasts. The shared_grocery_lists table stores public shareable links with trip metadata (tripId, tripName, collaborators) and maintains one persistent token per trip. The users table includes `proMembershipEndDate` timestamp to track active Pro memberships (including trial periods) and `selectedCampingBasics` text array for persistent camping basics selection. Drizzle-Zod integration ensures schema validation, and `drizzle-kit` manages database migrations.
+Data persistence uses PostgreSQL with the Neon serverless driver, accessed via Drizzle ORM. A robust database schema defines tables for users, sessions, recipes, trips (including optional `lat`/`lng` for weather), and shared_grocery_lists. `userId` foreign keys enforce user ownership. The `users` table includes `proMembershipEndDate` and `selectedCampingBasics`. Drizzle-Zod integration ensures schema validation, and `drizzle-kit` manages database migrations.
 
 ## External Dependencies
 
-*   **Authentication:** Replit Auth (OpenID Connect) for Google, GitHub, and email/password logins.
-*   **Database:** PostgreSQL (via Neon serverless driver) for persistent data storage.
-*   **ORM:** Drizzle ORM and Drizzle-Kit for database interaction and migrations.
-*   **Payment Processing:** Stripe Checkout Sessions for Pro Membership ($29.99/year with 7-day free trial). Webhook handler processes payment events and grants user access automatically.
-*   **WordPress Integration:** Live recipe fetching from TheCampingPlanner.com via WordPress REST API (category ID: 4 - "camping-food"). Fetches latest 20 posts with automatic refresh capability.
-*   **Weather API:** Open-Meteo free weather API for real-time forecasts. No API key required. Returns daily temperature and WMO weather codes.
+*   **Authentication:** Replit Auth (OpenID Connect for Google, GitHub, and email/password logins).
+*   **Database:** PostgreSQL (via Neon serverless driver).
+*   **ORM:** Drizzle ORM and Drizzle-Kit.
+*   **Payment Processing:** Stripe Checkout Sessions for Pro Membership ($29.99/year with 7-day free trial).
+*   **WordPress Integration:** Live recipe fetching from TheCampingPlanner.com via WordPress REST API.
+*   **Weather API:** Open-Meteo free weather API for real-time forecasts (no API key required).
 *   **Fonts:** Google Fonts (Architects Daughter, DM Sans, Fira Code, Geist Mono).
 *   **Icons:** Lucide React.
-
-## Stripe Integration Setup
-
-The application uses Stripe Checkout Sessions for a secure, hosted payment experience using a Price created in the Stripe Dashboard. Required environment variables:
-
-*   `STRIPE_SECRET_KEY`: Your Stripe secret key (starts with `sk_test_` for test mode or `sk_live_` for production)
-*   `VITE_STRIPE_PUBLIC_KEY`: Your Stripe publishable key (starts with `pk_test_` or `pk_live_`)
-*   `STRIPE_PRICE_ID`: The Price ID from your Stripe Dashboard (starts with `price_`, e.g., `price_1SRnQBIEQH0jZmIb2XwrLR5v`)
-*   `STRIPE_WEBHOOK_SECRET`: Webhook signing secret from Stripe Dashboard (starts with `whsec_`)
-
-**Important**: Ensure all Stripe keys match the same mode (test or live). For development, use test mode keys (`sk_test_`, `pk_test_`) with a test Price ID.
-
-Checkout endpoint: `POST /api/billing/create-checkout-session` - Creates a Stripe Checkout Session using the Dashboard Price ID. Dynamic success/cancel URLs automatically adapt to development and production environments.
-
-Webhook endpoint: `POST /api/stripe/webhook` - Configure in Stripe Dashboard to listen for:
-*   `checkout.session.completed` - Grants Pro membership access after successful trial signup or payment
-*   `customer.subscription.updated` - Updates Pro membership end date
-*   `customer.subscription.deleted` - Revokes Pro membership access
-
-Pro Membership pricing: $29.99/year with 7-day free trial (configured in Stripe Dashboard Price). The webhook route is registered before global JSON middleware to ensure raw body is available for signature verification.
