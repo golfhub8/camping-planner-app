@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,10 @@ export default function GroceryList() {
   const [copied, setCopied] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [listToken, setListToken] = useState<string | null>(params.token || null);
+  const redirectTimerRef = useRef<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -61,6 +64,16 @@ export default function GroceryList() {
       setGroceryItems([...data.items, ...externalMealItems]);
     },
   });
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Load or save grocery list on component mount
   useEffect(() => {
@@ -94,7 +107,10 @@ export default function GroceryList() {
 
       // CASE 2: User came from GrocerySelection with confirmed data - SAVE TO DATABASE
       const confirmedData = sessionStorage.getItem('confirmedGroceryData');
-      if (confirmedData && !isSaving) {
+      if (confirmedData && !saveAttempted) {
+        // Mark that we've attempted a save to prevent duplicate saves
+        setSaveAttempted(true);
+        
         try {
           setIsSaving(true);
           const { needed, pantry, externalMeals: extMeals, tripId, tripName } = JSON.parse(confirmedData);
@@ -134,7 +150,7 @@ export default function GroceryList() {
           
           console.log(`[GroceryList] Successfully saved list with token: ${token}`);
           
-          // Clear sessionStorage
+          // Clear sessionStorage BEFORE redirecting to prevent re-saves
           sessionStorage.removeItem('confirmedGroceryData');
           
           // Invalidate queries to refresh usage stats
@@ -145,25 +161,37 @@ export default function GroceryList() {
           
         } catch (error: any) {
           console.error('[GroceryList] Error saving list:', error);
+          
+          // Clear sessionStorage on ANY error to prevent infinite retries
+          sessionStorage.removeItem('confirmedGroceryData');
           setIsSaving(false);
           
           // Check if it's a paywall error
           if (error.status === 402) {
-            const errorData = await error.response?.json();
+            const errorData = await error.response?.json().catch(() => ({}));
+            const errorMessage = errorData.message || "You've reached the free limit. Start a free trial to create unlimited lists.";
+            setSaveError(errorMessage);
             toast({
               title: "Upgrade Required",
-              description: errorData.message || "You've reached the free limit. Start a free trial to create unlimited lists.",
+              description: errorMessage,
               variant: "destructive",
             });
+            // Direct navigation (no setTimeout to avoid timer leaks)
             setLocation("/subscribe");
             return;
           }
           
+          // For all other errors, set error state to show retry UI
+          const errorMessage = "Your list could not be saved. Please try again.";
+          setSaveError(errorMessage);
           toast({
             title: "Failed to save list",
-            description: "Your list could not be saved. Please try again.",
+            description: errorMessage,
             variant: "destructive",
           });
+          
+          // Reset saveAttempted to allow manual retry
+          setSaveAttempted(false);
         }
         return;
       }
@@ -362,6 +390,43 @@ export default function GroceryList() {
   const displayedItems = showOnlyNeeded 
     ? groceryItems.filter(item => !item.checked)
     : groceryItems;
+
+  // Show error state with retry UI
+  if (saveError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-4xl">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-destructive">Error Saving List</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">{saveError}</p>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => {
+                    setSaveError(null);
+                    setSaveAttempted(false);
+                    setLocation("/grocery");
+                  }}
+                  data-testid="button-retry"
+                >
+                  Try Again
+                </Button>
+                <Button 
+                  variant="ghost"
+                  onClick={() => setLocation("/trips")}
+                  data-testid="button-back-trips"
+                >
+                  Back to Trips
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   // Show loading state when saving the list
   if (isSaving) {
