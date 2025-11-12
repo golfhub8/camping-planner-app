@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,9 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShoppingCart, Loader2, ExternalLink, ArrowLeft } from "lucide-react";
+import { ShoppingCart, Loader2, ExternalLink, ArrowLeft, AlertCircle } from "lucide-react";
 import type { Recipe, Trip } from "@shared/schema";
 import { mergeIngredients, normalizeIngredientKey, type MergedIngredient } from "@/lib/ingredients";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 enum Step {
   SELECTION = "selection",
@@ -23,6 +25,7 @@ interface ConfirmedIngredient extends MergedIngredient {
 
 export default function GrocerySelection() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState<Step>(Step.SELECTION);
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<number[]>([]);
   const [manuallySelectedRecipeIds, setManuallySelectedRecipeIds] = useState<Set<number>>(new Set());
@@ -55,6 +58,43 @@ export default function GrocerySelection() {
     queryKey: ["/api/trips", selectedTripId, "meals"],
     enabled: !!selectedTripId,
   });
+
+  // Prefetch ingredients for selected external trip meals
+  // This keeps `proceedToConfirmation` synchronous and provides loading feedback
+  const selectedExternalMeals = selectedTripMealIds
+    .map(id => tripMeals.find(m => m.id === id))
+    .filter(meal => meal?.isExternal && meal?.externalRecipeId);
+  
+  const externalIngredientsQueries = useQueries({
+    queries: selectedExternalMeals.map((meal) => ({
+      queryKey: ["/api/recipes/external", meal.externalRecipeId, "ingredients"],
+      queryFn: async () => {
+        const response = await fetch(`/api/recipes/external/${meal.externalRecipeId}/ingredients`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ingredients for ${meal.title}`);
+        }
+        return response.json();
+      },
+      enabled: !!meal.externalRecipeId,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    })),
+  });
+
+  // Track loading/error state for external ingredients
+  const externalIngredientsLoading = externalIngredientsQueries.some(q => q.isLoading);
+  const externalIngredientsError = externalIngredientsQueries.some(q => q.isError);
+  const failedExternalMeals = selectedExternalMeals.filter((_, index) => 
+    externalIngredientsQueries[index]?.isError
+  );
+  
+  // Retry handler for failed external ingredient queries
+  const retryFailedQueries = () => {
+    externalIngredientsQueries.forEach((query, index) => {
+      if (query.isError) {
+        query.refetch();
+      }
+    });
+  };
 
   // Check for pending grocery items from RecipeDetail on mount
   useEffect(() => {
@@ -179,20 +219,48 @@ export default function GrocerySelection() {
   }
 
   // Move to confirmation step
+  // MULTI-MEAL INGREDIENT AGGREGATION:
+  // This function collects ingredients from ALL selected sources:
+  // 1. Manually selected recipes from "My Recipes"
+  // 2. Internal trip meals (recipes with recipeId)
+  // 3. External trip meals (WordPress recipes - prefetched via React Query)
+  // 4. RecipeDetail/TripDetail payloads (from ingredient picker modal)
   function proceedToConfirmation() {
     if (selectedRecipeIds.length === 0 && externalMealsTitles.length === 0) return;
+    
+    // Block navigation if external ingredients are still loading
+    if (externalIngredientsLoading) {
+      console.warn('[GroceryAggregation] External ingredients still loading, please wait...');
+      toast({
+        title: "Please wait",
+        description: "Fetching ingredients from external recipes...",
+        variant: "default",
+      });
+      return;
+    }
+    
+    // Block navigation if any external ingredient fetch failed
+    if (externalIngredientsError) {
+      console.error('[GroceryAggregation] Some external ingredients failed to load');
+      toast({
+        title: "Failed to load ingredients",
+        description: `Could not fetch ingredients for ${failedExternalMeals.length} external meal(s). Please try again.`,
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Build alreadyHaveSet from session storage and extended payload
     let alreadyHaveSet = new Set<string>();
     
-    // Gather ingredients from selected recipes
+    // Gather ingredients from selected internal recipes
     const recipeIngredients = selectedRecipeIds
       .map(id => {
         // Check if this is the recipe from RecipeDetail/TripDetail
         if (recipeDetailIngredients && recipeDetailIngredients.recipeId === id) {
           if (recipeDetailIngredients.kind === "extended") {
             // Extended payload from TripDetail: use ALL ingredients, seed pantry metadata
-            alreadyHaveSet = new Set([...alreadyHaveSet, ...recipeDetailIngredients.alreadyHaveNormalized]);
+            alreadyHaveSet = new Set([...Array.from(alreadyHaveSet), ...recipeDetailIngredients.alreadyHaveNormalized]);
             return {
               recipeId: recipeDetailIngredients.recipeId,
               recipeTitle: recipeDetailIngredients.recipeTitle,
@@ -218,9 +286,39 @@ export default function GrocerySelection() {
         };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
+    
+    // ADD EXTERNAL MEAL INGREDIENTS (from prefetched React Query cache):
+    // For each selected trip meal, if it's an external WordPress recipe,
+    // get its ingredients from the cached query result
+    selectedExternalMeals.forEach((meal, index) => {
+      const queryResult = externalIngredientsQueries[index];
+      
+      if (queryResult.data?.ingredients && Array.isArray(queryResult.data.ingredients)) {
+        const ingredients = queryResult.data.ingredients;
+        recipeIngredients.push({
+          recipeId: 0, // Synthetic ID for external meals
+          recipeTitle: meal.title,
+          ingredients,
+        });
+        console.info(`[GroceryAggregation] Added ${ingredients.length} ingredients from external meal "${meal.title}"`);
+      } else {
+        console.warn(`[GroceryAggregation] No ingredients found for external meal "${meal.title}"`);
+      }
+    });
 
-    // Merge ingredients
+    // LOG AGGREGATION SUMMARY for verification
+    console.info(`[GroceryAggregation] === MULTI-MEAL AGGREGATION SUMMARY ===`);
+    console.info(`[GroceryAggregation] Processing ${recipeIngredients.length} meals/recipes total`);
+    console.info(`[GroceryAggregation] - Internal recipes: ${selectedRecipeIds.length}`);
+    console.info(`[GroceryAggregation] - External meals: ${selectedExternalMeals.length}`);
+    console.info(`[GroceryAggregation] - From ingredient picker: ${recipeDetailIngredients ? 1 : 0}`);
+    
+    const totalIngredientsBeforeMerge = recipeIngredients.reduce((sum, r) => sum + r.ingredients.length, 0);
+    console.info(`[GroceryAggregation] Total ingredients before merge: ${totalIngredientsBeforeMerge}`);
+
+    // Merge ingredients (combines duplicates, sums amounts)
     const merged = mergeIngredients(recipeIngredients);
+    console.info(`[GroceryAggregation] Total unique ingredients after merge: ${merged.length}`);
     
     // Read "already have" ingredients from sessionStorage ONLY for minimal flows (RecipeDetail standalone)
     if (recipeDetailIngredients?.kind === "minimal" || !recipeDetailIngredients) {
@@ -230,7 +328,7 @@ export default function GrocerySelection() {
           const parsed = JSON.parse(alreadyHaveData);
           // RecipeDetail stores normalized keys for robust matching (handles amounts, punctuation, etc.)
           if (Array.isArray(parsed.normalizedKeys)) {
-            alreadyHaveSet = new Set([...alreadyHaveSet, ...parsed.normalizedKeys]);
+            alreadyHaveSet = new Set([...Array.from(alreadyHaveSet), ...parsed.normalizedKeys]);
           }
           // Clear after reading to prevent stale data
           sessionStorage.removeItem('alreadyHaveIngredients');
@@ -612,6 +710,27 @@ export default function GrocerySelection() {
           </CardContent>
         </Card>
 
+        {externalIngredientsError && failedExternalMeals.length > 0 && (
+          <Alert variant="destructive" className="mb-4" data-testid="alert-external-ingredients-error">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Failed to load external recipe ingredients</AlertTitle>
+            <AlertDescription className="flex items-center justify-between gap-4">
+              <span>
+                Could not fetch ingredients for {failedExternalMeals.length} external meal(s): 
+                {failedExternalMeals.map(m => m.title).join(", ")}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={retryFailedQueries}
+                data-testid="button-retry-external-ingredients"
+              >
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex gap-3 justify-end">
           <Button
             variant="outline"
@@ -622,14 +741,26 @@ export default function GrocerySelection() {
           </Button>
           <Button
             onClick={proceedToConfirmation}
-            disabled={selectedRecipeIds.length === 0 && externalMealsTitles.length === 0}
+            disabled={
+              (selectedRecipeIds.length === 0 && externalMealsTitles.length === 0) ||
+              externalIngredientsLoading
+            }
             className="gap-2"
             data-testid="button-proceed-to-confirm"
           >
-            <ShoppingCart className="h-4 w-4" />
-            Continue to Review
-            {(selectedRecipeIds.length > 0 || externalMealsTitles.length > 0) &&
-              ` (${selectedRecipeIds.length + externalMealsTitles.length})`}
+            {externalIngredientsLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Fetching ingredients...
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="h-4 w-4" />
+                Continue to Review
+                {(selectedRecipeIds.length > 0 || externalMealsTitles.length > 0) &&
+                  ` (${selectedRecipeIds.length + externalMealsTitles.length})`}
+              </>
+            )}
           </Button>
         </div>
       </main>
