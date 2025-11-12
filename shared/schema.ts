@@ -92,6 +92,12 @@ export const users = pgTable("users", {
   // Example: ["water", "coffee", "eggs"] - these persist across sessions
   selectedCampingBasics: text("selected_camping_basics").array().notNull().default(sql`'{}'::text[]`),
   
+  // Usage counters for free plan limits
+  // Free users limited to 5 trips and 5 grocery lists
+  // Pro users have unlimited access
+  tripsCount: integer("trips_count").notNull().default(0),
+  groceryCount: integer("grocery_count").notNull().default(0),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

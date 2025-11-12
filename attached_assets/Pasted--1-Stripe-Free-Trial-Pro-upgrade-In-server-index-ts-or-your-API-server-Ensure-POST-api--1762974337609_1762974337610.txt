@@ -1,0 +1,72 @@
+	1.	Stripe Free Trial + Pro upgrade
+	•	In server/index.ts (or your API server):
+	•	Ensure POST /api/billing/create-checkout-session returns url using stripe.checkout.sessions.create({ mode:'subscription', allow_promotion_codes:true, success_url: {BASE}/account?sub=success, cancel_url: {BASE}/printables, line_items:[{ price: process.env.STRIPE_PRICE_ID, quantity:1 }] }).
+Send cookies: credentials: 'include' on the client.
+	•	Add webhook POST /api/stripe/webhook verifying signature. On checkout.session.completed AND customer.subscription.created|updated:
+	•	upsert user record: plan: 'pro', pro_since, sub_id, period_end.
+	•	On customer.subscription.deleted set plan: 'free' and keep trial_used: true.
+	•	In client:
+	•	Fix Start 7-Day Free Trial buttons to call POST /api/billing/create-checkout-session with credentials: 'include' and redirect to data.url.
+	•	If a user returns to /account?sub=success, call /api/me/refresh then show Pro badge and unlock printables immediately.
+	•	ENV required: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID.
+Show a red toasty if any missing.
+	2.	Account page & plan benefits
+	•	Route /account shows: Current Plan (Free/Trial/Pro), renewal date (if Pro), buttons: Start Trial (when Free & trial_used=false), Manage Subscription (links to Stripe customer portal).
+	•	Under “Plan benefits”, render:
+	•	Free: “Up to 5 trips & 5 grocery lists. Offline access to saved recipes. 2 free printables.”
+	•	Pro: “Unlimited trips & grocery lists. All printables. Sharing & history.”
+	•	Implement usage counters in DB: trips_count, grocery_count. Increment on create; decrement on delete.
+	3.	Global limits & upsell
+	•	In server middlewares for POST /api/trips and POST /api/grocery-lists, block when user.plan==='free' && count>=5 with 402-style JSON: {code:'LIMIT_REACHED'}.
+	•	In UI, if blocked, show inline upsell: “You’ve reached the Free limit. Start your 7-day free trial to keep planning.”
+	4.	Default landing + nav order
+	•	Make / route redirect to /trips.
+	•	Header order: Trips, Recipes, Grocery, Printables.
+	•	Make profile menu: My Account, Manage Subscription, Logout. Fix the “Manage…” link to Stripe portal only (no Printables redirect).
+	5.	Location autocomplete everywhere
+	•	Use your existing Nominatim/Mapbox/Places util for LocationInput.
+	•	Trips “Location” field: as-you-type autocomplete. Store place_name, lat, lng on the trip. Weather fetch uses lat,lng.
+	•	Remove any “enter latitude/longitude manually” messages.
+	6.	Recipe import — prefill ingredients & ALL steps
+	•	In client/pages/recipes modal “Save Recipe”:
+	•	Keep Source URL, Title, prefilled Ingredients textarea (one per line), and prefilled Instructions textarea (each step separated by a blank line).
+	•	Fix the parser so all steps are captured. If parser misses, fall back to server-side scrape (cheerio) by calling /api/recipes/parse?url=....
+	•	Remove gray disabled state: fields are editable (prefilled).
+	•	On save, persist full text; show snackbar “Saved for offline use”.
+	7.	Add-to-Trip quick flow
+	•	When user taps Add to Trip and has no trips:
+	•	Show Create Quick Trip modal with fields: Trip Name (default from recipe like “Leo Carrillo Weekend”), Dates, Location (autocomplete).
+	•	On Create: POST trip, then attach the recipe as a planned meal, then show the trip page anchored to “Meals” with the newly added meal expanded.
+	8.	Trip Assistant (free-form builder)
+	•	At top of /trips before “Plan a New Trip”, add a text area:
+Placeholder: “Tell us your dates, region, and who’s coming. Example: ‘We’ve got Mar 12–21 near San Diego, family of 4. Campsites + meal ideas?’”
+	•	Client posts to /api/trips/assistant (server stub OK): returns a JSON with { suggestedCamps:[{name, place_name, lat, lng}], suggestedMeals:[{title, url}] }.
+	•	Render suggestions with Add buttons: Add campsite as trip location, Save recipe (uses the improved parser), and Create Trip from suggestions (fills fields automatically).
+	•	(We can keep backend stubbed with a curated list for now; switch to LLM later.)
+	9.	Grocery improvements interop
+	•	Ensure grocery builder can pull from My Saved Recipes and from Meals in a Trip.
+	•	Deduplicate & sum units (e.g., “3 cups cheddar” note) already in your design.
+	•	Add Email list button in the “Share Grocery List” dialog:
+	•	If server email not configured, open mailto: with subject & body containing the plain-text list.
+	•	Else, POST /api/share/grocery to send via transactional mail.
+	10.	Printables gating
+
+	•	On Pro: unlock download buttons immediately (no “Start Trial” loops).
+	•	On Free: show lock with the same Trial button wired to #1.
+	•	Keep two free items always downloadable.
+
+	11.	Routing/UX fixes
+
+	•	If the user clicks “Start Trial” anywhere and the call fails, show the exact message (“Stripe price missing” / “Network”) rather than generic “Network error”.
+	•	After successful Stripe return, do not bounce them back to Printables unless that was the origin; if they came from Account, stay on Account and show “Pro active”.
+
+	12.	Acceptance checks
+
+	•	I can:
+a) Start a trial without “network error”.
+b) See Pro on /account after returning.
+c) Save a recipe and see all ingredients + all steps prefilled.
+d) Hit Add to Trip with no trips → quick trip created → recipe attached.
+e) Type “Parksville” or “Los Angeles” in Location and see suggestions.
+f) Free plan blocks at 5 trips or 5 grocery lists with a clear upsell.
+g) Pro plan removes those limits; Printables download buttons enabled.
