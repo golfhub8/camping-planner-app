@@ -1629,6 +1629,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // POST /api/grocery-lists
+  // Creates and persists a grocery list (not necessarily shared yet)
+  // Body: { items: GroceryItem[], tripId?: number, tripName?: string }
+  // Returns: { token: string, id: number, listUrl: string }
+  // Protected route - requires authentication
+  // Note: Used for saving lists from "Build Your Grocery List" flow
+  app.post("/api/grocery-lists", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Check if user has reached the free tier grocery list limit
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Derive isPro from proMembershipEndDate
+      const now = new Date();
+      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+
+      // If not Pro, check grocery limit using counter field
+      if (!isPro && user.groceryCount >= FREE_GROCERY_LIMIT) {
+        return res.status(402).json({ 
+          code: "PAYWALL",
+          message: "You've reached the free limit of 5 shared grocery lists. Start a free trial to create unlimited lists."
+        });
+      }
+      
+      // Validate the request body
+      const data = createSharedGroceryListSchema.parse(req.body);
+      
+      // Create the grocery list in the database
+      const groceryList = await storage.createSharedGroceryList(data, userId);
+      
+      // Increment the grocery counter for the user
+      await storage.incrementGroceryCount(userId);
+      
+      // Generate the list URL (not a share URL - user can view their own list)
+      const listUrl = `${req.protocol}://${req.get('host')}/grocery/list/${groceryList.token}`;
+      
+      console.log(`[GroceryList] Created grocery list ${groceryList.id} for user ${userId} with ${data.items.length} items`);
+      
+      res.json({ 
+        token: groceryList.token,
+        id: groceryList.id,
+        listUrl,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error creating grocery list:", error);
+      res.status(500).json({ error: "Failed to create grocery list" });
+    }
+  });
+
+  // GET /api/grocery-lists/:token
+  // Retrieves a saved grocery list by its token
+  // Public route - no authentication required (anyone with token can view)
+  app.get("/api/grocery-lists/:token", async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Retrieve the grocery list
+      const groceryList = await storage.getSharedGroceryListByToken(token);
+      
+      if (!groceryList) {
+        return res.status(404).json({ error: "Grocery list not found or expired" });
+      }
+      
+      res.json(groceryList);
+    } catch (error) {
+      console.error("Error fetching grocery list:", error);
+      res.status(500).json({ error: "Failed to fetch grocery list" });
+    }
+  });
+
   // POST /api/grocery/share/link
   // Creates a shareable grocery list with a unique token
   // Body: { items: GroceryItem[], tripId?: number, tripName?: string, collaborators?: string[] }
