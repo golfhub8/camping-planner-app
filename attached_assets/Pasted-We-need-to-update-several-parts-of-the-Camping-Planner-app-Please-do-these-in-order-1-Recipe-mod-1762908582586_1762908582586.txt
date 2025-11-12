@@ -1,0 +1,57 @@
+We need to update several parts of the Camping Planner app. Please do these in order.
+
+1) Recipe modal → “send selected ingredients to grocery”
+	•	File to update: the React component that shows the recipe detail modal (the one that currently shows “Ingredients Checklist” like in the screenshot).
+	•	Right now the ingredient rows are just displayed. I want each ingredient row to have a checkbox.
+	•	Add two buttons to the bottom of the modal:
+	•	“Add selected to grocery list”
+	•	“Select all” (this checks every ingredient in the recipe)
+	•	When the user clicks “Add selected to grocery list”, send those ingredients to the backend (or to the existing client-side grocery builder if that’s how it’s wired) in the same structure we already use for the grocery page. Do NOT lose the connection to the recipe name — we’ll need to show that the ingredient came from this recipe.
+	•	If the ingredient has quantities (like “2 cups”, “6 slices”), keep that text on the ingredient so the grocery screen can combine them later.
+	•	If the recipe includes sections like “Equipment You’ll Need”, ignore those for grocery.
+
+2) Grocery page flow improvement
+	•	File to update: client/src/pages/Grocery.tsx (or whatever file renders “Build Your Grocery List”).
+	•	After the user chooses a recipe (from trip or from their recipe list), show a confirmation step BEFORE the final list is generated:
+	•	This step should list every ingredient from the selected recipes.
+	•	Each ingredient has a checkbox.
+	•	At the top, add a toggle: “Move unchecked items to ‘Already Have It’”.
+	•	When they click “Generate Grocery List”, only the checked ones go into the main grocery list, the unchecked ones go into a separate section called “Already in Your Pantry” (just render it below like our Camping Basics section).
+	•	When multiple recipes have the same ingredient name (case-insensitive), combine them and show the total to the user, like:
+	•	“Cheddar cheese — 1 cup (Mac and Cheese) + 2 cups (Campfire Mac) → 3 cups total”
+	•	Keep the existing “Camping Basics” items at the top, but leave them unselected by default.
+
+3) Fix double header / navbar
+	•	Right now on some pages (Trips/Grocery) there are two bars: one with logo + nav, and another with search/profile. We only want ONE top bar.
+	•	Update the main layout component (the one that wraps Recipes / Trips / Grocery / Printables) so that:
+	•	The top bar contains: logo (left), main nav tabs (Recipes, Trips, Grocery, Map, Printables), search bar, profile avatar, and the “Go Pro” button.
+	•	Remove any second/local header from the individual pages that duplicates search/profile.
+	•	Make the main header a bit taller (about 72px) and keep style consistent with the current app.
+
+4) Trips: location should autocomplete, not require lat/lon
+	•	In the “Plan a New Trip” form, right now the Location field just takes text and later we need to add latitude/longitude. Replace this with an autocomplete input.
+	•	Use a free geocoding/autocomplete source like Nominatim (OpenStreetMap) from the frontend (no key needed). As the user types “parksville”, “los angeles”, “goldstream”, show suggestions.
+	•	When the user picks a suggestion, save BOTH:
+	•	the display name (e.g. “Los Angeles, California, United States”)
+	•	the coordinates (lat/lon)
+	•	Send those coordinates to the backend when creating/updating the trip so the weather card stops saying “This trip doesn’t have coordinates set yet.”
+	•	Make sure editing an existing trip also re-runs the geocode if the location changes.
+
+5) Trip detail: add “What to Pack” teaser
+	•	On the trip detail page (where we show Weather Forecast, Collaborators, Grocery Cost, and “Meals for this Trip”), add a new card under or beside those called “What to Pack”.
+	•	In that card, show 5–6 basic items from our own planner (tent, sleeping bags, kitchen kit, hygiene kit, first-aid kit).
+	•	At the bottom of that card add a button: “See full packing lists — Go Pro” and link it to the existing subscribe/checkout flow we already wired for Printables.
+
+6) Printables: unlock for Pro
+	•	On the Printables page, the cards are now visible — good. Make the logic:
+	•	if the product is marked “Free” → always show “Download Free” and it should download directly from the file we uploaded.
+	•	if the user is Pro → show “Download” (not greyed out).
+	•	if the user is not Pro → show the current “Start 7-Day Free Trial ($29.99/year)” button.
+	•	Use the current auth/user endpoint we already have (/api/auth/user or whatever you set up) to decide if the user is Pro.
+
+7) Keep existing styles / routes
+	•	Do not change route names.
+	•	Keep TypeScript strictness.
+	•	Keep the “Add to Trip” button on recipe cards — we’re just adding the ingredient-selection step on top.
+
+When you’re done, tell me which files you edited and how to call the new grocery confirm step from the UI.

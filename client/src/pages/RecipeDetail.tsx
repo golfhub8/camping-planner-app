@@ -42,53 +42,47 @@ export default function RecipeDetail() {
     setCheckedIngredients(newChecked);
   };
 
+  const selectAllIngredients = () => {
+    if (!recipe) return;
+    const allIndices = new Set(recipe.ingredients.map((_, idx) => idx));
+    setCheckedIngredients(allIndices);
+  };
+
   const handlePrint = () => {
     window.print();
   };
 
-  // Send unchecked ingredients to grocery list
-  const sendToGroceryMutation = useMutation({
-    mutationFn: async () => {
-      if (!recipe) return;
-      
-      // Get only unchecked ingredients (the ones user still needs)
-      const neededIngredients = recipe.ingredients
-        .filter((_, idx) => !checkedIngredients.has(idx))
-        .map(ing => ({ name: ing }));
-      
-      if (neededIngredients.length === 0) {
-        throw new Error("No ingredients selected. Uncheck the ingredients you need to add to your grocery list.");
-      }
-
-      const response = await apiRequest("POST", "/api/grocery/from-recipe", {
-        recipeId: recipe.id,
-        recipeTitle: recipe.title,
-        ingredients: neededIngredients,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to add to grocery list");
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
+  // Add selected ingredients to grocery list
+  const addToGroceryList = () => {
+    if (!recipe) return;
+    
+    // Get checked ingredients (the ones user wants to add)
+    const selectedIngredients = recipe.ingredients
+      .filter((_, idx) => checkedIngredients.has(idx));
+    
+    if (selectedIngredients.length === 0) {
       toast({
-        title: "Added to Grocery List",
-        description: "Ingredients have been added to your grocery list",
-      });
-      // Navigate to grocery list
-      setLocation("/grocery/my-list");
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
+        title: "No ingredients selected",
+        description: "Please check the ingredients you want to add to your grocery list.",
         variant: "destructive",
       });
-    },
-  });
+      return;
+    }
+
+    // Store selected ingredients and recipe info in sessionStorage
+    const groceryData = {
+      recipes: [{
+        id: recipe.id,
+        title: recipe.title,
+        selectedIngredients: selectedIngredients
+      }]
+    };
+    
+    sessionStorage.setItem('pendingGroceryItems', JSON.stringify(groceryData));
+    
+    // Navigate to grocery page
+    setLocation("/grocery");
+  };
 
   if (isLoading) {
     return (
@@ -187,15 +181,24 @@ export default function RecipeDetail() {
                     </li>
                   ))}
                 </ul>
-                <Button
-                  onClick={() => sendToGroceryMutation.mutate()}
-                  disabled={sendToGroceryMutation.isPending}
-                  className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"
-                  data-testid="button-send-to-grocery"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  {sendToGroceryMutation.isPending ? "Adding..." : "Send to Grocery List"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={selectAllIngredients}
+                    className="flex-1"
+                    data-testid="button-select-all"
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    onClick={addToGroceryList}
+                    className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700"
+                    data-testid="button-add-to-grocery"
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    Add Selected to Grocery
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
