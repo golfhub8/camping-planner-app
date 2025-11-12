@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent, Copy, Check } from "lucide-react";
+import { Share2, ArrowLeft, Loader2, Carrot, Milk, Beef, Package, Tent, Copy, Check, Mail } from "lucide-react";
 import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { CAMPING_BASICS, type GroceryItem, type GroceryCategory } from "@shared/schema";
@@ -32,6 +32,7 @@ export default function GroceryList() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const [emailAddress, setEmailAddress] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -187,6 +188,36 @@ export default function GroceryList() {
         variant: "destructive",
       });
     }
+  }
+
+  // Send grocery list via email using mailto link
+  function sendViaEmail() {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      toast({
+        title: "Invalid email address",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const subject = encodeURIComponent("Grocery List for Our Camping Trip");
+    const body = encodeURIComponent(
+      `Hi!\n\nI'm sharing our grocery list for the upcoming camping trip. You can view it here:\n\n${shareUrl}\n\nThis list includes all the items we need. Check it out and let me know if I missed anything!\n\nHappy camping!\n- Sent from The Camping Planner`
+    );
+    
+    const mailtoLink = `mailto:${emailAddress}?subject=${subject}&body=${body}`;
+    
+    // Open email client
+    window.location.href = mailtoLink;
+    
+    toast({
+      title: "Email client opened",
+      description: `Opening your email client to send to ${emailAddress}`,
+    });
+    
+    // Clear email input after sending
+    setEmailAddress("");
   }
 
   // Fetch user's selected camping basics
@@ -484,30 +515,65 @@ export default function GroceryList() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={shareUrl}
-                readOnly
-                className="flex-1 px-3 py-2 border rounded-md bg-muted text-sm"
-                data-testid="input-share-url"
-              />
-              <Button
-                onClick={copyShareUrl}
-                variant="outline"
-                size="icon"
-                data-testid="button-copy-url"
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-600" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Share Link</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={shareUrl}
+                  readOnly
+                  className="flex-1 px-3 py-2 border rounded-md bg-muted text-sm"
+                  data-testid="input-share-url"
+                />
+                <Button
+                  onClick={copyShareUrl}
+                  variant="outline"
+                  size="icon"
+                  data-testid="button-copy-url"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Share this link with family or friends so they can see what groceries to buy for your camping trip!
-            </p>
+
+            <div className="border-t pt-4">
+              <Label htmlFor="email-input" className="text-sm font-medium mb-2 block">
+                Send via Email
+              </Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="email-input"
+                  type="email"
+                  placeholder="friend@example.com"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      sendViaEmail();
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border rounded-md text-sm"
+                  data-testid="input-email-address"
+                />
+                <Button
+                  onClick={sendViaEmail}
+                  variant="default"
+                  className="gap-2"
+                  disabled={!emailAddress}
+                  data-testid="button-send-email"
+                >
+                  <Mail className="h-4 w-4" />
+                  Send
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                This will open your email client with a pre-filled message
+              </p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
