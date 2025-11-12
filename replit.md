@@ -16,7 +16,7 @@ The frontend is a React 18 application with TypeScript, Vite, and Wouter for rou
 
 ### Backend
 
-The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. Most API routes are protected by `isAuthenticated` middleware. User ownership is strictly verified for all data access. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation (including from trip meal plans with pantry item preservation), and comprehensive trip management (creation, collaborators, cost tracking, meal planning, shareable grocery links). Weather forecasting is integrated via Open-Meteo API using trip coordinates. Payment processing is integrated via Stripe Checkout Sessions for Pro Membership, with robust webhook handlers that store subscription status locally for efficient Pro access checks (avoiding per-request Stripe API calls). Webhooks include email-based user lookup fallback and automatic metadata patching for legacy subscriptions. Pro access is granted for subscription statuses: active, trialing, and past_due (grace period). Live WordPress integration provides external recipes from TheCampingPlanner.com, automatically updating with new content. Zod is used for schema validation on all request and response payloads.
+The backend is an Express.js application built with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication with a PostgreSQL session store. Most API routes are protected by `isAuthenticated` middleware. User ownership is strictly verified for all data access. The API provides endpoints for user authentication, CRUD operations on user-owned recipes, dynamic grocery list generation (including from trip meal plans with pantry item preservation), and comprehensive trip management (creation, collaborators, cost tracking, meal planning, shareable grocery links). Payment processing is integrated via Stripe Checkout Sessions for Pro Membership, with robust webhook handlers that store subscription status locally for efficient Pro access checks (avoiding per-request Stripe API calls). Webhooks include email-based user lookup fallback and automatic metadata patching for legacy subscriptions. Pro access is granted for subscription statuses: active, trialing, and past_due (grace period). Live WordPress integration provides external recipes from TheCampingPlanner.com, automatically updating with new content. Zod is used for schema validation on all request and response payloads.
 
 ### Data Layer
 
@@ -29,6 +29,12 @@ Data persistence uses PostgreSQL with the Neon serverless driver, accessed via D
 *   **ORM:** Drizzle ORM and Drizzle-Kit.
 *   **Payment Processing:** Stripe Checkout Sessions for Pro Membership ($29.99/year with 7-day free trial).
 *   **WordPress Integration:** Live recipe fetching from TheCampingPlanner.com via WordPress REST API.
-*   **Weather API:** Open-Meteo free weather API for real-time forecasts (no API key required).
+*   **Weather API:** Open-Meteo free weather API for client-side real-time forecasts (no API key required, fetched directly from browser).
+*   **Geocoding API:** Mapbox Geocoding API for location autocomplete with coordinate capture (requires VITE_MAPBOX_TOKEN).
 *   **Fonts:** Google Fonts (Architects Daughter, DM Sans, Fira Code, Geist Mono).
 *   **Icons:** Lucide React.
+
+## Key Features
+
+### Weather Forecasting
+Client-side weather integration fetches real-time forecasts from Open-Meteo API when trips have stored coordinates. The LocationAutocomplete component (powered by Mapbox) captures latitude/longitude when users select a location from suggestions. WeatherCard component displays current conditions and multi-day forecasts filtered to trip dates, with graceful degradation when coordinates are unavailable. Weather utilities (`client/src/lib/weather.ts`) handle API requests and WMO weather code translations, using fahrenheit/mph/inches units for US audiences. The useWeather hook manages React Query caching with 30-minute stale time for efficient data fetching.
