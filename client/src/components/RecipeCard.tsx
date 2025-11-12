@@ -7,13 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus, ShoppingCart } from "lucide-react";
+import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus, ShoppingCart, Save } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import TripSelector from "./TripSelector";
 import IngredientPickerModal from "./IngredientPickerModal";
+import { SaveRecipeModal } from "./SaveRecipeModal";
 
 interface RecipeCardProps {
   id: number | string; // Can be number for internal recipes, or string (wp-ID) for external
@@ -22,10 +23,11 @@ interface RecipeCardProps {
   createdAt?: Date; // Optional for external recipes
   source?: "internal" | "external"; // Indicates if this is from database or WordPress
   url?: string; // For external recipes - link to full recipe
+  content?: string; // For external recipes - recipe instructions/content
   onViewExternal?: () => void; // Handler for viewing external recipes in modal
 }
 
-export default function RecipeCard({ id, title, ingredients, createdAt, source = "internal", url, onViewExternal }: RecipeCardProps) {
+export default function RecipeCard({ id, title, ingredients, createdAt, source = "internal", url, content, onViewExternal }: RecipeCardProps) {
   const { toast } = useToast();
   
   // State for the share dialog
@@ -39,6 +41,9 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   
   // State for ingredient picker modal
   const [ingredientPickerOpen, setIngredientPickerOpen] = useState(false);
+  
+  // State for save recipe modal (external recipes)
+  const [saveRecipeModalOpen, setSaveRecipeModalOpen] = useState(false);
 
   const displayIngredients = ingredients.slice(0, 3);
   const hasMore = ingredients.length > 3;
@@ -216,6 +221,20 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               </Button>
             )}
             
+            {/* Save to My Recipes button - only for external recipes */}
+            {source === "external" && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setSaveRecipeModalOpen(true)}
+                data-testid={`button-save-recipe-${id}`}
+              >
+                <Save className="h-4 w-4" />
+                Save Recipe
+              </Button>
+            )}
+            
             {/* Add to Trip button - only for external recipes */}
             {source === "external" && (
               <Button
@@ -373,6 +392,20 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           recipeId={typeof id === 'number' ? id : 0}
           recipeTitle={title}
           ingredients={ingredients}
+        />
+      )}
+      
+      {/* Save Recipe Modal - for saving external recipes to My Recipes */}
+      {source === "external" && (
+        <SaveRecipeModal
+          open={saveRecipeModalOpen}
+          onOpenChange={setSaveRecipeModalOpen}
+          externalRecipe={{
+            title,
+            sourceUrl: url,
+            ingredients,
+            content,
+          }}
         />
       )}
     </>

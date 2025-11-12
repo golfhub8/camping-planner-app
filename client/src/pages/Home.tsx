@@ -18,6 +18,7 @@ interface ExternalRecipe {
   source: "external";
   url: string; // Link to the full recipe on TheCampingPlanner.com
   ingredients?: string[]; // May not be available for external recipes
+  content?: string; // Recipe instructions/content from WordPress
 }
 
 export default function Home() {
@@ -246,6 +247,7 @@ export default function Home() {
                   ingredients={recipe.ingredients || []}
                   source="external"
                   url={recipe.url}
+                  content={recipe.content}
                   onViewExternal={() => setViewingExternalRecipeId(recipe.id)}
                 />
               ))}

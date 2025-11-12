@@ -18,6 +18,10 @@ export const recipes = pgTable("recipes", {
   // Preparation steps as a single text block
   steps: text("steps").notNull(),
   
+  // Optional source URL for external recipes saved to My Recipes
+  // When users save an external WordPress recipe, this stores the original URL
+  sourceUrl: text("source_url"),
+  
   // User who created this recipe (foreign key to users table)
   userId: varchar("user_id").notNull().references(() => users.id),
   
@@ -30,6 +34,7 @@ export const insertRecipeSchema = createInsertSchema(recipes).pick({
   title: true,
   ingredients: true,
   steps: true,
+  sourceUrl: true,
 });
 
 // TypeScript types for working with recipes
