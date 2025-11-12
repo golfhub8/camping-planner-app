@@ -7,12 +7,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus } from "lucide-react";
+import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus, ShoppingCart } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import TripSelector from "./TripSelector";
+import IngredientPickerModal from "./IngredientPickerModal";
 
 interface RecipeCardProps {
   id: number | string; // Can be number for internal recipes, or string (wp-ID) for external
@@ -35,6 +36,9 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   
   // State for trip selector (external recipes)
   const [tripSelectorOpen, setTripSelectorOpen] = useState(false);
+  
+  // State for ingredient picker modal
+  const [ingredientPickerOpen, setIngredientPickerOpen] = useState(false);
 
   const displayIngredients = ingredients.slice(0, 3);
   const hasMore = ingredients.length > 3;
@@ -198,10 +202,24 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           )}
           
           <div className="flex items-center gap-2 ml-auto">
+            {/* Add to Grocery button - only if ingredients available */}
+            {ingredients.length > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setIngredientPickerOpen(true)}
+                data-testid={`button-add-to-grocery-${id}`}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Add to Grocery
+              </Button>
+            )}
+            
             {/* Add to Trip button - only for external recipes */}
             {source === "external" && (
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
                 className="gap-1.5"
                 onClick={() => setTripSelectorOpen(true)}
@@ -346,6 +364,17 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
         onSelectTrip={handleSelectTrip}
         isLoading={addToTripMutation.isPending}
       />
+      
+      {/* Ingredient Picker Modal - for adding ingredients to grocery list */}
+      {ingredients.length > 0 && (
+        <IngredientPickerModal
+          open={ingredientPickerOpen}
+          onOpenChange={setIngredientPickerOpen}
+          recipeId={typeof id === 'number' ? id : 0}
+          recipeTitle={title}
+          ingredients={ingredients}
+        />
+      )}
     </>
   );
 }

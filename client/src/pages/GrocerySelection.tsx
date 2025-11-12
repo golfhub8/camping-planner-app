@@ -80,8 +80,8 @@ export default function GrocerySelection() {
             setSelectedRecipeIds(prev => [...prev, data.recipeId]);
             setManuallySelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
           }
-        } else if (data.recipeId && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
-          // Minimal payload from RecipeDetail: use ONLY selected ingredients
+        } else if (data.recipeId !== undefined && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+          // Minimal payload from RecipeDetail/IngredientPicker: use ONLY selected ingredients
           setRecipeDetailIngredients({
             kind: "minimal",
             recipeId: data.recipeId,
@@ -89,14 +89,14 @@ export default function GrocerySelection() {
             ingredients: data.ingredients
           });
           
-          // Auto-select the recipe from RecipeDetail
+          // Auto-select the recipe (recipeId can be 0 for external recipes)
           if (!selectedRecipeIds.includes(data.recipeId)) {
             setSelectedRecipeIds(prev => [...prev, data.recipeId]);
             setManuallySelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
           }
         }
-        // Clear the pending data
-        sessionStorage.removeItem('pendingGroceryItems');
+        // DON'T clear pending data here - it will be cleared when user proceeds to confirmation
+        // This prevents the empty state from showing on re-render
       } catch (e) {
         console.error('Failed to parse pending grocery items:', e);
         sessionStorage.removeItem('pendingGroceryItems');
@@ -255,6 +255,9 @@ export default function GrocerySelection() {
     
     setConfirmedIngredients(confirmed);
     setCurrentStep(Step.CONFIRMATION);
+    
+    // Clear pending grocery items from sessionStorage now that we've processed them
+    sessionStorage.removeItem('pendingGroceryItems');
   }
 
   function toggleIngredientNeeded(index: number) {
@@ -310,7 +313,20 @@ export default function GrocerySelection() {
     );
   }
 
-  if (!recipes || recipes.length === 0) {
+  // Check if there are any recipes OR pending grocery items from ingredient picker
+  // Check sessionStorage directly (not state) because state is populated in useEffect AFTER render
+  const hasPendingGroceryItems = (() => {
+    try {
+      const pendingData = sessionStorage.getItem('pendingGroceryItems');
+      return !!pendingData && pendingData !== 'null';
+    } catch {
+      return false;
+    }
+  })();
+  const hasSelectedRecipes = selectedRecipeIds.length > 0;
+  
+  // Only show "No Recipes Yet" if user has no recipes AND no pending items from ingredient picker
+  if (!recipes || (recipes.length === 0 && !hasPendingGroceryItems && !hasSelectedRecipes)) {
     return (
       <div className="min-h-screen bg-background">
         <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl pt-24">

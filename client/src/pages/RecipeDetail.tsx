@@ -3,20 +3,22 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Calendar, Printer, ChefHat, ShoppingCart } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { parseIngredient } from "@/lib/ingredients";
 import type { Recipe } from "@shared/schema";
+import IngredientPickerModal from "@/components/IngredientPickerModal";
 
 export default function RecipeDetail() {
   const params = useParams();
   const recipeId = parseInt(params.id || "1");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  
+  // State for ingredient picker modal
+  const [ingredientPickerOpen, setIngredientPickerOpen] = useState(false);
   
   // Fetch the specific recipe from the API
   const { data: recipe, isLoading } = useQuery<Recipe>({
@@ -29,87 +31,9 @@ export default function RecipeDetail() {
       return response.json();
     },
   });
-  
-  const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
-
-  const toggleIngredient = (index: number) => {
-    const newChecked = new Set(checkedIngredients);
-    if (newChecked.has(index)) {
-      newChecked.delete(index);
-    } else {
-      newChecked.add(index);
-    }
-    setCheckedIngredients(newChecked);
-  };
-
-  const selectAllIngredients = () => {
-    if (!recipe) return;
-    const allIndices = new Set(recipe.ingredients.map((_, idx) => idx));
-    setCheckedIngredients(allIndices);
-  };
 
   const handlePrint = () => {
     window.print();
-  };
-
-  // Add selected ingredients to grocery list
-  const addToGroceryList = () => {
-    if (!recipe) return;
-    
-    // Get checked ingredients (the ones user wants to add)
-    const selectedIngredients = recipe.ingredients
-      .filter((_, idx) => checkedIngredients.has(idx));
-    
-    if (selectedIngredients.length === 0) {
-      toast({
-        title: "No ingredients selected",
-        description: "Please check the ingredients you want to add to your grocery list.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Store recipe with selected ingredients in sessionStorage
-    // Format matches what GrocerySelection expects for mergeIngredients
-    const groceryData = {
-      recipeId: recipe.id,
-      recipeTitle: recipe.title,
-      ingredients: selectedIngredients // Array of ingredient strings with amounts
-    };
-    
-    sessionStorage.setItem('pendingGroceryItems', JSON.stringify(groceryData));
-    
-    // Navigate to grocery page
-    setLocation("/grocery");
-  };
-
-  // Mark unchecked ingredients as already owned
-  const markOthersAsAlreadyHave = () => {
-    if (!recipe) return;
-    
-    const uncheckedIngredients = recipe.ingredients.filter((_, idx) => !checkedIngredients.has(idx));
-    
-    if (uncheckedIngredients.length === 0) {
-      toast({
-        title: "All ingredients selected",
-        description: "Uncheck the ingredients you already have first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Store "already have" ingredients in sessionStorage using normalized keys
-    // parseIngredient strips amounts/units BEFORE normalizing for correct matching
-    const alreadyHaveData = {
-      normalizedKeys: uncheckedIngredients.map(ing => parseIngredient(ing).normalized)
-    };
-    
-    sessionStorage.setItem('alreadyHaveIngredients', JSON.stringify(alreadyHaveData));
-    
-    toast({
-      title: "Marked as already owned",
-      description: `${uncheckedIngredients.length} ingredient${uncheckedIngredients.length !== 1 ? 's' : ''} marked as already in your pantry.`,
-    });
   };
 
   if (isLoading) {
@@ -183,58 +107,24 @@ export default function RecipeDetail() {
                   <ChefHat className="h-5 w-5 text-primary" />
                   Ingredients
                 </CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Select ingredients to add to your grocery list
-                </p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <ul className="space-y-3">
                   {recipe.ingredients.map((ingredient, idx) => (
-                    <li key={idx} className="flex items-start gap-3" data-testid={`ingredient-${idx}`}>
-                      <Checkbox
-                        id={`ingredient-${idx}`}
-                        checked={checkedIngredients.has(idx)}
-                        onCheckedChange={() => toggleIngredient(idx)}
-                        className="mt-1"
-                        data-testid={`checkbox-ingredient-${idx}`}
-                      />
-                      <label
-                        htmlFor={`ingredient-${idx}`}
-                        className="flex-1 cursor-pointer select-none"
-                      >
-                        {ingredient}
-                      </label>
+                    <li key={idx} className="flex items-start gap-2" data-testid={`ingredient-${idx}`}>
+                      <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-primary" />
+                      <span className="flex-1">{ingredient}</span>
                     </li>
                   ))}
                 </ul>
-                <div className="flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={selectAllIngredients}
-                      className="flex-1"
-                      data-testid="button-select-all"
-                    >
-                      Select All
-                    </Button>
-                    <Button
-                      onClick={addToGroceryList}
-                      className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700"
-                      data-testid="button-add-to-grocery"
-                    >
-                      <ShoppingCart className="h-4 w-4" />
-                      Add Selected to Grocery
-                    </Button>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={markOthersAsAlreadyHave}
-                    className="w-full"
-                    data-testid="button-mark-already-have"
-                  >
-                    Mark Others as Already Have
-                  </Button>
-                </div>
+                <Button
+                  onClick={() => setIngredientPickerOpen(true)}
+                  className="w-full gap-2"
+                  data-testid="button-add-to-grocery"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to Grocery List
+                </Button>
               </CardContent>
             </Card>
 
@@ -258,6 +148,15 @@ export default function RecipeDetail() {
           </div>
         </div>
       </main>
+      
+      {/* Ingredient Picker Modal */}
+      <IngredientPickerModal
+        open={ingredientPickerOpen}
+        onOpenChange={setIngredientPickerOpen}
+        recipeId={recipe.id}
+        recipeTitle={recipe.title}
+        ingredients={recipe.ingredients}
+      />
     </div>
   );
 }

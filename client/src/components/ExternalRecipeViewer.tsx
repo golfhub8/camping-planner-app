@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Copy, ExternalLink, Share2, Loader2 } from "lucide-react";
+import { Copy, ExternalLink, Share2, Loader2, ShoppingCart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import IngredientPickerModal from "./IngredientPickerModal";
 
 interface ExternalRecipeViewerProps {
   recipeId: string | null; // wp-12345 format, or null when closed
@@ -55,6 +56,9 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
   const [shareEmail, setShareEmail] = useState("");
   const [isSharing, setIsSharing] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  
+  // Ingredient picker modal state
+  const [ingredientPickerOpen, setIngredientPickerOpen] = useState(false);
 
   // Fetch recipe details when recipeId changes
   useEffect(() => {
@@ -221,6 +225,27 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
     setShareMessage("");
     onClose();
   };
+  
+  // Convert ingredients checklist to string array for ingredient picker modal
+  const getIngredientsAsStrings = (): string[] => {
+    if (!recipe) return [];
+    
+    if (recipe.ingredientsChecklist && recipe.ingredientsChecklist.length > 0) {
+      return recipe.ingredientsChecklist.map((item) => {
+        let ingredientStr = item.name;
+        if (item.amountImperial) {
+          ingredientStr = `${item.amountImperial} ${item.name}`;
+        }
+        if (item.notes) {
+          ingredientStr += ` (${item.notes})`;
+        }
+        return ingredientStr;
+      });
+    }
+    
+    // Fallback to extra bullets if no checklist
+    return recipe.extraBullets || [];
+  };
 
   return (
     <>
@@ -336,6 +361,20 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
               {/* Fixed footer - always visible */}
               <DialogFooter className="flex items-center gap-2 sm:justify-between flex-wrap border-t pt-4">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Add to Grocery button - only if ingredients available */}
+                  {(recipe.ingredientsChecklist.length > 0 || recipe.extraBullets.length > 0) && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setIngredientPickerOpen(true)}
+                      className="gap-1.5"
+                      data-testid="button-add-to-grocery-external"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      Add to Grocery
+                    </Button>
+                  )}
+                  
                   {/* Share button */}
                   <Button
                     variant="outline"
@@ -465,6 +504,17 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Ingredient Picker Modal - for adding ingredients to grocery list */}
+      {recipe && (
+        <IngredientPickerModal
+          open={ingredientPickerOpen}
+          onOpenChange={setIngredientPickerOpen}
+          recipeId={0} // External recipes don't have numeric IDs
+          recipeTitle={recipe.title}
+          ingredients={getIngredientsAsStrings()}
+        />
+      )}
     </>
   );
 }

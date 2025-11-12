@@ -24,7 +24,6 @@ export default function Navbar() {
     { path: "/", label: "Recipes", matchExact: true },
     { path: "/grocery", label: "Grocery", matchExact: false },
     { path: "/trips", label: "Trips", matchExact: false },
-    { path: "/map", label: "Map", matchExact: false },
     { path: "/printables", label: "Printables", matchExact: false },
   ];
 
@@ -55,9 +54,9 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60" data-testid="navbar">
       <div className="container mx-auto px-6 md:px-10">
-        <div className="flex h-18 items-center justify-between gap-4">
+        <div className="flex h-24 items-center justify-between gap-4">
           <Link href="/" className="flex items-center hover-elevate rounded-lg px-2 py-1" data-testid="link-logo">
-            <img src={bannerImage} alt="The Camping Planner" className="h-12" />
+            <img src={bannerImage} alt="The Camping Planner" className="h-16" />
           </Link>
 
           <nav className="flex items-center gap-1">
