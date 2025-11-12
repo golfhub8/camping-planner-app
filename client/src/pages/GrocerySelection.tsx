@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShoppingCart, Loader2, ExternalLink, ArrowLeft } from "lucide-react";
 import type { Recipe, Trip } from "@shared/schema";
-import { mergeIngredients, type MergedIngredient } from "@/lib/ingredients";
+import { mergeIngredients, normalizeIngredientKey, type MergedIngredient } from "@/lib/ingredients";
 
 enum Step {
   SELECTION = "selection",
@@ -190,11 +190,34 @@ export default function GrocerySelection() {
     // Merge ingredients
     const merged = mergeIngredients(recipeIngredients);
     
-    // Initialize all as needed
-    const confirmed: ConfirmedIngredient[] = merged.map(ing => ({
-      ...ing,
-      isNeeded: true,
-    }));
+    // Read "already have" ingredients from sessionStorage (set by RecipeDetail.tsx)
+    let alreadyHaveSet = new Set<string>();
+    try {
+      const alreadyHaveData = sessionStorage.getItem('alreadyHaveIngredients');
+      if (alreadyHaveData) {
+        const parsed = JSON.parse(alreadyHaveData);
+        // RecipeDetail stores normalized keys for robust matching (handles amounts, punctuation, etc.)
+        if (Array.isArray(parsed.normalizedKeys)) {
+          alreadyHaveSet = new Set(parsed.normalizedKeys);
+        }
+        // Clear after reading to prevent stale data
+        sessionStorage.removeItem('alreadyHaveIngredients');
+      }
+    } catch (err) {
+      console.error('Failed to parse alreadyHaveIngredients:', err);
+    }
+    
+    // Initialize confirmed ingredients, marking alreadyHave items as not needed
+    const confirmed: ConfirmedIngredient[] = merged.map(ing => {
+      // Use normalized key for matching (same normalization as RecipeDetail and mergeIngredients)
+      const normalizedKey = normalizeIngredientKey(ing.name);
+      const isAlreadyOwned = alreadyHaveSet.has(normalizedKey);
+      
+      return {
+        ...ing,
+        isNeeded: !isAlreadyOwned, // If already owned, set isNeeded to false
+      };
+    });
     
     setConfirmedIngredients(confirmed);
     setCurrentStep(Step.CONFIRMATION);

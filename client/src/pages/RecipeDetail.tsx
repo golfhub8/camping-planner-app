@@ -9,6 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { parseIngredient } from "@/lib/ingredients";
 import type { Recipe } from "@shared/schema";
 
 export default function RecipeDetail() {
@@ -80,6 +81,35 @@ export default function RecipeDetail() {
     
     // Navigate to grocery page
     setLocation("/grocery");
+  };
+
+  // Mark unchecked ingredients as already owned
+  const markOthersAsAlreadyHave = () => {
+    if (!recipe) return;
+    
+    const uncheckedIngredients = recipe.ingredients.filter((_, idx) => !checkedIngredients.has(idx));
+    
+    if (uncheckedIngredients.length === 0) {
+      toast({
+        title: "All ingredients selected",
+        description: "Uncheck the ingredients you already have first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Store "already have" ingredients in sessionStorage using normalized keys
+    // parseIngredient strips amounts/units BEFORE normalizing for correct matching
+    const alreadyHaveData = {
+      normalizedKeys: uncheckedIngredients.map(ing => parseIngredient(ing).normalized)
+    };
+    
+    sessionStorage.setItem('alreadyHaveIngredients', JSON.stringify(alreadyHaveData));
+    
+    toast({
+      title: "Marked as already owned",
+      description: `${uncheckedIngredients.length} ingredient${uncheckedIngredients.length !== 1 ? 's' : ''} marked as already in your pantry.`,
+    });
   };
 
   if (isLoading) {
@@ -154,7 +184,7 @@ export default function RecipeDetail() {
                   Ingredients
                 </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Check off what you already have
+                  Select ingredients to add to your grocery list
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -170,31 +200,39 @@ export default function RecipeDetail() {
                       />
                       <label
                         htmlFor={`ingredient-${idx}`}
-                        className={`flex-1 cursor-pointer select-none ${
-                          checkedIngredients.has(idx) ? 'line-through text-muted-foreground' : ''
-                        }`}
+                        className="flex-1 cursor-pointer select-none"
                       >
                         {ingredient}
                       </label>
                     </li>
                   ))}
                 </ul>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={selectAllIngredients}
+                      className="flex-1"
+                      data-testid="button-select-all"
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      onClick={addToGroceryList}
+                      className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700"
+                      data-testid="button-add-to-grocery"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      Add Selected to Grocery
+                    </Button>
+                  </div>
                   <Button
                     variant="outline"
-                    onClick={selectAllIngredients}
-                    className="flex-1"
-                    data-testid="button-select-all"
+                    onClick={markOthersAsAlreadyHave}
+                    className="w-full"
+                    data-testid="button-mark-already-have"
                   >
-                    Select All
-                  </Button>
-                  <Button
-                    onClick={addToGroceryList}
-                    className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700"
-                    data-testid="button-add-to-grocery"
-                  >
-                    <ShoppingCart className="h-4 w-4" />
-                    Add Selected to Grocery
+                    Mark Others as Already Have
                   </Button>
                 </div>
               </CardContent>
