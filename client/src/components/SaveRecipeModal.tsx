@@ -81,27 +81,42 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
     setScrapError("");
     
     try {
-      const scraped = await scrapeRecipe(externalRecipe.sourceUrl);
-      setScrapedData(scraped);
+      // Call server-side parse endpoint for consistent, robust parsing
+      const response = await apiRequest("POST", "/api/recipes/parse", {
+        url: externalRecipe.sourceUrl,
+      });
+      
+      const scraped = await response.json();
+      
+      setScrapedData({
+        ...scraped,
+        sourceUrl: externalRecipe.sourceUrl,
+      });
       
       // Update form with scraped data
       if (scraped.title) {
         form.setValue("title", scraped.title);
       }
-      if (scraped.ingredients.length > 0) {
+      if (scraped.ingredients && scraped.ingredients.length > 0) {
         form.setValue("ingredientsText", scraped.ingredients.join("\n"));
       }
-      if (scraped.steps.length > 0) {
+      if (scraped.steps && scraped.steps.length > 0) {
         form.setValue("stepsText", scraped.steps.join("\n\n"));
       }
       if (scraped.imageUrl) {
         form.setValue("imageUrl", scraped.imageUrl);
       }
       
-      toast({
-        title: "Recipe parsed successfully",
-        description: `Found ${scraped.ingredients.length} ingredients and ${scraped.steps.length} steps`,
-      });
+      // Show success or partial success message
+      if (scraped.title && scraped.ingredients && scraped.ingredients.length > 0) {
+        toast({
+          title: "Recipe parsed successfully",
+          description: `Found ${scraped.ingredients.length} ingredients and ${scraped.steps?.length || 0} steps`,
+        });
+      } else {
+        // Parsing returned empty data - show error
+        throw new Error("Could not extract recipe data from URL");
+      }
     } catch (error) {
       console.error("Auto-scrape failed:", error);
       setScrapError(error instanceof Error ? error.message : "Failed to parse recipe");

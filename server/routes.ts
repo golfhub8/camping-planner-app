@@ -7,6 +7,185 @@ import { setupAuth, isAuthenticated, isAuthenticatedOptional } from "./replitAut
 import Stripe from "stripe";
 import { load as cheerioLoad } from "cheerio";
 import nodemailer from "nodemailer";
+import { promises as dns } from "dns";
+import * as net from "net";
+
+/**
+ * Converts IPv6 address to bytes for proper IPv4-mapped detection
+ * Handles both dotted-decimal (::ffff:127.0.0.1) and hex (::ffff:7f00:1) formats
+ */
+function parseIPv6ToIPv4(ipv6: string): string | null {
+  const cleaned = ipv6.replace(/^\[|\]$/g, '').toLowerCase();
+  
+  // Check if it's an IPv4-mapped IPv6 address (::ffff:xxxx:xxxx or ::ffff:x.x.x.x)
+  if (!cleaned.startsWith('::ffff:')) {
+    return null;
+  }
+  
+  const suffix = cleaned.substring(7); // Remove '::ffff:' prefix
+  
+  // If already in dotted-decimal format, return it
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(suffix)) {
+    return suffix;
+  }
+  
+  // Handle hexadecimal format (e.g., 7f00:1 → 127.0.0.1)
+  // Split into 16-bit groups
+  const parts = suffix.split(':');
+  if (parts.length !== 2) {
+    return null;
+  }
+  
+  // Parse each hex group to get the 4 IPv4 octets
+  const group1 = parseInt(parts[0], 16);
+  const group2 = parseInt(parts[1], 16);
+  
+  if (isNaN(group1) || isNaN(group2)) {
+    return null;
+  }
+  
+  // Convert to IPv4: first group = first 2 octets, second group = last 2 octets
+  const octet1 = (group1 >> 8) & 0xFF;
+  const octet2 = group1 & 0xFF;
+  const octet3 = (group2 >> 8) & 0xFF;
+  const octet4 = group2 & 0xFF;
+  
+  return `${octet1}.${octet2}.${octet3}.${octet4}`;
+}
+
+/**
+ * SSRF Protection Helper
+ * Checks if an IP address is in a private, loopback, or link-local range
+ * Handles IPv4, IPv6, and all IPv4-mapped IPv6 formats (dotted and hex)
+ */
+function isPrivateOrLocalIP(ip: string): boolean {
+  let cleanIp = ip.replace(/^\[|\]$/g, '');
+  
+  // Detect and convert IPv4-mapped IPv6 (both dotted and hex formats)
+  const ipv4 = parseIPv6ToIPv4(cleanIp);
+  if (ipv4) {
+    cleanIp = ipv4;
+  }
+  
+  // Normalize the IP using Node's net module for validation
+  const isIPv4 = net.isIPv4(cleanIp);
+  const isIPv6 = net.isIPv6(cleanIp);
+  
+  if (!isIPv4 && !isIPv6) {
+    // Invalid IP format, block it to be safe
+    return true;
+  }
+  
+  // Block unspecified addresses (all zeros)
+  if (cleanIp === '0.0.0.0' || cleanIp === '::' || cleanIp === '::0' || 
+      cleanIp.match(/^0:0:0:0:0:0:0:0$/)) {
+    return true;
+  }
+  
+  // IPv4 checks
+  if (isIPv4) {
+    const parts = cleanIp.split('.').map(Number);
+    
+    // Loopback: 127.0.0.0/8
+    if (parts[0] === 127) {
+      return true;
+    }
+    
+    // Private: 10.0.0.0/8
+    if (parts[0] === 10) {
+      return true;
+    }
+    
+    // Private: 172.16.0.0/12 (172.16-31.x.x)
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {
+      return true;
+    }
+    
+    // Private: 192.168.0.0/16
+    if (parts[0] === 192 && parts[1] === 168) {
+      return true;
+    }
+    
+    // Link-local: 169.254.0.0/16
+    if (parts[0] === 169 && parts[1] === 254) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // IPv6 checks
+  if (isIPv6) {
+    const lower = cleanIp.toLowerCase();
+    
+    // Loopback: ::1
+    if (lower === '::1' || lower.match(/^0:0:0:0:0:0:0:1$/)) {
+      return true;
+    }
+    
+    // Unique Local Addresses: fc00::/7
+    if (lower.match(/^f[cd][0-9a-f]{2}:/)) {
+      return true;
+    }
+    
+    // Link-local: fe80::/10
+    if (lower.match(/^fe[89ab][0-9a-f]:/)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Validates a URL for SSRF protection by resolving hostname to ALL IPs
+ * and checking if ANY of them are in a private/internal range
+ * This prevents bypass via mixed A/AAAA records (public + private)
+ */
+async function validateUrlForSSRF(url: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    
+    // Require HTTPS for security
+    if (parsedUrl.protocol !== 'https:' && 
+        !hostname.includes('thecampingplanner.com')) {
+      return {
+        valid: false,
+        error: 'Only HTTPS URLs are allowed for external sites'
+      };
+    }
+    
+    // Resolve hostname to ALL IP addresses (both IPv4 and IPv6)
+    try {
+      const addresses = await dns.lookup(hostname, { all: true });
+      
+      // Check if ANY resolved IP is private/internal
+      // This prevents bypass via domains that return mixed public + private IPs
+      for (const { address } of addresses) {
+        if (isPrivateOrLocalIP(address)) {
+          return {
+            valid: false,
+            error: `Cannot scrape private network addresses (hostname resolves to private IP: ${address})`
+          };
+        }
+      }
+      
+      return { valid: true };
+    } catch (dnsError) {
+      // DNS resolution failed - could be invalid domain or network issue
+      return {
+        valid: false,
+        error: `Cannot resolve hostname: ${hostname}`
+      };
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Invalid URL format'
+    };
+  }
+}
 
 // Free tier trip limit configuration
 // Free tier limits - can be overridden via environment variables
@@ -1062,37 +1241,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "URL parameter is required" });
       }
       
-      // Validate URL format
-      let parsedUrl;
-      try {
-        parsedUrl = new URL(url);
-      } catch {
-        return res.status(400).json({ error: "Invalid URL format" });
-      }
-      
-      // SSRF Protection: Only allow trusted recipe domains
-      // This prevents attackers from using our server to scan internal networks
-      const allowedDomains = [
-        'thecampingplanner.com',
-        'www.thecampingplanner.com',
-        // Add more trusted recipe sites as needed
-      ];
-      
-      if (!allowedDomains.includes(parsedUrl.hostname.toLowerCase())) {
-        return res.status(403).json({ 
-          error: "Domain not allowed. Only trusted recipe sites can be scraped." 
-        });
-      }
-      
-      // Block internal/private IP ranges (additional SSRF protection)
-      if (parsedUrl.hostname === 'localhost' || 
-          parsedUrl.hostname.match(/^127\./) ||
-          parsedUrl.hostname.match(/^10\./) ||
-          parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[01])\./) ||
-          parsedUrl.hostname.match(/^192\.168\./)) {
-        return res.status(403).json({ 
-          error: "Cannot scrape internal/private URLs" 
-        });
+      // SSRF Protection: Validate URL, resolve ALL IPs, and check for private ranges
+      const validation = await validateUrlForSSRF(url);
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
       }
       
       // Fetch the HTML content
@@ -1115,6 +1267,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error scraping recipe URL:", error);
       res.status(500).json({ error: "Failed to scrape recipe" });
+    }
+  });
+
+  // POST /api/recipes/parse
+  // Fetches and parses a recipe URL using JSON-LD and fallback scraping
+  // Body: { url: string }
+  // Returns: { title: string, ingredients: string[], steps: string[], imageUrl?: string }
+  // This endpoint provides server-side parsing for more consistent and robust results
+  // Protected route - requires authentication
+  app.post("/api/recipes/parse", isAuthenticated, async (req: any, res) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: "URL is required" });
+      }
+      
+      // SSRF Protection: Validate URL, resolve ALL IPs, and check for private ranges
+      const validation = await validateUrlForSSRF(url);
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+      
+      // Fetch the HTML content
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; CampingPlannerBot/1.0)',
+        },
+      });
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ 
+          error: `Failed to fetch URL: ${response.statusText}` 
+        });
+      }
+      
+      const html = await response.text();
+      
+      // Extract JSON-LD recipe data
+      const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+      let match;
+      
+      while ((match = jsonLdRegex.exec(html)) !== null) {
+        try {
+          const jsonData = JSON.parse(match[1]);
+          
+          // Handle both single objects and arrays of objects
+          const recipes = Array.isArray(jsonData) ? jsonData : [jsonData];
+          
+          for (const item of recipes) {
+            // Check if this is a Recipe object (can be nested in @graph)
+            const recipe = item['@type'] === 'Recipe' ? item : 
+                          item['@graph']?.find((g: any) => g['@type'] === 'Recipe');
+            
+            if (!recipe) continue;
+            
+            // Extract title
+            const title = recipe.name || recipe.headline || '';
+            if (!title) continue;
+            
+            // Extract ingredients
+            let ingredients: string[] = [];
+            if (Array.isArray(recipe.recipeIngredient)) {
+              ingredients = recipe.recipeIngredient.map((ing: any) => 
+                typeof ing === 'string' ? ing : ing.text || ''
+              ).filter(Boolean);
+            }
+            
+            // Extract steps/instructions
+            let steps: string[] = [];
+            if (recipe.recipeInstructions) {
+              if (typeof recipe.recipeInstructions === 'string') {
+                steps = recipe.recipeInstructions
+                  .split(/\n+/)
+                  .map((s: string) => s.trim())
+                  .filter((s: string) => s && s.length > 10);
+              } else if (Array.isArray(recipe.recipeInstructions)) {
+                steps = recipe.recipeInstructions.map((step: any) => {
+                  if (typeof step === 'string') return step;
+                  if (step['@type'] === 'HowToStep') return step.text || step.name || '';
+                  if (step.text) return step.text;
+                  return '';
+                }).filter(Boolean);
+              }
+            }
+            
+            // Extract image URL
+            let imageUrl: string | undefined;
+            if (recipe.image) {
+              if (typeof recipe.image === 'string') {
+                imageUrl = recipe.image;
+              } else if (Array.isArray(recipe.image)) {
+                imageUrl = recipe.image[0];
+              } else if (recipe.image.url) {
+                imageUrl = recipe.image.url;
+              }
+            }
+            
+            // Return if we have at least title and ingredients
+            if (title && ingredients.length > 0) {
+              return res.json({
+                title,
+                ingredients,
+                steps,
+                imageUrl,
+              });
+            }
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse JSON-LD block:', parseError);
+          continue;
+        }
+      }
+      
+      // If JSON-LD extraction failed, return empty data for manual entry
+      return res.json({
+        title: '',
+        ingredients: [],
+        steps: [],
+      });
+    } catch (error) {
+      console.error("Error parsing recipe:", error);
+      res.status(500).json({ error: "Failed to parse recipe" });
     }
   });
 

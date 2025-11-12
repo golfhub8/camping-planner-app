@@ -15,18 +15,19 @@ The frontend is a React 18 application with TypeScript, Vite, and Wouter for rou
 The backend is an Express.js application with TypeScript, providing a REST API. Authentication is integrated with Replit Auth via OpenID Connect, using session-based authentication and a PostgreSQL session store. Most API routes are protected by `isAuthenticated` middleware, ensuring user ownership for all data access. Zod is used for schema validation on all request and response payloads. The `useLogout` hook ensures a secure client-side and server-side logout flow by clearing the React Query cache and destroying sessions. Free tier usage limits (5 trips, 5 shared grocery lists) are enforced via counters in the `users` table and middleware checks, with Pro users bypassing these limits. Trip creation includes smart retry logic with exponential backoff for network and server errors. The "Trip Assistant" provides keyword-aware suggestions for campgrounds, meal plans, and packing tips, designed for seamless integration with future AI-powered services.
 
 ### Feature Specifications
-- **Recipe Management:** CRUD operations on user-owned recipes, including the ability to save external WordPress recipes from TheCampingPlanner.com to personal collections with full instructions, images, and source attribution.
+- **Recipe Management:** CRUD operations on user-owned recipes, including the ability to save external WordPress recipes from TheCampingPlanner.com to personal collections with full instructions, images, and source attribution. Server-side recipe parser with JSON-LD extraction and retry capability for robust external recipe scraping.
 - **Grocery List Generation:** Dynamic grocery list generation from selected recipes or entire trip meal plans, preserving pantry items, with multi-meal ingredient aggregation and deduplication.
 - **Trip Management:** Comprehensive trip creation, collaboration, cost tracking, and meal planning. Includes quick trip creation flow with auto-filled defaults.
 - **Weather Forecasting:** Client-side real-time weather forecasts from Open-Meteo API for trips with stored coordinates, captured via Mapbox Geocoding.
-- **Account & Subscription:** Account page for plan and subscription management, displaying free/trial/pro status, usage statistics, and enabling Stripe billing portal access.
+- **Account & Subscription:** Account page for plan and subscription management, displaying free/trial/pro status, usage statistics, and enabling Stripe billing portal access. Manual subscription sync endpoint enables immediate Pro status updates after checkout completion.
 - **Sharing:** Email sharing functionality for grocery lists via mailto: links, in addition to standard shareable URLs.
 
 ### System Design Choices
-- **Frontend State Management:** TanStack Query for state management and data fetching, incorporating optimistic updates and robust caching strategies.
+- **Frontend State Management:** TanStack Query for state management and data fetching, incorporating optimistic updates and robust caching strategies. Secure logout flow clears client cache before OIDC redirect.
 - **Authentication:** Replit Auth for OIDC login, with session-based authentication and strict user ownership verification.
-- **Payment Processing:** Stripe Checkout Sessions for Pro Membership, with hardened checkout flow, promotion code support, customer metadata, and webhook handling for subscription status updates (idempotency, automatic cleanup, duplicate prevention). Pro access is granted for active, trialing, and past_due subscription statuses.
+- **Payment Processing:** Stripe Checkout Sessions for Pro Membership, with hardened checkout flow, promotion code support, customer metadata, and webhook handling for subscription status updates (idempotency, automatic cleanup, duplicate prevention). Pro access is granted for active, trialing, and past_due subscription statuses. Manual `/api/billing/sync-subscription` endpoint provides immediate subscription status synchronization as fallback to webhooks.
 - **Data Layer:** PostgreSQL with Neon serverless driver, accessed via Drizzle ORM. A robust database schema enforces user ownership and supports `proMembershipEndDate`, `subscriptionStatus` (cached Stripe status), and usage counters. Drizzle-Zod integration for schema validation, `drizzle-kit` for migrations.
+- **Security:** SSRF protection for recipe scraping endpoints with DNS resolution, private IP range blocking, and HTTPS enforcement for external sites.
 
 ## External Dependencies
 *   **Authentication:** Replit Auth (OpenID Connect).
