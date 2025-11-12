@@ -10,6 +10,7 @@ import SearchResults from "@/pages/SearchResults";
 import GrocerySelection from "@/pages/GrocerySelection";
 import GroceryList from "@/pages/GroceryList";
 import GroceryShare from "@/pages/GroceryShare";
+import MyGroceryList from "@/pages/MyGroceryList";
 import Trips from "@/pages/Trips";
 import TripDetail from "@/pages/TripDetail";
 import Printables from "@/pages/Printables";
@@ -118,6 +119,7 @@ function Router() {
                   <Route path="/grocery" component={GrocerySelection} />
                   <Route path="/grocery/list" component={GroceryList} />
                   <Route path="/grocery/share" component={GroceryShare} />
+                  <Route path="/grocery/my-list" component={MyGroceryList} />
                   <Route path="/trips/:id" component={TripDetail} />
                   <Route path="/trips" component={Trips} />
                   <Route path="/map" component={CampingMap} />
