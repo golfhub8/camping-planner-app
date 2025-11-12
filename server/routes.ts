@@ -9,10 +9,15 @@ import { load as cheerioLoad } from "cheerio";
 import nodemailer from "nodemailer";
 
 // Free tier trip limit configuration
-// Can be overridden via environment variable
+// Free tier limits - can be overridden via environment variables
 // Defaults to 5 if not set or if parsing fails
 const FREE_TRIP_LIMIT = (() => {
   const parsed = parseInt(process.env.FREE_TRIP_LIMIT || '5', 10);
+  return Number.isNaN(parsed) ? 5 : parsed;
+})();
+
+const FREE_GROCERY_LIMIT = (() => {
+  const parsed = parseInt(process.env.FREE_GROCERY_LIMIT || '5', 10);
   return Number.isNaN(parsed) ? 5 : parsed;
 })();
 
@@ -1301,11 +1306,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       
+      // Check if user has reached the free tier grocery list limit
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Derive isPro from proMembershipEndDate
+      const now = new Date();
+      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+
+      // If not Pro, check grocery limit using counter field
+      if (!isPro && user.groceryCount >= FREE_GROCERY_LIMIT) {
+        return res.status(402).json({ 
+          code: "PAYWALL",
+          message: "You've reached the free limit of 5 shared grocery lists. Start a free trial to create unlimited lists."
+        });
+      }
+      
       // Validate the request body
       const data = createSharedGroceryListSchema.parse(req.body);
       
       // Create the shared grocery list
       const sharedList = await storage.createSharedGroceryList(data, userId);
+      
+      // Increment the grocery counter for the user
+      await storage.incrementGroceryCount(userId);
       
       // Generate the full shareable URL
       const shareUrl = `${req.protocol}://${req.get('host')}/shared/${sharedList.token}`;
@@ -1524,17 +1550,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date();
       const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
 
-      // If not Pro, check trip limit
-      if (!isPro) {
-        const trips = await storage.getAllTrips(userId);
-        const tripsCount = trips.length;
-
-        if (tripsCount >= FREE_TRIP_LIMIT) {
-          return res.status(402).json({ 
-            code: "PAYWALL",
-            message: "You've reached the free limit of 5 trips. Start a free trial to create unlimited trips."
-          });
-        }
+      // If not Pro, check trip limit using counter field
+      if (!isPro && user.tripsCount >= FREE_TRIP_LIMIT) {
+        return res.status(402).json({ 
+          code: "PAYWALL",
+          message: "You've reached the free limit of 5 trips. Start a free trial to create unlimited trips."
+        });
       }
       
       // Validate the request body against our schema
@@ -1555,6 +1576,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create the trip in storage (with userId)
       const trip = await storage.createTrip(validatedData, userId);
+      
+      // Increment the trip counter for the user
+      await storage.incrementTripsCount(userId);
       
       // Return the created trip with 201 status
       res.status(201).json(trip);
