@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ExternalLinkIcon } from "lucide-react";
@@ -15,6 +16,7 @@ export default function SubscribeButton({
   const [loading, setLoading] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const { toast } = useToast();
+  const [location] = useLocation();
 
   const handleClick = async () => {
     try {
@@ -24,6 +26,10 @@ export default function SubscribeButton({
       const res = await fetch("/api/billing/create-checkout-session", {
         method: "POST",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ returnPath: location }),
       });
 
       console.log("[SubscribeButton] Response status:", res.status);

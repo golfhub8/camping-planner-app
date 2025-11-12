@@ -2071,6 +2071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/billing/create-checkout-session
   // Create a Stripe Checkout session for Pro Membership using Dashboard Price
   // Uses STRIPE_PRICE_ID environment variable (price_1SRnQBIEQH0jZmIb2XwrLR5v)
+  // Body: { returnPath?: string } - optional path to return to after checkout
   // Protected route - requires authentication
   app.post("/api/billing/create-checkout-session", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
@@ -2094,12 +2095,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Checkout] Creating checkout session for user: ${userId} (${user.email})`);
 
-      // Build success and cancel URLs dynamically
+      // Get return path from request body, default to /printables
+      const { returnPath = '/printables' } = req.body || {};
+      
+      // Build success and cancel URLs dynamically based on return path
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const successUrl = `${baseUrl}/printables?payment=success`;
-      const cancelUrl = `${baseUrl}/printables?canceled=true`;
+      const successUrl = `${baseUrl}${returnPath}?payment=success`;
+      const cancelUrl = `${baseUrl}${returnPath}?canceled=true`;
 
-      // Prepare checkout session parameters
+      // Prepare checkout session parameters with promotion code support
       let sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "subscription",
         line_items: [
@@ -2115,6 +2119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         success_url: successUrl,
         cancel_url: cancelUrl,
+        allow_promotion_codes: true,
       };
 
       // If user already has a Stripe customer ID, reuse it
