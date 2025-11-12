@@ -135,7 +135,7 @@ export default function GroceryList() {
   // Create shareable link mutation
   const createShareLinkMutation = useMutation({
     mutationFn: async (items: GroceryItem[]) => {
-      const response = await apiRequest("POST", "/api/grocery/share", { items });
+      const response = await apiRequest("POST", "/api/grocery/share/link", { items });
       const data = await response.json();
       return data as { token: string; shareUrl: string };
     },

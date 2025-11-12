@@ -1,0 +1,55 @@
+Update grocery features to support:
+- Selecting ingredients from ANY recipe (saved or external) and adding them to a single “current list”.
+- Adding meals from the selected Trip directly into the current list.
+- Dedupe and aggregate like items (e.g., “cheddar cheese” 1 cup + 2 cups -> 3 cups). Keep unit if identical; if units differ, note both.
+- “Already have it” vs “Need to buy” toggle (persist per user).
+- Share: add a “Copy” button AND an “Email this list” button (mailto + server email route).
+
+Changes:
+
+1) Add server route for optional email send
+- In `server/routes.ts` add:
+  - `POST /api/grocery/share` with body `{ to: string, subject: string, html: string }`
+  - Use nodemailer with `SMTP_HOST, SMTP_USER, SMTP_PASS` env vars.
+  - Return `{ ok: true }` on success.
+
+2) Data model
+- In memory per user (or DB if available), store a “current grocery session”
+  - `{ items: Array<{ id, name, note?, qty?, unit?, have?:boolean, source?: 'recipe'|'custom', recipeId?:string }>, lastUpdated }`
+- Expose:
+  - `POST /api/grocery/session/reset`
+  - `GET /api/grocery/session`
+  - `POST /api/grocery/session/add-items` (array)
+  - `POST /api/grocery/session/toggle-have` (id -> flips have)
+  - `POST /api/grocery/session/remove` (id)
+  - `POST /api/grocery/session/aggregate` (server returns an aggregated view)
+
+3) Frontend: new Grocery page
+- Replace `client/src/pages/GroceryList.tsx` with a 3-panel layout:
+  A) “Pick sources”
+     - Dropdown: “Meals from your trip” (lists trips; when chosen, fetch meals -> show each meal’s ingredients with checkboxes; “Add selected to list”)
+     - “Your saved recipes” grid; clicking opens an ingredient picker modal (like Meals section) with “Add selected to list”
+     - “Quick Add” single item (name, qty, unit, note) -> append
+  B) “Your list”
+     - Two tabs: “Need to buy” and “Already have”
+     - Each item: checkbox (moves between tabs), editable qty/unit/note, delete
+     - “Aggregate view” switch that groups by name+unit
+  C) “Share/Export”
+     - Buttons: “Copy list”, “Email list” (opens modal collect email -> calls `/api/grocery/share`), “Download CSV”
+
+4) Aggregation rules
+- Normalize names by trimming and lowercasing; keep original casing for display.
+- Aggregate only when unit matches AND both have numeric qty.
+- If units differ or qty missing, list multiple bullets under same item name in the aggregated view with notes.
+
+5) Ingredient picker re-use
+- Reuse the modal used in Trips “Meals for this Trip” (checkboxes + Select All + Add Selected).
+- Wherever a recipe card exists (“My Recipes”, “From TheCampingPlanner.com”, the recipe detail modal), add an “Add to Grocery” button that launches the picker.
+
+6) Email share
+- Add a modal with email input; POST to `/api/grocery/share` with HTML produced from the aggregated list (include trip name if present).
+- Also render a `mailto:` fallback that pre-fills subject/body.
+
+Be careful:
+- Do NOT lose existing state management for “Camping Basics” – move those to the new list as a collapsible preset library (“Add Camping Basics”) that appends items to the session.
+- Keep the existing “Share Grocery List” button on the Trip page, but route it to the new Grocery page with the trip pre-selected via query param `?tripId=...`.

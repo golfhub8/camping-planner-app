@@ -6,6 +6,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, isAuthenticatedOptional } from "./replitAuth";
 import Stripe from "stripe";
 import { load as cheerioLoad } from "cheerio";
+import nodemailer from "nodemailer";
 
 // Free tier trip limit configuration
 // Can be overridden via environment variable
@@ -1075,12 +1076,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/grocery/share
-  // Creates a shareable grocery list with a unique token
-  // Body: { items: GroceryItem[], tripId?: number, tripName?: string, collaborators?: string[] }
-  // Returns: { token: string, shareUrl: string }
-  // Protected route - requires authentication
-  app.post("/api/grocery/share", isAuthenticated, async (req: any, res) => {
+  // Helper function for creating shareable tokens
+  // Used by both /api/grocery/share (backward compat) and /api/grocery/share/link
+  async function createShareTokenHandler(req: any, res: any) {
     try {
       const userId = req.user.claims.sub;
       
@@ -1109,7 +1107,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating shared grocery list:", error);
       res.status(500).json({ error: "Failed to create shared list" });
     }
-  });
+  }
+
+  // POST /api/grocery/share/link
+  // Creates a shareable grocery list with a unique token
+  // Body: { items: GroceryItem[], tripId?: number, tripName?: string, collaborators?: string[] }
+  // Returns: { token: string, shareUrl: string }
+  // Protected route - requires authentication
+  // Note: Preferred endpoint for token sharing
+  app.post("/api/grocery/share/link", isAuthenticated, createShareTokenHandler);
 
   // GET /api/grocery/shared/:token
   // Retrieves a shared grocery list by its token
@@ -2008,6 +2014,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("Error clearing personal grocery list:", err);
       return res.status(500).json({ message: err.message || "Failed to clear grocery list" });
+    }
+  });
+
+  // POST /api/grocery/share
+  // Send grocery list via email using nodemailer
+  // Body: { to: string, subject: string, html: string }
+  // Returns: { ok: true } on success
+  // Protected route - requires authentication
+  // Note: SMTP configuration required via environment variables
+  // Note: Token-based sharing is at /api/grocery/share/link
+  app.post("/api/grocery/share", isAuthenticated, async (req: any, res) => {
+    try {
+      // Validate the request body
+      const emailSchema = z.object({
+        to: z.string().email("Invalid email address"),
+        subject: z.string().min(1, "Subject is required"),
+        html: z.string().min(1, "Email content is required"),
+      });
+      
+      const { to, subject, html } = emailSchema.parse(req.body);
+      
+      // Check if SMTP is configured
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      
+      if (!smtpHost || !smtpUser || !smtpPass) {
+        return res.status(503).json({ 
+          error: "Email service not configured",
+          message: "SMTP credentials are required to send emails. Please contact your administrator.",
+        });
+      }
+      
+      // Create nodemailer transporter
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+      
+      // Send the email
+      await transporter.sendMail({
+        from: smtpUser,
+        to,
+        subject,
+        html,
+      });
+      
+      return res.json({ ok: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid request data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error sending grocery list email:", error);
+      return res.status(500).json({ 
+        error: "Failed to send email",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   });
 
