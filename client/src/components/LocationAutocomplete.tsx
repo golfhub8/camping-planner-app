@@ -4,10 +4,12 @@ import { Label } from "@/components/ui/label";
 import { MapPin, Loader2 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 
-interface LocationResult {
-  display_name: string;
-  lat: string;
-  lon: string;
+// Mapbox geocoding API response types
+interface MapboxFeature {
+  id: string;
+  place_name: string;
+  center: [number, number]; // [longitude, latitude]
+  text: string;
 }
 
 interface LocationAutocompleteProps {
@@ -24,7 +26,7 @@ export default function LocationAutocomplete({
   placeholder = "Enter a location..."
 }: LocationAutocompleteProps) {
   const [inputValue, setInputValue] = useState(value);
-  const [suggestions, setSuggestions] = useState<LocationResult[]>([]);
+  const [suggestions, setSuggestions] = useState<MapboxFeature[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   
@@ -35,7 +37,7 @@ export default function LocationAutocomplete({
   }, [value]);
 
   useEffect(() => {
-    if (!debouncedSearch || debouncedSearch.length < 3) {
+    if (!debouncedSearch || debouncedSearch.length < 2) {
       setSuggestions([]);
       return;
     }
@@ -43,21 +45,28 @@ export default function LocationAutocomplete({
     const searchLocation = async () => {
       setIsLoading(true);
       try {
+        const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+        if (!mapboxToken) {
+          console.error('VITE_MAPBOX_TOKEN not configured');
+          return;
+        }
+
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
             debouncedSearch
-          )}&limit=5`,
-          {
-            headers: {
-              'User-Agent': 'CampingPlannerApp/1.0'
-            }
-          }
+          )}.json?limit=5&access_token=${mapboxToken}`
         );
-        const results = await response.json();
-        setSuggestions(results);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch location suggestions');
+        }
+
+        const data = await response.json();
+        setSuggestions(data.features || []);
         setShowSuggestions(true);
       } catch (error) {
         console.error('Error fetching location suggestions:', error);
+        setSuggestions([]);
       } finally {
         setIsLoading(false);
       }
@@ -71,9 +80,11 @@ export default function LocationAutocomplete({
     setShowSuggestions(true);
   };
 
-  const handleSelectLocation = (location: LocationResult) => {
-    setInputValue(location.display_name);
-    onChange(location.display_name, parseFloat(location.lat), parseFloat(location.lon));
+  const handleSelectLocation = (location: MapboxFeature) => {
+    setInputValue(location.place_name);
+    // Mapbox returns [longitude, latitude] in center array
+    const [lng, lat] = location.center;
+    onChange(location.place_name, lat, lng);
     setSuggestions([]);
     setShowSuggestions(false);
   };
@@ -106,16 +117,16 @@ export default function LocationAutocomplete({
       
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
-          {suggestions.map((suggestion, idx) => (
+          {suggestions.map((suggestion) => (
             <button
-              key={idx}
+              key={suggestion.id}
               type="button"
               className="w-full px-4 py-2 text-left hover-elevate flex items-start gap-2"
               onClick={() => handleSelectLocation(suggestion)}
-              data-testid={`location-suggestion-${idx}`}
+              data-testid={`location-suggestion-${suggestion.id}`}
             >
               <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm">{suggestion.display_name}</span>
+              <span className="text-sm">{suggestion.place_name}</span>
             </button>
           ))}
         </div>
