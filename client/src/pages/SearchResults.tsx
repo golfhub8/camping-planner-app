@@ -30,7 +30,7 @@ export default function SearchResults() {
     return (
       <div className="min-h-screen bg-background">
         
-        <main className="container mx-auto px-6 md:px-10 py-12">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
           <div className="text-center text-muted-foreground">Searching...</div>
         </main>
       </div>
@@ -41,7 +41,7 @@ export default function SearchResults() {
     <div className="min-h-screen bg-background">
       
       
-      <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
+      <main className="container mx-auto pt-24 px-6 md:px-10 py-12 space-y-10">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <Search className="h-8 w-8 text-primary" />

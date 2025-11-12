@@ -61,7 +61,7 @@ export default function Trips() {
     return (
       <div className="min-h-screen bg-background">
         
-        <main className="container mx-auto px-6 md:px-10 py-12">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
           <div className="text-center text-muted-foreground">Loading trips...</div>
         </main>
       </div>
@@ -72,7 +72,7 @@ export default function Trips() {
     <div className="min-h-screen bg-background">
       
       
-      <main className="container mx-auto px-6 md:px-10 py-12 space-y-10">
+      <main className="container mx-auto pt-24 px-6 md:px-10 py-12 space-y-10">
         {/* Page Header */}
         <div className="text-center space-y-3">
           <h1 className="text-5xl font-bold text-foreground" data-testid="text-page-title">

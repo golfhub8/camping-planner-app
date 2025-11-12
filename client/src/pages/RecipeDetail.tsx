@@ -68,13 +68,12 @@ export default function RecipeDetail() {
       return;
     }
 
-    // Store selected ingredients and recipe info in sessionStorage
+    // Store recipe with selected ingredients in sessionStorage
+    // Format matches what GrocerySelection expects for mergeIngredients
     const groceryData = {
-      recipes: [{
-        id: recipe.id,
-        title: recipe.title,
-        selectedIngredients: selectedIngredients
-      }]
+      recipeId: recipe.id,
+      recipeTitle: recipe.title,
+      ingredients: selectedIngredients // Array of ingredient strings with amounts
     };
     
     sessionStorage.setItem('pendingGroceryItems', JSON.stringify(groceryData));
@@ -87,7 +86,7 @@ export default function RecipeDetail() {
     return (
       <div className="min-h-screen bg-background">
         
-        <main className="container mx-auto px-6 md:px-10 py-12">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
           <div className="text-center text-muted-foreground">Loading recipe...</div>
         </main>
       </div>
@@ -98,7 +97,7 @@ export default function RecipeDetail() {
     return (
       <div className="min-h-screen bg-background">
         
-        <main className="container mx-auto px-6 md:px-10 py-12">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
           <div className="text-center">
             <h1 className="text-2xl font-bold mb-4">Recipe Not Found</h1>
             <Link href="/">
@@ -116,7 +115,7 @@ export default function RecipeDetail() {
     <div className="min-h-screen bg-background">
       
       
-      <main className="container mx-auto px-6 md:px-10 py-12">
+      <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
         <div className="max-w-5xl mx-auto space-y-8">
           <div className="flex items-center gap-4">
             <Link href="/" data-testid="link-back">

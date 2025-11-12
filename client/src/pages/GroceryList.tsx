@@ -216,7 +216,7 @@ export default function GroceryList() {
     return (
       <div className="min-h-screen bg-background">
         
-        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-4xl">
           <div className="text-center">
             <h2 className="text-2xl font-bold mb-2">No Recipes Selected</h2>
             <p className="text-muted-foreground mb-6">
@@ -235,7 +235,7 @@ export default function GroceryList() {
     return (
       <div className="min-h-screen bg-background">
         
-        <main className="container mx-auto px-6 md:px-10 py-12">
+        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
           <div className="flex items-center justify-center min-h-[50vh]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -249,7 +249,7 @@ export default function GroceryList() {
   return (
     <div className="min-h-screen bg-background">
       
-      <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+      <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-4xl">
       {/* Header Section */}
       <div className="mb-8">
         <Button

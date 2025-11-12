@@ -34,6 +34,13 @@ export default function GrocerySelection() {
   // Confirmation step state
   const [confirmedIngredients, setConfirmedIngredients] = useState<ConfirmedIngredient[]>([]);
   const [moveUncheckedToPantry, setMoveUncheckedToPantry] = useState(false);
+  
+  // Store ingredients from RecipeDetail modal
+  const [recipeDetailIngredients, setRecipeDetailIngredients] = useState<{
+    recipeId: number;
+    recipeTitle: string;
+    ingredients: string[];
+  } | null>(null);
 
   const { data: recipes, isLoading } = useQuery<Recipe[]>({
     queryKey: ["/api/recipes"],
@@ -55,18 +62,26 @@ export default function GrocerySelection() {
     if (pendingData) {
       try {
         const data = JSON.parse(pendingData);
-        if (data.recipes && data.recipes.length > 0) {
+        // Check if it's from RecipeDetail (has recipeId and ingredients array)
+        if (data.recipeId && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+          // Store the selected ingredients from RecipeDetail
+          setRecipeDetailIngredients({
+            recipeId: data.recipeId,
+            recipeTitle: data.recipeTitle,
+            ingredients: data.ingredients
+          });
+          
           // Auto-select the recipe from RecipeDetail
-          const recipe = data.recipes[0];
-          if (recipe.id && !selectedRecipeIds.includes(recipe.id)) {
-            setSelectedRecipeIds(prev => [...prev, recipe.id]);
-            setManuallySelectedRecipeIds(prev => new Set(prev).add(recipe.id));
+          if (!selectedRecipeIds.includes(data.recipeId)) {
+            setSelectedRecipeIds(prev => [...prev, data.recipeId]);
+            setManuallySelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
           }
         }
         // Clear the pending data
         sessionStorage.removeItem('pendingGroceryItems');
       } catch (e) {
         console.error('Failed to parse pending grocery items:', e);
+        sessionStorage.removeItem('pendingGroceryItems');
       }
     }
   }, []);
@@ -85,6 +100,11 @@ export default function GrocerySelection() {
       
       if (!isInTripMeals) {
         setSelectedRecipeIds(prev => prev.filter(id => id !== recipeId));
+        
+        // Clear recipeDetailIngredients if this was the recipe from RecipeDetail
+        if (recipeDetailIngredients && recipeDetailIngredients.recipeId === recipeId) {
+          setRecipeDetailIngredients(null);
+        }
       }
     } else {
       setManuallySelectedRecipeIds(prevManual => new Set(prevManual).add(recipeId));
@@ -147,12 +167,22 @@ export default function GrocerySelection() {
     // Gather ingredients from selected recipes
     const recipeIngredients = selectedRecipeIds
       .map(id => {
+        // Check if this is the recipe from RecipeDetail with user-selected ingredients
+        if (recipeDetailIngredients && recipeDetailIngredients.recipeId === id) {
+          return {
+            recipeId: recipeDetailIngredients.recipeId,
+            recipeTitle: recipeDetailIngredients.recipeTitle,
+            ingredients: recipeDetailIngredients.ingredients, // Use ONLY selected ingredients
+          };
+        }
+        
+        // Otherwise use full recipe from the list
         const recipe = recipes?.find(r => r.id === id);
         if (!recipe) return null;
         return {
           recipeId: recipe.id,
           recipeTitle: recipe.title,
-          ingredients: recipe.ingredients,
+          ingredients: recipe.ingredients, // Use all ingredients
         };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
@@ -213,8 +243,7 @@ export default function GrocerySelection() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        
-        <main className="container mx-auto px-6 md:px-10 py-12">
+        <main className="container mx-auto px-6 md:px-10 py-12 pt-24">
           <div className="flex items-center justify-center min-h-[50vh]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -226,8 +255,7 @@ export default function GrocerySelection() {
   if (!recipes || recipes.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        
-        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl pt-24">
           <div className="text-center">
             <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
             <h2 className="text-2xl font-bold mb-2">No Recipes Yet</h2>
@@ -250,8 +278,7 @@ export default function GrocerySelection() {
 
     return (
       <div className="min-h-screen bg-background">
-        
-        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+        <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl pt-24">
           <div className="mb-8">
             <Button
               variant="ghost"
@@ -381,8 +408,7 @@ export default function GrocerySelection() {
   // Render selection step
   return (
     <div className="min-h-screen bg-background">
-      
-      <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl">
+      <main className="container mx-auto px-6 md:px-10 py-12 max-w-4xl pt-24">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Build Your Grocery List</h1>
           <p className="text-lg text-muted-foreground">
