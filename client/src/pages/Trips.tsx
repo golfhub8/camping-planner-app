@@ -57,7 +57,7 @@ export default function Trips() {
     },
   });
 
-  // Mutation for creating a new trip
+  // Mutation for creating a new trip with automatic retry on network errors
   const createTripMutation = useMutation({
     mutationFn: async (newTrip: InsertTrip) => {
       // Guard against missing dates (should be caught by form validation, but adding safety)
@@ -65,34 +65,82 @@ export default function Trips() {
         throw new Error("Start and end dates are required");
       }
 
-      const response = await apiRequest("POST", "/api/trips", {
-        name: newTrip.name,
-        location: newTrip.location,
-        // Convert to ISO strings for the API (startDate and endDate are Date objects from the form)
-        startDate: newTrip.startDate.toISOString(),
-        endDate: newTrip.endDate.toISOString(),
-        // Include coordinates if provided
-        lat: newTrip.lat ?? null,
-        lng: newTrip.lng ?? null,
-      });
+      // Retry logic: attempt up to 3 times on network errors
+      // Do NOT retry on validation errors (4xx status codes) or paywall errors
+      let lastError: Error | null = null;
+      const maxRetries = 3;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Reset status code for this attempt (prevents carryover from previous attempt)
+        let statusCode: number | null = null;
+        
+        try {
+          const response = await apiRequest("POST", "/api/trips", {
+            name: newTrip.name,
+            location: newTrip.location,
+            // Convert to ISO strings for the API (startDate and endDate are Date objects from the form)
+            startDate: newTrip.startDate.toISOString(),
+            endDate: newTrip.endDate.toISOString(),
+            // Include coordinates if provided
+            lat: newTrip.lat ?? null,
+            lng: newTrip.lng ?? null,
+          });
 
-      // Handle 402 paywall - show upsell modal instead of error toast
-      if (response.status === 402) {
-        const errorData = await response.json();
-        if (errorData.code === "PAYWALL") {
-          // Throw a special error that we'll catch in onError to show modal
-          throw new Error("PAYWALL");
+          statusCode = response.status;
+
+          // Handle 402 paywall - show upsell modal instead of error toast (no retry)
+          if (response.status === 402) {
+            const errorData = await response.json();
+            if (errorData.code === "PAYWALL") {
+              // Throw a special error that we'll catch in onError to show modal
+              throw new Error("PAYWALL");
+            }
+            // If it's 402 but not PAYWALL, treat as generic error
+            throw new Error(errorData.message || errorData.error || "Failed to create trip");
+          }
+
+          // Handle 4xx client errors (validation, bad request, etc.) - no retry
+          if (response.status >= 400 && response.status < 500) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || errorData.error || "Failed to create trip");
+          }
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || errorData.error || "Failed to create trip");
+          }
+
+          // Success! Return the created trip
+          return response.json();
+        } catch (error: any) {
+          lastError = error;
+          
+          // Don't retry on client errors (4xx) or paywall errors
+          if (error.message === "PAYWALL" || (statusCode && statusCode >= 400 && statusCode < 500)) {
+            throw error;
+          }
+          
+          // Network/server error (5xx or no response) - retry if we have attempts remaining
+          if (attempt < maxRetries) {
+            // Show friendly toast on retry
+            if (attempt === 1) {
+              toast({
+                title: "Server is waking up...",
+                description: "Retrying connection, please wait.",
+              });
+            }
+            // Wait a bit before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+            continue;
+          }
+          
+          // All retries exhausted
+          throw new Error(error.message || "Unable to connect to server. Please try again.");
         }
-        // If it's 402 but not PAYWALL, treat as generic error
-        throw new Error(errorData.message || errorData.error || "Failed to create trip");
       }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || errorData.error || "Failed to create trip");
-      }
-
-      return response.json();
+      
+      // This should never happen, but TypeScript needs it
+      throw lastError || new Error("Failed to create trip");
     },
     onSuccess: () => {
       // Invalidate and refetch trips and entitlements after creating a new one

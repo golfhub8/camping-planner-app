@@ -529,6 +529,18 @@ export default function TripDetail() {
           tripStartDate={trip.startDate}
           tripEndDate={trip.endDate}
         />
+        
+        {/* Helpful hint when coordinates are missing */}
+        {(!trip.lat || !trip.lng) && (
+          <Card data-testid="card-weather-hint">
+            <CardContent className="py-4 flex items-start gap-3">
+              <CloudSunIcon className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-muted-foreground">
+                <strong>Add coordinates for weather forecasts:</strong> Edit your trip and use the location autocomplete to select a place with coordinates.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Collaborators Section */}
