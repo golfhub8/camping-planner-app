@@ -332,6 +332,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/usage/stats
+  // Returns usage statistics: trips, meals, and grocery lists
+  // Protected route - requires authentication
+  app.get('/api/usage/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Count user's trips
+      const trips = await storage.getAllTrips(userId);
+      const tripsCount = trips.length;
+      
+      // Count total meals across all trips
+      let mealsCount = 0;
+      for (const trip of trips) {
+        const meals = await storage.getTripMeals(trip.id, userId);
+        mealsCount += meals.length;
+      }
+      
+      // Count grocery lists generated (shared grocery lists with trips)
+      let groceryListsCount = 0;
+      for (const trip of trips) {
+        const sharedList = await storage.getSharedGroceryListByTrip(trip.id);
+        if (sharedList) {
+          groceryListsCount++;
+        }
+      }
+
+      res.json({
+        tripsCount,
+        mealsCount,
+        groceryListsCount,
+      });
+    } catch (error) {
+      console.error("Error fetching usage stats:", error);
+      res.status(500).json({ message: "Failed to fetch usage stats" });
+    }
+  });
+
   // GET /api/entitlements
   // Returns user entitlements for trip creation and feature access
   // Protected route - requires authentication
@@ -1953,6 +1991,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Allows users to view invoices, update payment methods, and cancel subscription
   // Protected route - requires authentication
   app.get("/api/billing/portal", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
+    }
+
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user?.stripeCustomerId) {
+        return res.status(400).json({ error: "No billing account found. Please subscribe first." });
+      }
+
+      // Build return URL dynamically
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const returnUrl = `${baseUrl}/account`;
+
+      // Create billing portal session
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: returnUrl,
+      });
+
+      return res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Error creating billing portal session:", error);
+      return res.status(500).json({ error: "Could not create billing portal session" });
+    }
+  });
+
+  // GET /api/billing/subscription-status
+  // Get current subscription status and plan information
+  // Returns plan type (free, trial, pro) and renewal date
+  // Protected route - requires authentication
+  app.get("/api/billing/subscription-status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Determine plan based on subscription status
+      let plan: 'free' | 'trial' | 'pro' = 'free';
+      const status = user.subscriptionStatus;
+
+      if (status === 'trialing') {
+        plan = 'trial';
+      } else if (status === 'active' || status === 'past_due') {
+        plan = 'pro';
+      }
+
+      // Return renewal date (proMembershipEndDate) as ISO string
+      const current_period_end = user.proMembershipEndDate 
+        ? user.proMembershipEndDate.toISOString() 
+        : null;
+
+      return res.json({ 
+        plan, 
+        current_period_end,
+        status: status || null,
+      });
+    } catch (error: any) {
+      console.error("Error fetching subscription status:", error);
+      return res.status(500).json({ error: "Could not fetch subscription status" });
+    }
+  });
+
+  // GET /api/billing/portal-session
+  // Create a Stripe Customer Portal session for managing subscription
+  // Returns portal URL for user to manage billing
+  // Protected route - requires authentication
+  app.get("/api/billing/portal-session", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
       return res.status(503).json({ error: "Payment system not configured. Please add STRIPE_SECRET_KEY." });
     }

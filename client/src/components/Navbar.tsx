@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, LogOut, User, CreditCard } from "lucide-react";
+import { Search, LogOut, User, FileText } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import SubscribeButton from "./SubscribeButton";
@@ -103,20 +103,20 @@ export default function Navbar() {
                 <DropdownMenuItem asChild>
                   <Link href="/account" className="flex items-center cursor-pointer" data-testid="menu-item-account">
                     <User className="mr-2 h-4 w-4" />
-                    <span>My Account</span>
+                    <span>Account</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/manage-subscription" className="flex items-center cursor-pointer" data-testid="menu-item-subscription">
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    <span>Manage Subscription</span>
+                  <Link href="/printables" className="flex items-center cursor-pointer" data-testid="menu-item-printables">
+                    <FileText className="mr-2 h-4 w-4" />
+                    <span>Printables</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <a href="/api/auth/logout" className="flex items-center cursor-pointer" data-testid="menu-item-logout">
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
+                    <span>Logout</span>
                   </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>

@@ -1,0 +1,42 @@
+Update the app to add a dedicated Account page and fix the profile menu routing.
+
+1) Create a new page at client/src/pages/Account.tsx with:
+   - Heading: "Your Account"
+   - Section "Membership":
+       • Badge showing Free / Trial / Pro
+       • If Trial or Pro: show next renewal date and a "Manage billing" button that links to Stripe customer portal (new backend route, see step 3)
+       • If Free: show "Start 7-Day Free Trial" (reusing the same SubscribeButton component)
+       • “Benefits” box listing: Unlimited printables (Pro), Full packing checklists (Pro), Trip history & sharing (Free), Grocery list builder (Free), Priority updates (Pro)
+   - Section "Profile":
+       • Show email (read-only)
+       • Button "Reset Password" (if we don't have auth reset wired, show a modal with “Email support to reset” for now)
+   - Section "Usage":
+       • Count of trips planned, meals added, grocery lists generated (query same store we already use for trips/meals; if counts don’t exist yet, compute from tables on load)
+
+2) Wire up navigation:
+   - In client/src/components/Navbar.tsx:
+       • The profile/avatar dropdown must include “Account” (route /account), “Printables”, and “Logout”
+       • Replace any existing “Manage my account” link that points to Printables with /account
+
+3) Backend: Stripe customer portal + status
+   - In server/index.ts (or the main Express file), add:
+       • GET /api/billing/portal-session -> creates a Stripe billing portal session (requires STRIPE_SECRET_KEY and STRIPE_PORTAL_RETURN_URL envs). Return { url } and redirect the browser.
+   - Also add GET /api/billing/subscription-status that returns { plan: 'free'|'trial'|'pro', current_period_end: ISOString|null } using the user’s stripeCustomerId if present.
+   - Expose both with auth middleware (same one used already for checkout session).
+
+4) Frontend subscription state:
+   - Create client/src/hooks/useSubscription.ts to call /api/billing/subscription-status and cache.
+   - Use this hook in Account.tsx and in Printables.tsx so the “Start Free Trial” button changes to “Download” for Pro.
+
+5) Update client/src/pages/Printables.tsx:
+   - If plan is Pro/Trial, show active download buttons.
+   - Otherwise, show CTA card but remove any redirect to “manage account”; link to /account instead.
+
+6) Add route:
+   - In client/src/App.tsx (or router file), add <Route path="/account" element={<Account />} />
+
+7) QA checklist:
+   - Avatar → Account opens /account (not Printables)
+   - /account shows correct plan badge
+   - “Manage billing” opens Stripe Customer Portal via new route
+   - Printables unlock correctly for Trial/Pro

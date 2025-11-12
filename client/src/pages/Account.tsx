@@ -3,9 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, CreditCard, Package, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { Calendar, CreditCard, Package, AlertCircle, Check, Mail, TrendingUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
+import { useState } from "react";
+import { useSubscription } from "@/hooks/useSubscription";
+import SubscribeButton from "@/components/SubscribeButton";
 
 interface UserProfile {
   email: string;
@@ -19,22 +24,39 @@ interface UserProfile {
   stripeCustomerId: string | null;
 }
 
+interface UsageStats {
+  tripsCount: number;
+  mealsCount: number;
+  groceryListsCount: number;
+}
+
 export default function Account() {
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  
   const { data: user, isLoading } = useQuery<UserProfile>({
     queryKey: ["/api/me"],
   });
 
+  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+
+  const { data: usage } = useQuery<UsageStats>({
+    queryKey: ["/api/usage/stats"],
+  });
+
+  const isPro = subscription?.plan === 'pro' || subscription?.plan === 'trial';
+  const isTrialing = subscription?.plan === 'trial';
+
   const getTrialDaysRemaining = () => {
-    if (!user?.isTrialing || !user?.periodEnd) return null;
-    const endDate = new Date(user.periodEnd);
+    if (!isTrialing || !subscription?.current_period_end) return null;
+    const endDate = new Date(subscription.current_period_end);
     const today = new Date();
     const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return daysRemaining > 0 ? daysRemaining : 0;
   };
 
   const getPlanStatus = () => {
-    if (user?.isTrialing) return "Trial";
-    if (user?.isPro) return "Pro";
+    if (subscription?.plan === 'trial') return "Trial";
+    if (subscription?.plan === 'pro') return "Pro";
     return "Free";
   };
 
@@ -49,7 +71,7 @@ export default function Account() {
 
   const handleManageSubscription = async () => {
     try {
-      const response = await fetch("/api/billing/portal", {
+      const response = await fetch("/api/billing/portal-session", {
         method: "GET",
         credentials: "include",
       });
@@ -109,13 +131,13 @@ export default function Account() {
                 </CardTitle>
                 <CardDescription className="mt-1">Your current plan and billing information</CardDescription>
               </div>
-              <Badge variant={user.isPro ? "default" : "secondary"} className="text-base px-4 py-1" data-testid="badge-plan-status">
-                {getPlanStatus()}
+              <Badge variant={isPro ? "default" : "secondary"} className="text-base px-4 py-1" data-testid="badge-plan-status">
+                {subscriptionLoading ? "Loading..." : getPlanStatus()}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {user.isTrialing && trialDaysRemaining !== null && (
+            {isTrialing && trialDaysRemaining !== null && (
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <div className="flex items-center gap-3">
                   <Calendar className="h-5 w-5 text-primary" />
@@ -129,23 +151,19 @@ export default function Account() {
               </div>
             )}
 
-            {user.isPro && !user.isTrialing && user.periodEnd && (
+            {isPro && !isTrialing && subscription?.current_period_end && (
               <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-muted-foreground">Renewal Date</span>
-                <span className="font-medium" data-testid="text-renewal-date">{formatDate(user.periodEnd)}</span>
+                <span className="font-medium" data-testid="text-renewal-date">{formatDate(subscription.current_period_end)}</span>
               </div>
             )}
 
-            {!user.isPro && (
+            {!isPro && (
               <div className="bg-muted rounded-lg p-4">
                 <p className="text-sm text-muted-foreground mb-3">
                   Upgrade to Pro to unlock unlimited trips, printable planners, and exclusive camping resources.
                 </p>
-                <Link href="/printables?upgrade=trial">
-                  <Button variant="default" data-testid="button-start-trial">
-                    Start Free Trial
-                  </Button>
-                </Link>
+                <SubscribeButton label="Start 7-Day Free Trial" />
               </div>
             )}
 
@@ -161,26 +179,79 @@ export default function Account() {
                 </Button>
               </div>
             )}
+
+            <Separator className="my-4" />
+
+            <div>
+              <h3 className="font-semibold mb-3">Plan Benefits</h3>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm" data-testid="benefit-trip-history-sharing">
+                  <Check className="h-4 w-4 text-primary" />
+                  <span>Trip history & sharing</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm" data-testid="benefit-grocery-list-builder">
+                  <Check className="h-4 w-4 text-primary" />
+                  <span>Grocery list builder</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm" data-testid="benefit-unlimited-printables">
+                  <Check className={`h-4 w-4 ${isPro ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className={!isPro ? 'text-muted-foreground' : ''}>
+                    Unlimited printables
+                  </span>
+                  <Badge variant="outline" className="text-xs ml-auto">Pro</Badge>
+                </div>
+                <div className="flex items-center gap-2 text-sm" data-testid="benefit-full-packing-checklists">
+                  <Check className={`h-4 w-4 ${isPro ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className={!isPro ? 'text-muted-foreground' : ''}>
+                    Full packing checklists
+                  </span>
+                  <Badge variant="outline" className="text-xs ml-auto">Pro</Badge>
+                </div>
+                <div className="flex items-center gap-2 text-sm" data-testid="benefit-priority-updates">
+                  <Check className={`h-4 w-4 ${isPro ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className={!isPro ? 'text-muted-foreground' : ''}>
+                    Priority updates
+                  </span>
+                  <Badge variant="outline" className="text-xs ml-auto">Pro</Badge>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card data-testid="card-trip-stats">
+        <Card data-testid="card-usage-stats">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Trip Statistics
+              <TrendingUp className="h-5 w-5" />
+              Usage Statistics
             </CardTitle>
-            <CardDescription>Your camping trip activity</CardDescription>
+            <CardDescription>Your activity on The Camping Planner</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm text-muted-foreground">Total Trips Created</span>
-              <span className="text-2xl font-bold" data-testid="text-trips-count">{user.tripsCount}</span>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <p className="text-2xl font-bold" data-testid="stat-trips">
+                  {usage?.tripsCount ?? 0}
+                </p>
+                <p className="text-sm text-muted-foreground">Trips Planned</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold" data-testid="stat-meals">
+                  {usage?.mealsCount ?? 0}
+                </p>
+                <p className="text-sm text-muted-foreground">Meals Added</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold" data-testid="stat-grocery-lists">
+                  {usage?.groceryListsCount ?? 0}
+                </p>
+                <p className="text-sm text-muted-foreground">Grocery Lists Generated</p>
+              </div>
             </div>
-            {!user.isPro && (
-              <div className="bg-muted rounded-lg p-3 text-sm">
+            {!isPro && (
+              <div className="bg-muted rounded-lg p-3 text-sm mt-4">
                 <p className="text-muted-foreground">
-                  Free plan: <span className="font-semibold">{user.tripsCount}/5 trips</span>
+                  Free plan: <span className="font-semibold">{user?.tripsCount ?? 0}/5 trips</span>
                 </p>
               </div>
             )}
@@ -189,10 +260,13 @@ export default function Account() {
 
         <Card data-testid="card-account-info">
           <CardHeader>
-            <CardTitle>Account Information</CardTitle>
-            <CardDescription>Your profile details</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Account Information
+            </CardTitle>
+            <CardDescription>Your profile details and security settings</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-muted-foreground">Email</span>
               <span className="font-medium" data-testid="text-email">{user.email}</span>
@@ -205,9 +279,43 @@ export default function Account() {
                   : user.firstName || user.lastName || "Not set"}
               </span>
             </div>
+
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setResetPasswordDialogOpen(true)}
+                data-testid="button-reset-password"
+              >
+                Reset Password
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <DialogContent data-testid="dialog-reset-password">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              To reset your password, please contact support at support@thecampingplanner.com
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Our support team will guide you through the password reset process securely.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => setResetPasswordDialogOpen(false)}
+              className="w-full"
+              data-testid="button-close-reset-dialog"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
