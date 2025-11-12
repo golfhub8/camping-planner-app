@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,16 +21,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Sparkles, CheckCircle, AlertCircle } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { scrapeRecipe, type ScrapedRecipe } from "@/lib/recipeScraper";
 
 const saveRecipeSchema = z.object({
   title: z.string().min(1, "Title is required"),
   sourceUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   ingredientsText: z.string().min(1, "Ingredients are required"),
-  steps: z.string().min(1, "Instructions are required"),
+  stepsText: z.string().min(1, "Instructions are required"),
+  imageUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
 });
 
 type SaveRecipeForm = z.infer<typeof saveRecipeSchema>;
@@ -49,6 +53,8 @@ interface SaveRecipeModalProps {
 export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveRecipeModalProps) {
   const { toast } = useToast();
   const [isParsing, setIsParsing] = useState(false);
+  const [scrapedData, setScrapedData] = useState<ScrapedRecipe | null>(null);
+  const [scrapeError, setScrapError] = useState<string>("");
 
   const form = useForm<SaveRecipeForm>({
     resolver: zodResolver(saveRecipeSchema),
@@ -56,9 +62,58 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
       title: externalRecipe.title,
       sourceUrl: externalRecipe.sourceUrl || "",
       ingredientsText: externalRecipe.ingredients?.join("\n") || "",
-      steps: externalRecipe.content || "",
+      stepsText: "",
+      imageUrl: "",
     },
   });
+
+  // Auto-scrape when modal opens with a sourceUrl
+  useEffect(() => {
+    if (open && externalRecipe.sourceUrl) {
+      handleAutoScrape();
+    }
+  }, [open, externalRecipe.sourceUrl]);
+
+  async function handleAutoScrape() {
+    if (!externalRecipe.sourceUrl) return;
+    
+    setIsParsing(true);
+    setScrapError("");
+    
+    try {
+      const scraped = await scrapeRecipe(externalRecipe.sourceUrl);
+      setScrapedData(scraped);
+      
+      // Update form with scraped data
+      if (scraped.title) {
+        form.setValue("title", scraped.title);
+      }
+      if (scraped.ingredients.length > 0) {
+        form.setValue("ingredientsText", scraped.ingredients.join("\n"));
+      }
+      if (scraped.steps.length > 0) {
+        form.setValue("stepsText", scraped.steps.join("\n\n"));
+      }
+      if (scraped.imageUrl) {
+        form.setValue("imageUrl", scraped.imageUrl);
+      }
+      
+      toast({
+        title: "Recipe parsed successfully",
+        description: `Found ${scraped.ingredients.length} ingredients and ${scraped.steps.length} steps`,
+      });
+    } catch (error) {
+      console.error("Auto-scrape failed:", error);
+      setScrapError(error instanceof Error ? error.message : "Failed to parse recipe");
+      
+      // Fall back to provided data
+      if (externalRecipe.ingredients) {
+        form.setValue("ingredientsText", externalRecipe.ingredients.join("\n"));
+      }
+    } finally {
+      setIsParsing(false);
+    }
+  }
 
   const saveRecipeMutation = useMutation({
     mutationFn: async (data: SaveRecipeForm) => {
@@ -68,10 +123,17 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
         .map(line => line.trim())
         .filter(line => line.length > 0);
 
+      // Parse steps from textarea (split by double newlines or single newlines)
+      const steps = data.stepsText
+        .split(/\n\n+/)
+        .map(step => step.trim().replace(/\n/g, " "))
+        .filter(step => step.length > 0);
+
       const response = await apiRequest("POST", "/api/recipes", {
         title: data.title,
         ingredients,
-        steps: data.steps,
+        steps,
+        imageUrl: data.imageUrl || undefined,
         sourceUrl: data.sourceUrl || undefined,
       });
 
@@ -81,15 +143,17 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
       queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
       toast({
         title: "Recipe saved",
-        description: "The recipe has been added to My Recipes",
+        description: "The recipe has been added to My Recipes for offline use",
       });
       onOpenChange(false);
       form.reset();
+      setScrapedData(null);
+      setScrapError("");
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "Failed to save recipe",
-        description: error.message,
+        description: error instanceof Error ? error.message : "An error occurred",
         variant: "destructive",
       });
     },
@@ -136,15 +200,47 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
     }, 300);
   }
 
+  const ingredientCount = form.watch("ingredientsText").split("\n").filter(Boolean).length;
+  const stepCount = form.watch("stepsText").split(/\n\n+/).filter(Boolean).length;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Save Recipe to My Recipes</DialogTitle>
           <DialogDescription>
-            Save this external recipe to your collection so you can use it in trips and grocery lists
+            Save this external recipe to your collection for offline use in trips and grocery lists
           </DialogDescription>
         </DialogHeader>
+
+        {isParsing && (
+          <Alert>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertDescription>
+              Parsing recipe data from source URL...
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {scrapeError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {scrapeError}. You can still fill in the recipe details manually below.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {scrapedData && !scrapeError && (
+          <Alert>
+            <CheckCircle className="h-4 w-4 text-primary" />
+            <AlertDescription className="flex items-center gap-2">
+              <span>Recipe parsed successfully</span>
+              <Badge variant="outline">{scrapedData.ingredients.length} ingredients</Badge>
+              <Badge variant="outline">{scrapedData.steps.length} steps</Badge>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => saveRecipeMutation.mutate(data))} className="space-y-4">
@@ -167,9 +263,9 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
               name="sourceUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Source URL (optional)</FormLabel>
+                  <FormLabel>Source URL</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="https://..." data-testid="input-source-url" />
+                    <Input {...field} placeholder="https://..." data-testid="input-source-url" readOnly />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -183,22 +279,7 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Ingredients (one per line)</FormLabel>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleSmartParse}
-                      disabled={isParsing}
-                      className="gap-2"
-                      data-testid="button-smart-parse"
-                    >
-                      {isParsing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      Smart Parse
-                    </Button>
+                    <Badge variant="secondary">{ingredientCount} items</Badge>
                   </div>
                   <FormControl>
                     <Textarea
@@ -216,17 +297,34 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
 
             <FormField
               control={form.control}
-              name="steps"
+              name="stepsText"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Instructions</FormLabel>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Instructions (separate steps with blank lines)</FormLabel>
+                    <Badge variant="secondary">{stepCount} steps</Badge>
+                  </div>
                   <FormControl>
                     <Textarea
                       {...field}
-                      placeholder="Describe how to prepare this recipe..."
-                      rows={6}
+                      placeholder="Heat oil in a large pot over medium heat.&#10;&#10;Add onions and cook until soft, about 5 minutes.&#10;&#10;Add remaining ingredients..."
+                      rows={10}
                       data-testid="textarea-steps"
                     />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Image URL (optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="https://..." data-testid="input-image-url" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

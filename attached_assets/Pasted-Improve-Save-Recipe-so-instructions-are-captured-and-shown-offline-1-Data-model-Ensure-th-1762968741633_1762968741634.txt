@@ -1,0 +1,33 @@
+Improve "Save Recipe" so instructions are captured and shown offline.
+
+1) Data model:
+   - Ensure the Recipe schema (client and server) includes:
+     {
+       id, title, ingredients: IngredientItem[], steps: string[], imageUrl?: string, sourceUrl?: string, createdAt
+     }
+     IngredientItem has: { name: string, quantity?: string, notes?: string, section?: string }
+   - Update any Supabase/DB table migration if needed to add a 'steps' JSON column and 'image_url', 'source_url' fields.
+
+2) Parser:
+   - The existing external recipe fetch/scrape logic should try in order:
+     a) JSON-LD Recipe (look for @type 'Recipe') — read 'recipeInstructions' (string or HowToStep[]), 'image', 'name', 'recipeIngredient'
+     b) microdata / OpenGraph fallback
+     c) As a last resort, keep current manual text capture but **do not** show the raw “Ingredients (one per line)” input if we successfully parsed JSON-LD.
+   - Put this logic in a utility: client/src/lib/recipeScraper.ts and reuse on the page that handles Save Recipe.
+
+3) UI changes:
+   - In the “Save Recipe” modal/component (client/src/components/RecipeSaveModal.tsx or wherever it lives):
+     • Show a preview: Title, Ingredients count, Steps count
+     • Allow user edits to both ingredients and steps before saving (simple text areas OR per-item editing)
+     • Remove or hide the "Ingredients (one per line)" fallback when we already parsed JSON-LD.
+     • Add a little note “Saved for offline use” when steps are present.
+
+4) My Recipes view:
+   - In client/src/pages/Recipes.tsx (or /RecipeDetail.tsx), ensure we render both the Ingredients checklist and a Steps column for saved recipes.
+   - Add a "Print" button (prints the offline recipe view).
+
+5) When exporting to grocery list, continue to use the parsed ingredients. Steps are informational only.
+
+6) QA:
+   - Try saving two articles from TheCampingPlanner.com that have JSON-LD; confirm steps appear.
+   - Confirm that a purely manual recipe still allows typing ingredients and steps before saving.

@@ -63,7 +63,11 @@ export default function RecipeDetail() {
     );
   }
 
-  const steps = recipe.steps.split('\n').filter(s => s.trim());
+  // Recipe steps are now stored as an array
+  const steps = Array.isArray(recipe.steps) ? recipe.steps : [];
+  
+  // Show source URL badge if available
+  const hasSourceUrl = recipe.sourceUrl && recipe.sourceUrl.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,11 +97,26 @@ export default function RecipeDetail() {
                 <ChefHat className="h-3 w-3" />
                 {recipe.ingredients.length} ingredients
               </Badge>
+              {steps.length > 0 && (
+                <Badge variant="secondary" className="gap-1" data-testid="badge-step-count">
+                  {steps.length} steps
+                </Badge>
+              )}
+              {hasSourceUrl && (
+                <Badge variant="outline" className="gap-1" data-testid="badge-saved-from-web">
+                  Saved from web
+                </Badge>
+              )}
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground" data-testid="text-created-date">
                 <Calendar className="h-4 w-4" />
                 Created {formatDistanceToNow(new Date(recipe.createdAt), { addSuffix: true })}
               </div>
             </div>
+            {hasSourceUrl && (
+              <p className="text-sm text-muted-foreground">
+                Source: <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary" data-testid="link-source-url">{recipe.sourceUrl}</a>
+              </p>
+            )}
           </div>
 
           <div className="grid gap-6 md:grid-cols-5">
@@ -130,19 +149,25 @@ export default function RecipeDetail() {
 
             <Card className="md:col-span-3">
               <CardHeader>
-                <CardTitle className="font-bold">Steps</CardTitle>
+                <CardTitle className="font-bold">Instructions</CardTitle>
               </CardHeader>
               <CardContent>
-                <ol className="space-y-4">
-                  {steps.map((step, idx) => (
-                    <li key={idx} className="flex gap-4" data-testid={`step-${idx}`}>
-                      <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                        {idx + 1}
-                      </div>
-                      <p className="flex-1 pt-1">{step.replace(/^\d+\.\s*/, '')}</p>
-                    </li>
-                  ))}
-                </ol>
+                {steps.length > 0 ? (
+                  <ol className="space-y-4">
+                    {steps.map((step, idx) => (
+                      <li key={idx} className="flex gap-4" data-testid={`step-${idx}`}>
+                        <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                          {idx + 1}
+                        </div>
+                        <p className="flex-1 pt-1">{step.replace(/^\d+\.\s*/, '')}</p>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No instructions available for this recipe. Add them by editing the recipe.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>

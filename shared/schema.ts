@@ -15,8 +15,12 @@ export const recipes = pgTable("recipes", {
   // Array of ingredients (e.g., ["1 lb ground beef", "2 cans kidney beans"])
   ingredients: text("ingredients").array().notNull(),
   
-  // Preparation steps as a single text block
-  steps: text("steps").notNull(),
+  // Preparation steps as an array of strings (one step per item)
+  // Example: ["Heat oil in pan", "Add onions and cook until soft", "Add meat and brown"]
+  steps: text("steps").array().notNull(),
+  
+  // Optional image URL for the recipe
+  imageUrl: text("image_url"),
   
   // Optional source URL for external recipes saved to My Recipes
   // When users save an external WordPress recipe, this stores the original URL
@@ -34,6 +38,7 @@ export const insertRecipeSchema = createInsertSchema(recipes).pick({
   title: true,
   ingredients: true,
   steps: true,
+  imageUrl: true,
   sourceUrl: true,
 });
 

@@ -1017,6 +1017,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/recipes/scrape
+  // Fetches HTML content from a recipe URL to enable client-side JSON-LD parsing
+  // Query parameter: url (the recipe URL to scrape)
+  // Returns: { html: string }
+  // This endpoint bypasses CORS restrictions by fetching on the server side
+  // Protected route - requires authentication
+  // SECURITY: Only allows scraping from trusted recipe domains to prevent SSRF attacks
+  app.get("/api/recipes/scrape", isAuthenticated, async (req: any, res) => {
+    try {
+      const url = req.query.url as string;
+      
+      if (!url) {
+        return res.status(400).json({ error: "URL parameter is required" });
+      }
+      
+      // Validate URL format
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        return res.status(400).json({ error: "Invalid URL format" });
+      }
+      
+      // SSRF Protection: Only allow trusted recipe domains
+      // This prevents attackers from using our server to scan internal networks
+      const allowedDomains = [
+        'thecampingplanner.com',
+        'www.thecampingplanner.com',
+        // Add more trusted recipe sites as needed
+      ];
+      
+      if (!allowedDomains.includes(parsedUrl.hostname.toLowerCase())) {
+        return res.status(403).json({ 
+          error: "Domain not allowed. Only trusted recipe sites can be scraped." 
+        });
+      }
+      
+      // Block internal/private IP ranges (additional SSRF protection)
+      if (parsedUrl.hostname === 'localhost' || 
+          parsedUrl.hostname.match(/^127\./) ||
+          parsedUrl.hostname.match(/^10\./) ||
+          parsedUrl.hostname.match(/^172\.(1[6-9]|2[0-9]|3[01])\./) ||
+          parsedUrl.hostname.match(/^192\.168\./)) {
+        return res.status(403).json({ 
+          error: "Cannot scrape internal/private URLs" 
+        });
+      }
+      
+      // Fetch the HTML content
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; CampingPlannerBot/1.0)',
+        },
+      });
+      
+      if (!response.ok) {
+        return res.status(response.status).json({ 
+          error: `Failed to fetch URL: ${response.statusText}` 
+        });
+      }
+      
+      const html = await response.text();
+      
+      // Return the HTML content for client-side parsing
+      res.json({ html });
+    } catch (error) {
+      console.error("Error scraping recipe URL:", error);
+      res.status(500).json({ error: "Failed to scrape recipe" });
+    }
+  });
+
   // GET /api/recipes/:id
   // Returns a single recipe by ID (only if user owns it)
   // Protected route - requires authentication
