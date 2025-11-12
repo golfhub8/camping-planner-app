@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon } from "lucide-react";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon, PackageIcon } from "lucide-react";
+import SubscribeButton from "@/components/SubscribeButton";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -868,6 +869,57 @@ export default function TripDetail() {
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* What to Pack Teaser */}
+        <Card data-testid="card-what-to-pack">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <PackageIcon className="w-5 h-5" />
+                  What to Pack
+                </CardTitle>
+                <CardDescription>
+                  Essential camping gear for your trip
+                </CardDescription>
+              </div>
+              <SubscribeButton label="Unlock Full List" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Teaser items (5-6 items) */}
+            <div className="space-y-2">
+              {[
+                "Tent and stakes",
+                "Sleeping bags",
+                "First aid kit",
+                "Flashlight or headlamp",
+                "Water bottles",
+                "Camp stove and fuel"
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 text-sm"
+                  data-testid={`pack-item-${idx}`}
+                >
+                  <span className="text-primary">•</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-3">
+                Get access to the complete camping packing checklist with Pro Membership ($29.99/year with 7-day free trial)
+              </p>
+              <ul className="text-xs text-muted-foreground space-y-1 ml-4">
+                <li>• Comprehensive packing lists for all seasons</li>
+                <li>• Printable camping planners and activity sheets</li>
+                <li>• Meal planning templates</li>
+              </ul>
+            </div>
           </CardContent>
         </Card>
 

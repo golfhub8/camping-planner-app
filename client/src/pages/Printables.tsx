@@ -105,6 +105,7 @@ export default function Printables() {
                 </CardHeader>
                 <CardFooter className="mt-auto">
                   {p.free && p.file ? (
+                    // Free printables: Always show download for everyone
                     <Button
                       asChild
                       className="w-full bg-emerald-500 hover:bg-emerald-600"
@@ -115,7 +116,8 @@ export default function Printables() {
                         Download Free
                       </a>
                     </Button>
-                  ) : p.file ? (
+                  ) : p.requiresPro && isPro && p.file ? (
+                    // Pro printables: Show download button only for Pro members
                     <Button
                       asChild
                       className="w-full bg-emerald-600 hover:bg-emerald-700"
@@ -126,11 +128,21 @@ export default function Printables() {
                         Download (Pro)
                       </a>
                     </Button>
+                  ) : p.requiresPro && !isPro ? (
+                    // Pro printables: Show locked message for non-Pro users
+                    <div className="w-full text-center" data-testid={`locked-printable-${index}`}>
+                      <p className="text-xs text-muted-foreground italic flex items-center justify-center gap-1 mb-2">
+                        <LockIcon className="w-3 h-3" />
+                        Available with Pro Membership
+                      </p>
+                      <SubscribeButton label="Start Free Trial" className="w-full text-xs" />
+                    </div>
                   ) : (
+                    // Fallback for any other case
                     <div className="w-full text-center" data-testid={`locked-printable-${index}`}>
                       <p className="text-xs text-muted-foreground italic flex items-center justify-center gap-1">
                         <LockIcon className="w-3 h-3" />
-                        Available with Pro Membership
+                        Coming soon
                       </p>
                     </div>
                   )}

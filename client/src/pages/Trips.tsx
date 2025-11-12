@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTripSchema, type Trip, type InsertTrip } from "@shared/schema";
 import EditTripDialog from "@/components/EditTripDialog";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -31,6 +32,8 @@ export default function Trips() {
       location: "",
       startDate: undefined as any,
       endDate: undefined as any,
+      lat: undefined,
+      lng: undefined,
     },
   });
 
@@ -43,6 +46,9 @@ export default function Trips() {
         // Convert to ISO strings for the API (startDate and endDate are Date objects from the form)
         startDate: newTrip.startDate.toISOString(),
         endDate: newTrip.endDate.toISOString(),
+        // Include coordinates if provided
+        lat: newTrip.lat ?? null,
+        lng: newTrip.lng ?? null,
       });
       return response.json();
     },
@@ -114,18 +120,22 @@ export default function Trips() {
                     )}
                   />
 
-                  {/* Location */}
+                  {/* Location with Autocomplete */}
                   <FormField
                     control={form.control}
                     name="location"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Location</FormLabel>
                         <FormControl>
-                          <Input 
-                            placeholder="e.g., Goldstream Provincial Park" 
-                            data-testid="input-trip-location"
-                            {...field} 
+                          <LocationAutocomplete
+                            value={field.value}
+                            onChange={(location, lat, lng) => {
+                              field.onChange(location);
+                              form.setValue('lat', lat);
+                              form.setValue('lng', lng);
+                            }}
+                            label="Location"
+                            placeholder="e.g., Goldstream Provincial Park"
                           />
                         </FormControl>
                         <FormMessage />

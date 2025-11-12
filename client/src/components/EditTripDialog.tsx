@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { updateTripSchema, type UpdateTrip, type Trip } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -131,18 +132,22 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
                 )}
               />
 
-              {/* Location */}
+              {/* Location with Autocomplete */}
               <FormField
                 control={form.control}
                 name="location"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Location</FormLabel>
                     <FormControl>
-                      <Input
+                      <LocationAutocomplete
+                        value={field.value || ''}
+                        onChange={(location, lat, lng) => {
+                          field.onChange(location);
+                          form.setValue('lat', lat ?? null);
+                          form.setValue('lng', lng ?? null);
+                        }}
+                        label="Location"
                         placeholder="e.g., Goldstream Provincial Park"
-                        data-testid="input-edit-location"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -199,68 +204,26 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
               />
             </div>
 
-            {/* Coordinates Section */}
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Coordinates (Optional)</div>
-              <p className="text-xs text-muted-foreground">
-                Add coordinates to enable weather forecasts. Both latitude and longitude must be provided together.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Latitude */}
-                <FormField
-                  control={form.control}
-                  name="lat"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Latitude</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.000001"
-                          placeholder="e.g., 48.4284"
-                          data-testid="input-edit-lat"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => {
-                            // Use null instead of undefined so JSON.stringify includes it
-                            const value = e.target.value === '' ? null : parseFloat(e.target.value);
-                            field.onChange(value);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Longitude */}
-                <FormField
-                  control={form.control}
-                  name="lng"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Longitude</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.000001"
-                          placeholder="e.g., -123.3656"
-                          data-testid="input-edit-lng"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => {
-                            // Use null instead of undefined so JSON.stringify includes it
-                            const value = e.target.value === '' ? null : parseFloat(e.target.value);
-                            field.onChange(value);
-                          }}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
+            {/* Coordinates Display (Read-only - set via location autocomplete) */}
+            {(() => {
+              const lat = form.watch('lat');
+              const lng = form.watch('lng');
+              if (lat == null || lng == null) return null;
+              
+              return (
+                <div className="space-y-2 p-3 bg-muted/50 rounded-md border">
+                  <div className="text-sm font-medium">Coordinates</div>
+                  <div className="text-sm font-mono">
+                    Latitude: {typeof lat === 'number' ? lat.toFixed(6) : lat}
+                    <br />
+                    Longitude: {typeof lng === 'number' ? lng.toFixed(6) : lng}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Coordinates are automatically set when you select a location from the autocomplete suggestions. They enable weather forecasts for this trip.
+                  </p>
+                </div>
+              );
+            })()}
 
             <DialogFooter>
               <Button
