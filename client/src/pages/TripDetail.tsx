@@ -16,9 +16,10 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon, PackageIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon, PackageIcon, ChevronDownIcon, ChevronRightIcon, CloudRain } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
-import WeatherCard from "@/components/WeatherCard";
+import { CurrentWeather, WeatherForecast } from "@/components/WeatherCard";
+import { useWeatherCard } from "@/hooks/useWeatherCard";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -522,25 +523,101 @@ export default function TripDetail() {
           )}
         </div>
 
-        {/* Weather Section */}
-        <WeatherCard 
-          lat={trip.lat ? parseFloat(trip.lat) : null} 
-          lng={trip.lng ? parseFloat(trip.lng) : null}
-          tripStartDate={trip.startDate}
-          tripEndDate={trip.endDate}
-        />
-        
-        {/* Helpful hint when coordinates are missing */}
-        {(!trip.lat || !trip.lng) && (
-          <Card data-testid="card-weather-hint">
-            <CardContent className="py-4 flex items-start gap-3">
-              <CloudSunIcon className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-muted-foreground">
-                <strong>Add coordinates for weather forecasts:</strong> Edit your trip and use the location autocomplete to select a place with coordinates.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        {/* Weather & Hikes Section */}
+        {(() => {
+          const lat = trip.lat ? parseFloat(trip.lat) : null;
+          const lng = trip.lng ? parseFloat(trip.lng) : null;
+          const { weather, isLoading, error, tempUnit, toggleTempUnit, formatTemp } = useWeatherCard(lat, lng, 7);
+
+          // If no coordinates, show helpful hint
+          if (!lat || !lng) {
+            return (
+              <Card data-testid="card-weather-hint">
+                <CardContent className="py-4 flex items-start gap-3">
+                  <CloudSunIcon className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Add coordinates for weather forecasts:</strong> Edit your trip and use the location autocomplete to select a place with coordinates.
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          // Loading state
+          if (isLoading) {
+            return (
+              <Card data-testid="card-weather-loading">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CloudRain className="h-5 w-5 text-primary" />
+                    Weather Forecast
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </CardContent>
+              </Card>
+            );
+          }
+
+          // Error state
+          if (error || !weather) {
+            return (
+              <Card data-testid="card-weather-error">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CloudRain className="h-5 w-5 text-primary" />
+                    Weather Forecast
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Unable to load weather forecast
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          // Success state - split layout
+          return (
+            <div className="space-y-4">
+              {/* Current weather - full width */}
+              <CurrentWeather 
+                weather={weather} 
+                tempUnit={tempUnit} 
+                toggleTempUnit={toggleTempUnit} 
+                formatTemp={formatTemp} 
+              />
+              
+              {/* Forecast and Hikes - side by side on desktop */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <WeatherForecast 
+                  weather={weather} 
+                  formatTemp={formatTemp} 
+                  tripStartDate={trip.startDate}
+                  tripEndDate={trip.endDate}
+                />
+                
+                {/* Nearby Hikes Placeholder */}
+                <Card data-testid="card-nearby-hikes-placeholder">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <MapPinIcon className="h-5 w-5 text-primary" />
+                      Nearby Hikes
+                      <Badge variant="secondary" className="text-xs">Powered by AllTrails</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      Hike suggestions coming soon! We're working on integrating with AllTrails to show you the best trails near your campsite.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="grid gap-6 md:grid-cols-2">
           {/* Collaborators Section */}

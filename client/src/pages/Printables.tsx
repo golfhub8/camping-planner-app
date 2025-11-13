@@ -52,26 +52,28 @@ export default function Printables() {
     'mega-activity-book': 'MEGA CAMPING ACTIVITY BOOK A4.pdf',
   };
 
-  // Handle download initiation - show personal use modal first
+  // Handle download initiation - show personal use modal first (only for Pro files if not acknowledged in session)
   const initiateDownload = (url: string, isProFile: boolean, filename?: string) => {
-    setPendingDownload({ url, isPro: isProFile, filename });
-    setShowPersonalUseModal(true);
+    // Check if user has already acknowledged personal use agreement in this session
+    const hasAcknowledged = typeof window !== 'undefined' && sessionStorage.getItem('personalUseAcknowledged') === 'true';
+    
+    // For Pro files, show modal if not acknowledged
+    // For free files, proceed directly
+    if (isProFile && !hasAcknowledged) {
+      setPendingDownload({ url, isPro: isProFile, filename });
+      setShowPersonalUseModal(true);
+    } else {
+      // Proceed directly with download
+      handleDirectDownload(url, isProFile, filename);
+    }
   };
 
-  // Handle confirmed download after user agrees to terms
-  const handleConfirmedDownload = async () => {
-    if (!pendingDownload) return;
-
-    setShowPersonalUseModal(false);
-    
-    // Clear pending download on cancel path
-    const cleanup = () => setPendingDownload(null);
-
-    // For Pro files, use the protected endpoint which requires authentication
-    if (pendingDownload.isPro) {
+  // Direct download without modal (for free files or after acknowledgement)
+  const handleDirectDownload = async (url: string, isProFile: boolean, filename?: string) => {
+    if (isProFile) {
       try {
-        const response = await fetch(pendingDownload.url, {
-          credentials: 'include', // Include cookies for authentication
+        const response = await fetch(url, {
+          credentials: 'include',
         });
 
         if (!response.ok) {
@@ -86,32 +88,63 @@ export default function Printables() {
           throw new Error('Download failed');
         }
 
-        // Download the PDF blob with correct filename
         const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        // Use provided filename or try to extract from Content-Disposition header
-        link.download = pendingDownload.filename || 'printable.pdf';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
+        if (typeof window !== 'undefined') {
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = filename || 'printable.pdf';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+        }
+
+        toast({
+          title: "Download Started",
+          description: "Your printable is downloading now.",
+        });
       } catch (error) {
-        console.error('Download error:', error);
         toast({
           title: "Download Failed",
-          description: "Unable to download the printable. Please try again.",
+          description: "Please try again or contact support.",
           variant: "destructive",
         });
-      } finally {
-        cleanup();
       }
     } else {
-      // For free files, use direct download
-      window.open(pendingDownload.url, '_blank');
-      cleanup();
+      // Free file - open in new tab to view directly
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank');
+        toast({
+          title: "Opening Printable",
+          description: "Your free printable is opening in a new tab.",
+        });
+      } else {
+        toast({
+          title: "Unable to Open",
+          description: "Please access this page in a browser to view printables.",
+          variant: "destructive",
+        });
+      }
     }
+  };
+
+  // Handle confirmed download after user agrees to terms
+  const handleConfirmedDownload = async () => {
+    if (!pendingDownload) return;
+
+    // Mark as acknowledged for this session
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('personalUseAcknowledged', 'true');
+    }
+    
+    setShowPersonalUseModal(false);
+    
+    // Proceed with download
+    await handleDirectDownload(pendingDownload.url, pendingDownload.isPro, pendingDownload.filename);
+    
+    // Clear pending download
+    setPendingDownload(null);
   };
 
   if (isLoading) {
@@ -273,7 +306,7 @@ export default function Printables() {
           <AlertDialogHeader>
             <AlertDialogTitle>Personal Use Only</AlertDialogTitle>
             <AlertDialogDescription className="text-base">
-              These printables are for your personal and household use only. Please do not upload, resell, or share the files publicly. By clicking Download, you agree to these terms.
+              These printables are for your personal, household use only. Please don't upload them to file-sharing sites or resell them. Thank you for supporting The Camping Planner!
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -283,7 +316,7 @@ export default function Printables() {
               data-testid="button-confirm-download"
               className="bg-emerald-600 hover:bg-emerald-700"
             >
-              Agree & Download
+              I Understand – Download
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

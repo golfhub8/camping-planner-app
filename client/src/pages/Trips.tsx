@@ -198,11 +198,21 @@ export default function Trips() {
       
       
       <main className="container mx-auto pt-24 px-6 md:px-10 py-12 space-y-10">
+        {/* Hero Section */}
+        <div className="text-center space-y-4 max-w-4xl mx-auto pb-8" data-testid="hero-welcome">
+          <h1 className="text-5xl font-bold text-foreground">
+            Welcome to The Camping Planner
+          </h1>
+          <p className="text-lg text-muted-foreground leading-relaxed">
+            Plan stress-free camping trips from one simple dashboard. Create trips, save your favourite camp recipes, build smart grocery lists, and keep everyone on the same page with shared packing checklists. Whether you're planning a weekend getaway or a month-long road trip, The Camping Planner helps you stay organized so you can actually enjoy the campfire.
+          </p>
+        </div>
+
         {/* Page Header */}
         <div className="text-center space-y-3">
-          <h1 className="text-5xl font-bold text-foreground" data-testid="text-page-title">
-            Camping Trips
-          </h1>
+          <h2 className="text-3xl font-semibold text-foreground" data-testid="text-page-title">
+            Your Camping Trips
+          </h2>
           <p className="text-muted-foreground" data-testid="text-trip-count">
             {trips.length} trip{trips.length !== 1 ? 's' : ''} planned
           </p>

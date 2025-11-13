@@ -1,0 +1,175 @@
+PROMPT FOR REPLIT (PLEASE IMPLEMENT ALL OF THE FOLLOWING CHANGES)
+	1.	WEATHER PANEL – ADD CELSIUS + FUTURE HIKES INTEGRATION
+
+We already show the current weather and a 5-day forecast (in °F) on the trip details page. Please update this component as follows:
+
+a. Temperature toggle
+– Add a simple Fahrenheit/Celsius toggle in the top-right corner of the weather card, next to the current temperature.
+– Default to whatever unit the user’s browser locale suggests (if locale is “US” use °F, otherwise °C), but always allow manual switching.
+– Store the user’s preference in localStorage so that when they come back, the unit stays the same.
+– When the user switches unit, update both the “Current” temperature and all forecast rows. Do not re-call the weather API, just convert.
+– Use the standard formula:
+• C = (F – 32) × 5 / 9
+• F = C × 9 / 5 + 32
+– Show both values in a compact way, e.g.:
+• “51°F / 11°C” for current
+• In the forecast rows, show “High / Low” in the selected unit, and the alternate unit in lighter text if space allows (for example: “53° / 39° (12° / 4°)” ). If that’s too busy, just show the selected unit.
+
+b. Layout change to make room for hikes
+– Make the weather “Forecast” section half-width on large screens (stacked full-width on mobile). On desktop, the right half of that row should be used for “Nearby Hikes”.
+– The “Current” weather card at the top can remain full-width as it is now.
+
+c. Nearby hikes placeholder (AllTrails affiliate integration ready)
+– On the trip details page, under the weather area, add a new card titled “Nearby Hikes (powered by AllTrails)” in the right-hand column.
+– For now, implement this as follows so it’s ready for a future AllTrails integration:
+• Add a backend endpoint: GET /api/trips/:tripId/hikes/suggestions
+• This endpoint will accept trip coordinates (lat/lng) and return a list of hikes: [ { id, name, distanceKm, difficulty, allTrailsUrl, estimatedTimeMinutes } ]. You can stub this with static data or mock data for now.
+• On the frontend, create a HikeSuggestions component that:
+– Calls that endpoint when the trip has valid coordinates.
+– Shows a loading state, empty state (“No hikes found yet. Try adjusting your location.”), and the list of hikes when available.
+– Each hike row should show: name, distance (e.g. “6.2 km”), difficulty, and a “View on AllTrails” link that opens allTrailsUrl in a new tab. This link is where we’ll eventually attach our affiliate parameters.
+– Each hike row must also have a “Save to Trip” button.
+
+d. Saving hikes to a trip
+– Extend the trip model to support saved hikes: for example, an array of { id, name, distanceKm, difficulty, allTrailsUrl }.
+– Add a backend endpoint: POST /api/trips/:tripId/hikes with a hike payload to save a hike to that trip.
+– On the trip details page, under the “Meals for this Trip” section, add a new section “Saved Hikes for this Trip”. It should show any hikes the user has saved from the Nearby Hikes card, with:
+• hike name (link to allTrailsUrl)
+• distance and difficulty
+• a simple “Remove” (X) button that calls DELETE /api/trips/:tripId/hikes/:hikeId.
+– Saved hikes should be persisted per trip and visible to any collaborators on that trip.
+	2.	RECIPE SAVE MODAL – MAKE INGREDIENTS/INSTRUCTIONS ALWAYS EDITABLE + FIX PARSING UX
+
+Right now when I press “Save Recipe” on an external recipe from TheCampingPlanner.com:
+
+– The app tries to auto-import ingredients and instructions.
+– If parsing fails, it shows an error banner and the Ingredients/Instructions text areas stay greyed out or behave strangely.
+– Even on success, the UI shows “0 items / 0 steps” while there is text in the text areas.
+
+Please change behaviour as follows:
+
+a. Base behaviour
+– The “Save Recipe to My Recipes” modal should ALWAYS show Ingredients and Instructions as normal editable text areas (same visual style as Recipe Title and Source URL).
+– There should be NO state where the user cannot type or paste into these fields.
+– Remove the greyed-out “disabled” look; treat them as normal inputs.
+
+b. Parsing logic
+– Keep the attempt to auto-import ingredients and instructions from the source URL, but adjust UX:
+• If parsing succeeds: populate the Ingredients textarea with one ingredient per line and populate the Instructions textarea with separate steps, separated by blank lines. Then update the counters correctly.
+• If parsing fails: show a non-blocking message at the top: “We couldn’t auto-import this recipe. You can paste ingredients and steps manually.” Then leave the Ingredients and Instructions fields empty but fully editable.
+
+c. Item/step counters
+– The “x items” counter next to the Ingredients label should be computed as: the count of non-empty lines in the Ingredients textarea (trim whitespace). Recalculate on every change.
+– The “x steps” counter for Instructions should be computed as: the count of non-empty blocks separated by one or more blank lines. Recalculate on every change.
+– These counters should update live as the user types or pastes.
+
+d. Reliability for our own domain
+– For URLs under TheCampingPlanner.com, if possible, use a more reliable parsing strategy instead of generic scraping. For example:
+• Look for structured data (JSON-LD) if present.
+• Or rely on known CSS selectors for ingredient and instruction lists on our own site.
+– If those selectors or JSON-LD are not found, fall back gracefully to the manual mode described above (no blocking error, just the helper message).
+	3.	SUBSCRIPTION STATE – MAKE PRO STATUS STICKY + CANCEL FLOW
+
+Currently:
+
+– I subscribed as a Pro member yesterday.
+– Today when I logged back in, the account showed “Trial” again until we manually forced it.
+
+Please fix the subscription system so that it is persistent and Stripe-driven:
+
+a. Data model
+– Ensure the user record in the database has at least:
+• subscriptionStatus: “free” | “trial” | “pro” | “canceled”
+• subscriptionRenewalDate (or current_period_end as a timestamp)
+• stripeCustomerId
+• stripeSubscriptionId
+– All UI should read from these fields, not from session-only flags.
+
+b. Stripe integration
+– On successful checkout / trial start, use Stripe webhooks to update the user:
+• For test mode this will be events like checkout.session.completed and customer.subscription.created / updated.
+• When we receive a successful subscription (status = “active” or “trialing”), set subscriptionStatus to “pro” (or “trial” if we want to distinguish trialing), and set subscriptionRenewalDate from current_period_end.
+– On subscription cancellation or expiration (customer.subscription.deleted / updated with status “canceled” or “past_due” as we decide), set subscriptionStatus to “canceled” or revert to “free”.
+– On every app load / login, the “My Account” page should reflect whatever is stored in the DB; do not reset to “trial” unless the DB actually says so.
+
+c. Renewal behaviour and invoice email
+– Stripe should be configured to auto-renew annually. Confirm in code that we treat subscriptionStatus “active” as Pro up to subscriptionRenewalDate.
+– For each successful invoice.payment_succeeded webhook, send the user an invoice email using our existing SMTP setup. Use a simple template like:
+• Subject: “Your Camping Planner Pro renewal receipt”
+• Body includes: amount, date, renewal period, and a link to manage subscription.
+– Make sure the invoice email uses hello@thecampingplanner.com and goes through the same SMTP host we already tested.
+
+d. Cancel subscription flow UX
+– On the My Account page, under “Manage Subscription”, add a “Cancel Subscription” button.
+– Easiest option: integrate Stripe’s Billing Portal. Clicking “Cancel Subscription” should redirect the user to the Stripe customer portal where they can cancel/manage payment details.
+– When they return, the portal/webhooks will update the DB and the UI should show subscriptionStatus “canceled” or “free” as appropriate.
+– Keep cancellation discoverable but not obnoxiously prominent (e.g., secondary button style under Manage Subscription).
+	4.	PRINTABLES ACCESS + HEADER BADGE
+
+Currently:
+
+– My Account shows I am a Pro member.
+– The Printables & Games page still shows the Pro items as locked with “Start Free Trial”.
+– The header still shows a “Go Pro” button even when I am Pro.
+
+Please change this:
+
+a. Unlock printables for Pro
+– On the Printables page, check the logged-in user’s subscriptionStatus.
+– If subscriptionStatus is “pro” (or “trial” if we also want trials to access), then:
+• Replace “Start Free Trial” buttons with “Download” buttons for each Pro printable.
+• Remove or hide the “Available with Pro Membership” padlock text for that user, or replace it with a small “Included in your Pro membership” note.
+– Non-Pro users should still see the upsell state with “Start Free Trial”.
+
+b. Pre-download warning / discouragement popup
+– Before a Pro user downloads any Pro printable, show a modal:
+• Title: “Personal Use Only”
+• Body: A short message such as:
+“These printables are for your personal, household use only. Please don’t upload them to file-sharing sites or resell them. Thank you for supporting The Camping Planner!”
+• Buttons: “I Understand – Download” (primary) and “Cancel” (secondary).
+– Only proceed with the file download after the user clicks “I Understand – Download”.
+– Remember the acknowledgement for that session for that specific user (e.g., in localStorage or session) so they don’t see the modal on every single download if that becomes annoying.
+
+c. Header badge
+– In the main header, if subscriptionStatus is “pro”, replace the “Go Pro” button with a small “Pro” badge or label. For example:
+• A pill that says “Pro Member” (non-clickable) to the left of the profile avatar.
+– If subscriptionStatus is “free” or “trial”, keep the “Go Pro” button as it is.
+	5.	TRIP PAGE HERO / WELCOME SECTION (COPY + PLACEMENT)
+
+On the “Camping Trips” main page (list of trips + “Plan a New Trip” form), add a short welcome hero section ABOVE the “Camping Trips” title.
+
+Implementation:
+
+– At the top of the page, under the main nav, insert a hero block:
+• Big heading: “Welcome to The Camping Planner”
+• Subheading + short paragraph explaining what the app does and hooking the user. Use this copy (feel free to break into lines to match our design system):
+
+Heading:
+Welcome to The Camping Planner
+
+Body copy:
+Plan stress-free camping trips from one simple dashboard. Create trips, save your favourite camp recipes, build smart grocery lists, and keep everyone on the same page with shared packing checklists. Whether you’re planning a weekend getaway or a month-long road trip, The Camping Planner helps you stay organized so you can actually enjoy the campfire.
+
+– Then show the existing “Camping Trips” heading and “Plan a New Trip” card below this hero.
+	6.	SMALL UX NITS
+
+a. Recipe auto-import status text
+– At the top of the Save Recipe modal, the status banner should be clear:
+• Success: “Recipe parsed successfully – you can review or edit the ingredients and steps below.”
+• Failure: “We couldn’t auto-import this recipe. You can paste ingredients and steps manually.”
+– Make sure the status banner does not prevent typing in the fields.
+
+b. When user chooses “Add Meal” on a trip and has no recipes yet
+– The current modal tells them to create a recipe but then just dumps them on the Trips page again.
+– Instead, when they click “Create a Recipe”, navigate them directly to the “Create New Recipe” form on the Recipes page. After they save at least one recipe, they should be able to come back to their trip and add that recipe as a meal.
+	7.	GROCERY LIST MISSING INGREDIENTS BUG (REMINDER)
+
+We recently saw that:
+
+– Adding ingredients from a trip meal showed a toast like “Added 12 ingredients…”
+– When going to “Build Your Grocery List” and pressing “Continue to Review”, the grocery list shows “No Recipes Selected” and no ingredients.
+
+Please ensure that:
+
+– When the user selects recipes or meals for a trip on the “Build Your Grocery List” flow and clicks Continue to Review, we actually aggregate all selected ingredients into a GroceryList model in the backend, and then render them on the final grocery list review page.
+– The final grocery list page must not say “No Recipes Selected” if there are selected recipes; instead it should show the categorized list (Pantry, Fresh, etc.), quantities combined across recipes, and support export/share as already designed
