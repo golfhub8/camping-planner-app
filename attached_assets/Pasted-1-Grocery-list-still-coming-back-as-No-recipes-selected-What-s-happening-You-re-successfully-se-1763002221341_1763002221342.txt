@@ -1,0 +1,44 @@
+1. Grocery list still coming back as “No recipes selected”
+
+What’s happening:
+You’re successfully selecting recipes/meals, but when you hit Continue to Review the app routes you to the grocery review page without actually saving or passing along the selected ingredients. So the review page has nothing to render and shows “No recipes selected.”
+
+What you want
+
+Flow should be:
+	1.	Choose trip + recipes
+	2.	Click Continue to Review
+	3.	API builds a grocery list (combined ingredients) and stores it
+	4.	UI navigates to /grocery/list/:id and shows that list
+	5.	That list can be shared / emailed / exported
+
+Prompt for Replit (grocery list persistence)
+
+Copy–paste this into Replit’s AI:
+
+The “Build Your Grocery List” flow is not persisting selected recipes/meals.
+
+Current behavior:
+	•	On /grocery/build I can select a trip and recipes.
+	•	When I click “Continue to Review”, I’m taken to the grocery page that says “No recipes selected. Please select some recipes first to generate a grocery list.”
+	•	A toast appears like “Added 12 ingredients from Campfire Truffle Mac with Bacon…”, but no actual grocery list is created or displayed.
+
+Please do the following:
+	1.	Add a backend endpoint like:
+	•	POST /api/grocery-lists that accepts { tripId?: string, recipeIds: string[] }
+	•	Builds a combined ingredient list from all selected recipes/meals
+	•	Saves it as a GroceryList record in the database (including userId, createdAt, items, and which recipes it came from)
+	•	Returns { id, items }
+	2.	On the frontend “Build Your Grocery List” page:
+	•	When the user clicks Continue to Review, call this endpoint with the selected trip + recipe IDs.
+	•	After a successful response, navigate to a new page: /grocery/list/:id using the returned list id.
+	3.	Create a new page /grocery/list/[id] that:
+	•	Fetches the grocery list by id
+	•	Displays the combined ingredients grouped by category (similar to how ingredients are shown under “Meals for this Trip”)
+	•	Allows checkboxes to mark items as needed/already-have
+	•	Has a “Share / Export” section with:
+	•	“Copy list to clipboard”
+	•	“Email this list” (open mailto: with the list in the body for now)
+	4.	Remove the old logic that shows “No recipes selected” after building a list. That state should only appear if the user opens /grocery without having any list or before they’ve run the builder.
+
+Make sure the selection I make in the builder actually results in a persistent grocery list I can revisit and not just a toast message.

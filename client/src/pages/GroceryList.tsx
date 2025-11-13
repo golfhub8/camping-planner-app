@@ -34,11 +34,7 @@ export default function GroceryList() {
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveAttempted, setSaveAttempted] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [listToken, setListToken] = useState<string | null>(params.token || null);
-  const redirectTimerRef = useRef<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -65,20 +61,11 @@ export default function GroceryList() {
     },
   });
 
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current !== null) {
-        clearTimeout(redirectTimerRef.current);
-        redirectTimerRef.current = null;
-      }
-    };
-  }, []);
 
-  // Load or save grocery list on component mount
+  // Load grocery list on component mount
   useEffect(() => {
-    async function loadOrSaveList() {
-      // CASE 1: Viewing a saved list by token
+    async function loadList() {
+      // CASE 1: Viewing a saved list by token (primary flow)
       if (listToken) {
         console.log(`[GroceryList] Loading saved list from token: ${listToken}`);
         try {
@@ -105,98 +92,14 @@ export default function GroceryList() {
         return;
       }
 
-      // CASE 2: User came from GrocerySelection with confirmed data - SAVE TO DATABASE
-      const confirmedData = sessionStorage.getItem('confirmedGroceryData');
-      if (confirmedData && !saveAttempted) {
-        // Mark that we've attempted a save to prevent duplicate saves
-        setSaveAttempted(true);
-        
-        try {
-          setIsSaving(true);
-          const { needed, pantry, externalMeals: extMeals, tripId, tripName } = JSON.parse(confirmedData);
-          
-          // Convert to GroceryItems
-          const neededItems: GroceryItem[] = (needed || []).map((ing: any) => ({
-            name: ing.name,
-            category: ing.category || "Pantry" as GroceryCategory,
-            checked: false,
-          }));
-          
-          const pantryItems: GroceryItem[] = (pantry || []).map((ing: any) => ({
-            name: ing.name,
-            category: ing.category || "Pantry" as GroceryCategory,
-            checked: true,
-          }));
-          
-          const externalItems: GroceryItem[] = (extMeals || []).map((title: string) => ({
-            name: title + " (see trip for recipe details)",
-            category: "Pantry" as const,
-            checked: false,
-          }));
-          
-          const allItems = [...neededItems, ...pantryItems, ...externalItems];
-          
-          console.log(`[GroceryList] Saving ${allItems.length} items to database${tripId ? ` for trip ${tripName} (ID: ${tripId})` : ''}...`);
-          
-          // Save to database
-          const response = await apiRequest("POST", "/api/grocery-lists", {
-            items: allItems,
-            tripId: tripId || undefined,
-            tripName: tripName || undefined,
-          });
-          
-          const data = await response.json();
-          const token = data.token;
-          
-          console.log(`[GroceryList] Successfully saved list with token: ${token}`);
-          
-          // Clear sessionStorage BEFORE redirecting to prevent re-saves
-          sessionStorage.removeItem('confirmedGroceryData');
-          
-          // Invalidate queries to refresh usage stats
-          queryClient.invalidateQueries({ queryKey: ["/api/account/usage"] });
-          
-          // Reset saving state before navigation
-          setIsSaving(false);
-          setSaveAttempted(false);
-          
-          // Redirect to token-based URL
-          setLocation(`/grocery/list/${token}`);
-          
-        } catch (error: any) {
-          console.error('[GroceryList] Error saving list:', error);
-          
-          // Clear sessionStorage on ANY error to prevent infinite retries
-          sessionStorage.removeItem('confirmedGroceryData');
-          setIsSaving(false);
-          
-          // Check if it's a paywall error
-          if (error.status === 402) {
-            const errorData = await error.response?.json().catch(() => ({}));
-            const errorMessage = errorData.message || "You've reached the free limit. Start a free trial to create unlimited lists.";
-            setSaveError(errorMessage);
-            toast({
-              title: "Upgrade Required",
-              description: errorMessage,
-              variant: "destructive",
-            });
-            // Direct navigation (no setTimeout to avoid timer leaks)
-            setLocation("/subscribe");
-            return;
-          }
-          
-          // For all other errors, set error state to show retry UI
-          const errorMessage = "Your list could not be saved. Please try again.";
-          setSaveError(errorMessage);
-          toast({
-            title: "Failed to save list",
-            description: errorMessage,
-            variant: "destructive",
-          });
-          
-          // Reset saveAttempted to allow manual retry
-          setSaveAttempted(false);
-        }
+      // CASE 2: No token provided - redirect to grocery builder with error
+      if (!listToken && recipeIds.length === 0 && externalMeals.length === 0) {
+        toast({
+          title: "No list found",
+          description: "Please build a grocery list first.",
+          variant: "default",
+        });
+        setLocation("/grocery");
         return;
       }
 
@@ -213,7 +116,7 @@ export default function GroceryList() {
       }
     }
 
-    loadOrSaveList();
+    loadList();
   }, [listToken]);
 
   // Toggle item checked state
@@ -394,59 +297,6 @@ export default function GroceryList() {
   const displayedItems = showOnlyNeeded 
     ? groceryItems.filter(item => !item.checked)
     : groceryItems;
-
-  // Show error state with retry UI
-  if (saveError) {
-    return (
-      <div className="min-h-screen bg-background">
-        <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-4xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-destructive">Error Saving List</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">{saveError}</p>
-              <div className="flex gap-2">
-                <Button 
-                  onClick={() => {
-                    setSaveError(null);
-                    setSaveAttempted(false);
-                    setLocation("/grocery");
-                  }}
-                  data-testid="button-retry"
-                >
-                  Try Again
-                </Button>
-                <Button 
-                  variant="ghost"
-                  onClick={() => setLocation("/trips")}
-                  data-testid="button-back-trips"
-                >
-                  Back to Trips
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    );
-  }
-
-  // Show loading state when saving the list
-  if (isSaving) {
-    return (
-      <div className="min-h-screen bg-background">
-        <main className="container mx-auto pt-24 px-6 md:px-10 py-12">
-          <div className="flex items-center justify-center min-h-[50vh]">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-              <p className="text-muted-foreground">Saving your grocery list...</p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   // Show loading state when generating list from API
   if (generateListMutation.isPending) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,10 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShoppingCart, Loader2, ExternalLink, ArrowLeft, AlertCircle } from "lucide-react";
-import type { Recipe, Trip } from "@shared/schema";
+import type { Recipe, Trip, GroceryItem } from "@shared/schema";
 import { mergeIngredients, normalizeIngredientKey, type MergedIngredient } from "@/lib/ingredients";
+import { categorizeIngredient } from "@/lib/categorize";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { apiRequest } from "@/lib/queryClient";
 
 enum Step {
   SELECTION = "selection",
@@ -26,6 +28,7 @@ interface ConfirmedIngredient extends MergedIngredient {
 export default function GrocerySelection() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState<Step>(Step.SELECTION);
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<number[]>([]);
   const [manuallySelectedRecipeIds, setManuallySelectedRecipeIds] = useState<Set<number>>(new Set());
@@ -373,28 +376,93 @@ export default function GrocerySelection() {
     setConfirmedIngredients(prev => prev.map(ing => ({ ...ing, isNeeded: true })));
   }
 
+  // Mutation to save grocery list to database
+  const saveGroceryListMutation = useMutation({
+    mutationFn: async (items: GroceryItem[]) => {
+      const selectedTrip = selectedTripId ? trips.find(t => t.id.toString() === selectedTripId) : null;
+      
+      const response = await apiRequest("POST", "/api/grocery-lists", {
+        items,
+        tripId: selectedTrip?.id,
+        tripName: selectedTrip?.name,
+      });
+      
+      const data = await response.json();
+      return data as { token: string; id: number; listUrl: string };
+    },
+    onSuccess: (data) => {
+      console.log(`[GrocerySelection] Saved list with token: ${data.token}`);
+      
+      // Invalidate usage stats to reflect new grocery list count
+      queryClient.invalidateQueries({ queryKey: ["/api/account/usage"] });
+      
+      // Clear any pending grocery data from sessionStorage
+      sessionStorage.removeItem('confirmedGroceryData');
+      sessionStorage.removeItem('pendingGroceryItems');
+      sessionStorage.removeItem('alreadyHaveIngredients');
+      
+      // Navigate to the saved list
+      setLocation(`/grocery/list/${data.token}`);
+    },
+    onError: async (error: any) => {
+      console.error('[GrocerySelection] Error saving list:', error);
+      
+      // Handle paywall (402)
+      if (error.status === 402) {
+        const errorData = await error.response?.json().catch(() => ({}));
+        const message = errorData.message || "You've reached the free limit of 5 shared grocery lists. Start a free trial to create unlimited lists.";
+        
+        toast({
+          title: "Upgrade Required",
+          description: message,
+          variant: "destructive",
+        });
+        
+        // Redirect to subscribe page
+        setLocation("/subscribe");
+        return;
+      }
+      
+      // Handle other errors
+      toast({
+        title: "Failed to save list",
+        description: "Your grocery list could not be saved. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   function generateFinalList() {
-    // Split ingredients into needed and pantry
+    // Convert confirmed ingredients to GroceryItem format
     const needed = confirmedIngredients.filter(ing => ing.isNeeded);
     const pantry = confirmedIngredients.filter(ing => !ing.isNeeded);
     
-    // Get trip info if a trip was selected
-    const selectedTrip = selectedTripId ? trips.find(t => t.id.toString() === selectedTripId) : null;
+    // Build GroceryItem array with proper format, categorizing each ingredient
+    const neededItems: GroceryItem[] = needed.map(ing => ({
+      name: ing.name,
+      category: categorizeIngredient(ing.name),
+      checked: false,
+    }));
     
-    // Store in sessionStorage for GroceryList page
-    // Always store pantry items - they were marked as "already have" by the user
-    const groceryData = {
-      needed,
-      pantry,  // Always include pantry items (needed for TripDetail extended payload)
-      externalMeals: externalMealsTitles,
-      tripId: selectedTrip?.id,
-      tripName: selectedTrip?.name,
-    };
+    const pantryItems: GroceryItem[] = pantry.map(ing => ({
+      name: ing.name,
+      category: categorizeIngredient(ing.name),
+      checked: true, // Pantry items are marked as "already have"
+    }));
     
-    sessionStorage.setItem('confirmedGroceryData', JSON.stringify(groceryData));
+    // Add external meal titles as Pantry items
+    const externalItems: GroceryItem[] = externalMealsTitles.map(title => ({
+      name: title + " (see trip for recipe details)",
+      category: "Pantry",
+      checked: false,
+    }));
     
-    // Navigate to grocery list page (no query params needed - all data is in sessionStorage)
-    setLocation('/grocery/list');
+    const allItems = [...neededItems, ...pantryItems, ...externalItems];
+    
+    console.log(`[GrocerySelection] Saving ${allItems.length} items to database...`);
+    
+    // Save to database via API
+    saveGroceryListMutation.mutate(allItems);
   }
 
   function backToSelection() {
@@ -566,12 +634,21 @@ export default function GrocerySelection() {
             </Button>
             <Button
               onClick={generateFinalList}
-              disabled={needed.length === 0}
+              disabled={needed.length === 0 || saveGroceryListMutation.isPending}
               className="gap-2"
               data-testid="button-generate-final-list"
             >
-              <ShoppingCart className="h-4 w-4" />
-              Generate Grocery List ({needed.length} items)
+              {saveGroceryListMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving list...
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="h-4 w-4" />
+                  Generate Grocery List ({needed.length} items)
+                </>
+              )}
             </Button>
           </div>
         </main>
