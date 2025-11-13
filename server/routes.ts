@@ -282,10 +282,19 @@ export function registerWebhookRoute(app: Express): void {
       // Handle the event
       switch (event.type) {
         case 'checkout.session.completed': {
-          console.log(`[Webhook] Processing checkout.session.completed`);
+          console.log(`[Webhook] ==================== Processing checkout.session.completed ====================`);
           const session = event.data.object as Stripe.Checkout.Session;
+          console.log(`[Webhook] Session ID: ${session.id}`);
+          console.log(`[Webhook] client_reference_id: ${session.client_reference_id}`);
+          console.log(`[Webhook] metadata:`, JSON.stringify(session.metadata));
+          console.log(`[Webhook] customer: ${session.customer}`);
+          console.log(`[Webhook] customer_email: ${session.customer_email}`);
+          console.log(`[Webhook] subscription: ${session.subscription}`);
+          
           let userId = session.client_reference_id || session.metadata?.app_user_id;
           let userIdFoundViaEmail = false;
+
+          console.log(`[Webhook] Extracted userId: ${userId || 'NOT FOUND'}`);
 
           // If no userId in metadata, try to look up by email from customer
           if (!userId && session.customer_email) {
@@ -295,24 +304,32 @@ export function registerWebhookRoute(app: Express): void {
               userId = user.id;
               userIdFoundViaEmail = true;
               console.log(`[Webhook] Found user by email: ${userId}`);
+            } else {
+              console.log(`[Webhook] No user found with email: ${session.customer_email}`);
             }
           }
 
           if (!userId) {
-            console.error("[Webhook] No user ID found in checkout session and couldn't look up by email");
+            console.error("[Webhook] ❌ CRITICAL: No user ID found in checkout session and couldn't look up by email");
+            console.error("[Webhook] This means the subscription will NOT be activated!");
             break;
           }
+          
+          console.log(`[Webhook] ✅ Successfully identified userId: ${userId}`);
 
           const purchaseType = session.metadata?.purchase_type;
           console.log(`[Webhook] Purchase type: ${purchaseType || 'not specified'}, User ID: ${userId}`);
 
           if (purchaseType === 'pro_membership_annual') {
+            console.log(`[Webhook] Processing Pro membership subscription...`);
             // Handle annual Pro membership subscription - save customer and subscription IDs
             if (session.customer && session.subscription) {
+              console.log(`[Webhook] Updating database - customer: ${session.customer}, subscription: ${session.subscription}`);
               await storage.updateStripeCustomerId(userId, session.customer as string);
               await storage.updateStripeSubscriptionId(userId, session.subscription as string);
               
               // Fetch the subscription to get the actual current_period_end (includes trial)
+              console.log(`[Webhook] Fetching subscription details from Stripe...`);
               const subscriptionResponse = await stripe.subscriptions.retrieve(session.subscription as string);
               
               // Type guard: ensure this is an active subscription (not deleted)
@@ -329,9 +346,11 @@ export function registerWebhookRoute(app: Express): void {
               }
               
               const endDate = new Date(subscriptionResponse.current_period_end * 1000);
+              console.log(`[Webhook] Setting Pro membership end date: ${endDate}`);
               await storage.updateProMembershipEndDate(userId, endDate);
               
               // Store subscription status for efficient /api/me access
+              console.log(`[Webhook] Setting subscription status: ${subscriptionResponse.status}`);
               await storage.updateSubscriptionStatus(userId, subscriptionResponse.status);
               
               // If userId was found via email (not in metadata), update Stripe metadata
@@ -351,7 +370,8 @@ export function registerWebhookRoute(app: Express): void {
                 }
               }
               
-              console.log(`Activated Pro membership for user ${userId} - status: ${subscriptionResponse.status}, expires ${endDate}`);
+              console.log(`[Webhook] ✅ SUCCESS: Activated Pro membership for user ${userId}`);
+              console.log(`[Webhook] Status: ${subscriptionResponse.status}, Expires: ${endDate}`);
             }
           }
           break;
@@ -2543,6 +2563,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/billing/config", (req, res) => {
     const configured = !!(stripe && process.env.STRIPE_PRICE_ID);
     res.json({ configured });
+  });
+
+  // GET /api/billing/debug
+  // Diagnostic endpoint to check current subscription state
+  // Protected route - requires authentication
+  app.get("/api/billing/debug", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Get current database values
+      const dbState = {
+        userId: user.id,
+        email: user.email,
+        stripeCustomerId: user.stripeCustomerId || null,
+        stripeSubscriptionId: user.stripeSubscriptionId || null,
+        subscriptionStatus: user.subscriptionStatus || null,
+        proMembershipEndDate: user.proMembershipEndDate?.toISOString() || null,
+      };
+
+      // Determine plan based on subscription status (same logic as /api/account/plan)
+      let plan: 'free' | 'pro' = 'free';
+      const status = user.subscriptionStatus;
+      if (status === 'trialing' || status === 'active' || status === 'past_due') {
+        plan = 'pro';
+      }
+
+      // Try to fetch live data from Stripe if subscription ID exists
+      let stripeData = null;
+      if (stripe && user.stripeSubscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          if (subscription && subscription.object === 'subscription' && 'current_period_end' in subscription) {
+            stripeData = {
+              id: subscription.id,
+              status: subscription.status,
+              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+              cancel_at_period_end: subscription.cancel_at_period_end,
+            };
+          }
+        } catch (error: any) {
+          stripeData = { error: error.message };
+        }
+      }
+
+      return res.json({
+        databaseState: dbState,
+        computedPlan: plan,
+        stripeData: stripeData,
+        diagnosis: {
+          hasStripeCustomer: !!user.stripeCustomerId,
+          hasSubscriptionId: !!user.stripeSubscriptionId,
+          hasStatus: !!user.subscriptionStatus,
+          isPro: plan === 'pro',
+          statusMatchesStripe: stripeData && !stripeData.error ? 
+            stripeData.status === user.subscriptionStatus : null,
+        },
+      });
+    } catch (error: any) {
+      console.error("Error in debug endpoint:", error);
+      return res.status(500).json({ error: error.message });
+    }
   });
 
   // POST /api/billing/create-checkout-session

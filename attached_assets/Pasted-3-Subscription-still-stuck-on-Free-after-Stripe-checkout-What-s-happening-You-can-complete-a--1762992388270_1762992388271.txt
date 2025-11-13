@@ -1,0 +1,61 @@
+3. Subscription still stuck on “Free” after Stripe checkout
+
+What’s happening
+	•	You can complete a Stripe checkout / trial flow without errors in the Stripe UI.
+	•	Back in the app, My Account → Subscription Plan still shows Free.
+	•	Plan benefits are free limits (5 trips / 5 grocery lists).
+	•	Printables stay locked; the app never flips you to Pro.
+
+This almost always means the Stripe webhook → backend → user record chain is broken.
+
+Prompt for Replit AI
+
+Investigate and fix Stripe subscription syncing so users are upgraded to Pro after a successful checkout.
+
+Current symptoms
+	•	Users can complete the Stripe checkout / 7-day trial flow.
+	•	In Stripe’s dashboard, the payment/subscription appears successful.
+	•	In the app, My Account → Subscription Plan still shows Free. Plan benefits and usage limits never change.
+	•	Paid printables remain locked.
+
+Goal
+	•	When Stripe reports a successful checkout/session/subscription:
+	•	Update the user’s record in our database to plan = 'pro' (or similar).
+	•	Reflect this immediately in the UI (account page, trip/grocery limits, printables access).
+
+Steps
+	1.	Locate all Stripe-related backend code:
+	•	API routes like /api/stripe/webhook, /api/stripe/create-checkout-session, /api/stripe/billing-portal, etc.
+	•	Any helpers that map Stripe customers to our internal user IDs.
+	2.	Verify the webhook endpoint:
+	•	In Stripe dashboard, check the webhook for test mode. It should point to the public dev URL plus /api/stripe/webhook (not a private Replit URL).
+	•	Confirm subscribed events include at least:
+	•	checkout.session.completed
+	•	customer.subscription.created
+	•	customer.subscription.updated
+	•	customer.subscription.deleted
+	•	Make sure the webhook secret is correctly set in Replit env vars and used in the webhook handler to verify the signature.
+	3.	Update the webhook handler:
+	•	For checkout.session.completed or when a subscription transitions to active:
+	•	Retrieve the session’s customer and client_reference_id or metadata with our user_id.
+	•	Look up the corresponding user in our database.
+	•	Set their plan to 'pro', store subscription id, status, and current period end.
+	•	For customer.subscription.deleted or trial end without renewal:
+	•	Downgrade the user to the free plan.
+	4.	Ensure the frontend relies on the database plan field, not local storage:
+	•	On page load, fetch the user record (including plan) from the backend/Supabase session.
+	•	Use that to:
+	•	Show Free vs Pro in My Account.
+	•	Enforce 5-trip / 5-grocery limits for Free.
+	•	Unlock printables when plan === 'pro'.
+	5.	Test with Stripe CLI (recommended):
+	•	Use stripe listen and stripe trigger checkout.session.completed etc. to simulate events against your dev webhook.
+	•	Confirm that user records are updated and the UI switches to Pro without a manual refresh beyond the standard reload.
+
+Validation
+	•	Start as a Free user.
+	•	Go through the full Stripe checkout / trial flow.
+	•	After redirect back to the app:
+	•	My Account → Subscription Plan should show Pro.
+	•	Limits (trips/grocery) should be unlimited or show Pro labels.
+	•	Printables should show active download buttons instead of “Start Free Trial”.
