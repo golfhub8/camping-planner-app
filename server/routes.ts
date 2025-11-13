@@ -2558,11 +2558,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reference: blueprint:javascript_stripe
 
   // GET /api/billing/config
-  // Check if Stripe is properly configured
+  // Check if Stripe is properly configured and verify price details
   // Public route - no authentication required
-  app.get("/api/billing/config", (req, res) => {
+  app.get("/api/billing/config", async (req, res) => {
     const configured = !!(stripe && process.env.STRIPE_PRICE_ID);
-    res.json({ configured });
+    
+    if (!configured) {
+      return res.json({ configured: false });
+    }
+    
+    // Fetch price details to verify recurring configuration
+    try {
+      const price = await stripe!.prices.retrieve(process.env.STRIPE_PRICE_ID!);
+      const product = await stripe!.products.retrieve(price.product as string);
+      
+      return res.json({ 
+        configured: true,
+        price: {
+          id: price.id,
+          type: price.type, // Should be 'recurring'
+          recurring: price.recurring ? {
+            interval: price.recurring.interval, // Should be 'year'
+            interval_count: price.recurring.interval_count,
+          } : null,
+          unit_amount: price.unit_amount,
+          currency: price.currency,
+        },
+        product: {
+          name: product.name,
+          description: product.description,
+        },
+      });
+    } catch (error: any) {
+      console.error('[Billing Config] Error fetching price details:', error);
+      return res.json({ 
+        configured: true,
+        error: 'Could not fetch price details',
+      });
+    }
   });
 
   // GET /api/billing/debug

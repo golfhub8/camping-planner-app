@@ -1,0 +1,42 @@
+2. Subscription now shows Pro – renewal & receipts
+
+You’re now correctly marked as Pro (🎉), so the webhook + user flag are finally working.
+
+a) Does it auto-renew yearly?
+
+If your Stripe price is configured as:
+	•	Type: Recurring
+	•	Interval: Year
+
+…then yes: Stripe will automatically renew the subscription every year until canceled.
+
+Ask Replit (or yourself) to confirm the price object:
+
+Double-check the Stripe price we’re using for Camping Planner Pro:
+	•	Make sure it is a recurring price with interval: 'year'.
+	•	Confirm in the Stripe Dashboard that the checkout session is using this recurring yearly price, not a one-time payment.
+
+b) Do we need to email terms / conditions?
+
+Best practice:
+	•	Clearly show “billed annually until canceled” on the pricing/checkout copy.
+	•	Send an email receipt that:
+	•	Confirms the charge
+	•	States it’s an annual, auto-renewing subscription
+	•	Links to your Terms & Conditions / Cancellation Policy
+
+Stripe can send receipts automatically if email receipts are turned on in your Stripe Dashboard (Email > Customer emails > Successful payments). If you need something more branded, you can also send your own email after checkout.session.completed.
+
+Prompt for Replit (receipt + renewal info):
+
+Integrate Stripe receipts and renewal clarity:
+	1.	Ensure Stripe’s “successful payment” customer emails are enabled in the Dashboard so users get a receipt automatically.
+	2.	In our custom email (if we send one through our backend), include:
+	•	Plan name (“Camping Planner Pro – Annual”)
+	•	Amount + currency
+	•	“Renews automatically every 12 months unless canceled”
+	•	A link to manage/cancel their subscription (/account page + Stripe portal link).
+	3.	On the pricing / checkout copy in the app, add a short line like:
+“$29/year, billed annually. Renews automatically until canceled.”
+
+Implement the backend email trigger (if not already) off the checkout.session.completed or invoice.payment_succeeded webhook so new Pro members always get a clear confirmation email.
