@@ -822,7 +822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ error: 'Printable not found' });
     }
     
-    const filePath = path.resolve(import.meta.dirname, '../client/public/printables', filename);
+    const filePath = path.resolve(import.meta.dirname, 'private/printables', filename);
     
     // Check if file exists
     if (!fs.existsSync(filePath)) {
