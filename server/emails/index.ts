@@ -1,3 +1,4 @@
+export { sendWelcomeToProEmail, sendProPaymentReceiptEmail } from "../emailService";
 export { sendRenewalReminderEmail } from "./renewalReminder";
 export { sendPaymentFailedEmail } from "./paymentFailed";
 export { sendTrialStartedEmail } from "./trialStarted";

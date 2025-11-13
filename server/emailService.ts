@@ -76,11 +76,6 @@ export async function sendWelcomeToProEmail(options: {
   to: string;
   name?: string;
 }) {
-  if (!transporter) {
-    console.warn("[Email] Cannot send email - transporter not initialized");
-    return;
-  }
-
   const { to, name } = options;
   const userName = name || "camper";
 
@@ -133,20 +128,12 @@ hello@thecampingplanner.com
 https://thecampingplanner.com
   `.trim();
 
-  try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM!,
-      to,
-      subject,
-      text: textBody,
-      html: htmlBody,
-    });
-
-    console.log(`[Email] Welcome to Pro email sent to ${to}`);
-  } catch (error) {
-    console.error(`[Email] Failed to send Welcome to Pro email to ${to}:`, error);
-    throw error;
-  }
+  await sendEmail({
+    to,
+    subject,
+    text: textBody,
+    html: htmlBody,
+  });
 }
 
 // Send payment receipt/invoice email after successful payment
