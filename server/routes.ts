@@ -533,13 +533,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication Routes
   
   // GET /api/auth/user
-  // Returns the currently logged in user
+  // Returns the currently logged in user with isPro status
   // Protected route - requires authentication
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
-      res.json(user);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Derive isPro from proMembershipEndDate
+      const now = new Date();
+      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+      
+      // Return user with isPro flag
+      res.json({ ...user, isPro });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
