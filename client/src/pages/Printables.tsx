@@ -2,8 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { FileTextIcon, GamepadIcon, BookOpenIcon, DownloadIcon, LockIcon, CheckCircle2Icon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 import SubscribeButton from "../components/SubscribeButton";
 
 interface Printable {
@@ -21,6 +24,10 @@ interface PrintablesResponse {
 }
 
 export default function Printables() {
+  const { toast } = useToast();
+  const [showPersonalUseModal, setShowPersonalUseModal] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState<{ url: string; isPro: boolean } | null>(null);
+
   // Get all printables (free and Pro)
   const { data, isLoading } = useQuery<PrintablesResponse>({
     queryKey: ['/api/printables/downloads'],
@@ -35,6 +42,63 @@ export default function Printables() {
   const printables = data?.printables || [];
   const isPro = data?.user?.isPro || false;
   const isStripeConfigured = configData?.configured !== false;
+
+  // Handle download initiation - show personal use modal first
+  const initiateDownload = (url: string, isProFile: boolean) => {
+    setPendingDownload({ url, isPro: isProFile });
+    setShowPersonalUseModal(true);
+  };
+
+  // Handle confirmed download after user agrees to terms
+  const handleConfirmedDownload = async () => {
+    if (!pendingDownload) return;
+
+    setShowPersonalUseModal(false);
+
+    // For Pro files, use the protected endpoint which requires authentication
+    if (pendingDownload.isPro) {
+      try {
+        const response = await fetch(pendingDownload.url, {
+          credentials: 'include', // Include cookies for authentication
+        });
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 402) {
+            toast({
+              title: "Pro Membership Required",
+              description: "This printable requires an active Pro membership. Please upgrade to access Pro content.",
+              variant: "destructive",
+            });
+            return;
+          }
+          throw new Error('Download failed');
+        }
+
+        // Download the PDF blob
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = pendingDownload.url.split('/').pop() || 'printable.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+      } catch (error) {
+        console.error('Download error:', error);
+        toast({
+          title: "Download Failed",
+          description: "Unable to download the printable. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // For free files, use direct download
+      window.open(pendingDownload.url, '_blank');
+    }
+
+    setPendingDownload(null);
+  };
 
   if (isLoading) {
     return (
@@ -123,26 +187,22 @@ export default function Printables() {
                   {p.free && p.file ? (
                     // Free printables: Always show download for everyone
                     <Button
-                      asChild
+                      onClick={() => initiateDownload(p.file!, false)}
                       className="w-full bg-emerald-500 hover:bg-emerald-600"
                       data-testid={`button-download-${index}`}
                     >
-                      <a href={p.file} target="_blank" rel="noreferrer">
-                        <DownloadIcon className="w-4 h-4 mr-2" />
-                        Download Free
-                      </a>
+                      <DownloadIcon className="w-4 h-4 mr-2" />
+                      Download Free
                     </Button>
-                  ) : p.requiresPro && isPro && p.file ? (
-                    // Pro printables: Show download button only for Pro members
+                  ) : p.requiresPro && isPro ? (
+                    // Pro printables: Show download button for Pro members (uses protected endpoint)
                     <Button
-                      asChild
+                      onClick={() => initiateDownload(`/api/printables/download/${p.id}`, true)}
                       className="w-full bg-emerald-600 hover:bg-emerald-700"
                       data-testid={`button-download-${index}`}
                     >
-                      <a href={p.file} target="_blank" rel="noreferrer">
-                        <DownloadIcon className="w-4 h-4 mr-2" />
-                        Download (Pro)
-                      </a>
+                      <DownloadIcon className="w-4 h-4 mr-2" />
+                      Download (Pro)
                     </Button>
                   ) : p.requiresPro && !isPro ? (
                     // Pro printables: Show locked message for non-Pro users
@@ -192,6 +252,28 @@ export default function Printables() {
           </p>
         </div>
       </main>
+
+      {/* Personal Use Agreement Modal */}
+      <AlertDialog open={showPersonalUseModal} onOpenChange={setShowPersonalUseModal}>
+        <AlertDialogContent data-testid="modal-personal-use">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Personal Use Only</AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              These printables are for your personal and household use only. Please do not upload, resell, or share the files publicly. By clicking Download, you agree to these terms.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-download">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmedDownload}
+              data-testid="button-confirm-download"
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              Agree & Download
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
