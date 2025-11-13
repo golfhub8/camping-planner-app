@@ -2567,6 +2567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/billing/debug
   // Diagnostic endpoint to check current subscription state
+  // Returns sanitized diagnostic information for troubleshooting
   // Protected route - requires authentication
   app.get("/api/billing/debug", isAuthenticated, async (req: any, res) => {
     try {
@@ -2577,16 +2578,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Get current database values
-      const dbState = {
-        userId: user.id,
-        email: user.email,
-        stripeCustomerId: user.stripeCustomerId || null,
-        stripeSubscriptionId: user.stripeSubscriptionId || null,
-        subscriptionStatus: user.subscriptionStatus || null,
-        proMembershipEndDate: user.proMembershipEndDate?.toISOString() || null,
-      };
-
       // Determine plan based on subscription status (same logic as /api/account/plan)
       let plan: 'free' | 'pro' = 'free';
       const status = user.subscriptionStatus;
@@ -2594,36 +2585,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         plan = 'pro';
       }
 
-      // Try to fetch live data from Stripe if subscription ID exists
-      let stripeData = null;
-      if (stripe && user.stripeSubscriptionId) {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-          if (subscription && subscription.object === 'subscription' && 'current_period_end' in subscription) {
-            stripeData = {
-              id: subscription.id,
-              status: subscription.status,
-              current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-              cancel_at_period_end: subscription.cancel_at_period_end,
-            };
-          }
-        } catch (error: any) {
-          stripeData = { error: error.message };
-        }
-      }
-
+      // Return sanitized diagnostic information
       return res.json({
-        databaseState: dbState,
+        // Derived state
         computedPlan: plan,
-        stripeData: stripeData,
-        diagnosis: {
+        
+        // Database state (sanitized - no sensitive IDs exposed)
+        database: {
           hasStripeCustomer: !!user.stripeCustomerId,
           hasSubscriptionId: !!user.stripeSubscriptionId,
-          hasStatus: !!user.subscriptionStatus,
-          isPro: plan === 'pro',
-          statusMatchesStripe: stripeData && !stripeData.error ? 
-            stripeData.status === user.subscriptionStatus : null,
+          subscriptionStatus: user.subscriptionStatus || null,
+          membershipEndDate: user.proMembershipEndDate?.toISOString() || null,
         },
+        
+        // Diagnostic flags
+        diagnosis: {
+          isPro: plan === 'pro',
+          webhookLikelyWorking: !!(user.stripeCustomerId && user.stripeSubscriptionId),
+          statusSet: !!user.subscriptionStatus,
+          endDateSet: !!user.proMembershipEndDate,
+        },
+        
+        // Troubleshooting hints
+        hints: [
+          !user.stripeCustomerId ? "No Stripe customer ID - checkout may not have completed" : null,
+          !user.stripeSubscriptionId ? "No subscription ID - webhook may not have fired" : null,
+          !user.subscriptionStatus ? "No subscription status - database not updated" : null,
+          user.subscriptionStatus && plan === 'free' ? 
+            `Status is "${user.subscriptionStatus}" but plan is still free - unexpected status value` : null,
+        ].filter(Boolean),
       });
     } catch (error: any) {
       console.error("Error in debug endpoint:", error);
