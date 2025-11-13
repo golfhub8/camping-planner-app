@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { PlusCircle, ChevronDown, ChevronUp } from "lucide-react";
 
 interface RecipeFormProps {
-  onSubmit?: (recipe: { title: string; ingredients: string[]; steps: string }) => void;
+  onSubmit?: (recipe: { title: string; ingredients: string[]; steps: string[] }) => void;
 }
 
 export default function RecipeForm({ onSubmit }: RecipeFormProps) {
@@ -39,8 +39,13 @@ export default function RecipeForm({ onSubmit }: RecipeFormProps) {
       .map(i => i.trim())
       .filter(i => i.length > 0);
 
+    const stepsArray = steps
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
     if (onSubmit) {
-      onSubmit({ title, ingredients: ingredientsArray, steps });
+      onSubmit({ title, ingredients: ingredientsArray, steps: stepsArray });
     }
 
     setTitle("");

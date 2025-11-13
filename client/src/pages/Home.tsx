@@ -50,7 +50,7 @@ export default function Home() {
 
   // Mutation for creating a new recipe
   const createRecipeMutation = useMutation({
-    mutationFn: async (newRecipe: { title: string; ingredients: string[]; steps: string }) => {
+    mutationFn: async (newRecipe: { title: string; ingredients: string[]; steps: string[] }) => {
       const response = await fetch("/api/recipes", {
         method: "POST",
         headers: {
@@ -70,8 +70,8 @@ export default function Home() {
       queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
       
       // Check if we should auto-add the recipe to a trip
-      const queryString = location.includes('?') ? location.split('?')[1] : '';
-      const searchParams = new URLSearchParams(queryString);
+      // Use window.location.search to get the current query string reliably
+      const searchParams = new URLSearchParams(window.location.search);
       const tripIdToAdd = searchParams.get('addToTrip');
       
       if (tripIdToAdd && newRecipe.id) {
@@ -106,14 +106,15 @@ export default function Home() {
         }
       } else {
         // No trip to add to, just clean up URL if needed
-        if (searchParams.get('createNew')) {
+        const cleanupParams = new URLSearchParams(window.location.search);
+        if (cleanupParams.get('createNew')) {
           navigate('/recipes', { replace: true });
         }
       }
     },
   });
 
-  const handleCreateRecipe = (newRecipe: { title: string; ingredients: string[]; steps: string }) => {
+  const handleCreateRecipe = (newRecipe: { title: string; ingredients: string[]; steps: string[] }) => {
     createRecipeMutation.mutate(newRecipe);
   };
 
