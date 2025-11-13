@@ -217,6 +217,11 @@ if (process.env.STRIPE_SECRET_KEY) {
   console.error('[Stripe] STRIPE_SECRET_KEY not found in environment');
 }
 
+// DEPRECATED: Old webhook handler code moved to server/webhooks/stripeWebhook.ts
+// This function and related code are kept commented for reference but should not be used
+// Use registerStripeWebhook from server/webhooks/stripeWebhook.ts instead
+
+/*
 // In-memory cache for processed webhook event IDs (idempotency)
 // This prevents duplicate processing of the same webhook event
 // Store event IDs for 24 hours to handle Stripe retry attempts
@@ -572,6 +577,7 @@ export function registerWebhookRoute(app: Express): void {
     }
   });
 }
+*/
 
 // Middleware to require Pro membership for printables access
 // Checks if user has active Pro membership (includes both trial and paid)
