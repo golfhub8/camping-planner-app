@@ -3447,8 +3447,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to fetch hiking trails from National Park Service API
+  async function fetchNPSTrails(query: string, limit: number = 5) {
+    const NPS_API_KEY = process.env.NPS_API_KEY;
+    
+    if (!NPS_API_KEY) {
+      console.warn("[NPS API] API key not configured, returning empty trails");
+      return [];
+    }
+    
+    try {
+      const url = `https://developer.nps.gov/api/v1/thingstodo?q=${encodeURIComponent(query)}&limit=${limit}&api_key=${NPS_API_KEY}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.error(`[NPS API] Request failed with status ${response.status}`);
+        return [];
+      }
+      
+      const data = await response.json();
+      const activities = data.data || [];
+      
+      // Map NPS activities to trail suggestions
+      const trails = activities
+        .filter((activity: any) => {
+          const title = (activity.title || "").toLowerCase();
+          const shortDesc = (activity.shortDescription || "").toLowerCase();
+          return title.includes("trail") || title.includes("hike") || 
+                 shortDesc.includes("trail") || shortDesc.includes("hike");
+        })
+        .map((activity: any) => {
+          // Extract difficulty from description or tags
+          let difficulty: "easy" | "moderate" | "hard" = "moderate";
+          const desc = (activity.shortDescription || "").toLowerCase();
+          if (desc.includes("easy") || desc.includes("beginner")) {
+            difficulty = "easy";
+          } else if (desc.includes("difficult") || desc.includes("strenuous") || desc.includes("challenging")) {
+            difficulty = "hard";
+          }
+          
+          // Parse distance and elevation from description (if available)
+          const distanceMatch = desc.match(/(\d+\.?\d*)\s*(mile|km)/i);
+          const distance = distanceMatch ? parseFloat(distanceMatch[1]) : 3.0;
+          
+          const elevationMatch = desc.match(/(\d+)\s*(feet|ft|meters|m)\s*(elevation|gain)/i);
+          const elevationGain = elevationMatch ? parseInt(elevationMatch[1]) : 500;
+          
+          return {
+            id: activity.id,
+            name: activity.title,
+            location: activity.relatedParks?.map((p: any) => p.fullName).join(", ") || "National Park",
+            distance,
+            elevationGain,
+            difficulty,
+            highlights: [activity.shortDescription || "Scenic trail"],
+            estimatedTime: difficulty === "easy" ? "1-2 hours" : difficulty === "moderate" ? "2-4 hours" : "4-6 hours",
+            parkName: activity.relatedParks?.[0]?.fullName,
+            url: activity.url,
+          };
+        })
+        .slice(0, limit);
+      
+      return trails;
+    } catch (error) {
+      console.error("[NPS API] Error fetching trails:", error);
+      return [];
+    }
+  }
+
   // POST /api/trip-assistant
-  // Get AI-powered trip planning suggestions (stubbed for now)
+  // Get AI-powered trip planning suggestions with real hiking trails from NPS API
   // Body: { tripId?: number, prompt: string, season?: string, groupSize?: number }
   // Protected route - requires authentication
   app.post("/api/trip-assistant", isAuthenticated, async (req: any, res) => {
@@ -3587,10 +3655,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Pack out what you pack in - bring trash bags for Leave No Trace camping",
       ];
       
+      // Fetch real hiking trails from National Park Service API
+      const trailQuery = hasMountain ? "mountain hiking" : 
+                        hasBeach ? "coastal hiking" :
+                        hasFamily && hasEasy ? "easy family hiking" :
+                        "hiking trail";
+      
+      const trails = await fetchNPSTrails(trailQuery, 5);
+      
       return res.json({
         campgrounds,
         mealPlan,
         packingTips,
+        trails,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
