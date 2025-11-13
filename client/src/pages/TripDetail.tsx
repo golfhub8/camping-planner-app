@@ -21,6 +21,7 @@ import SubscribeButton from "@/components/SubscribeButton";
 import { CurrentWeather, WeatherForecast } from "@/components/WeatherCard";
 import { useWeatherCard } from "@/hooks/useWeatherCard";
 import { useToast } from "@/hooks/use-toast";
+import NearbyHikes from "@/components/NearbyHikes";
 import { format } from "date-fns";
 import { z } from "zod";
 import { parseIngredient } from "@/lib/ingredients";
@@ -583,21 +584,8 @@ export default function TripDetail() {
                 tripEndDate={trip.endDate}
               />
               
-              {/* Nearby Hikes Placeholder */}
-              <Card data-testid="card-nearby-hikes-placeholder">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <MapPinIcon className="h-5 w-5 text-primary" />
-                    Nearby Hikes
-                    <Badge variant="secondary" className="text-xs">Powered by AllTrails</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Hike suggestions coming soon! We're working on integrating with AllTrails to show you the best trails near your campsite.
-                  </p>
-                </CardContent>
-              </Card>
+              {/* Nearby Hikes from NPS API */}
+              <NearbyHikes tripId={trip.id} location={trip.location} />
             </div>
           </div>
         )}
