@@ -46,6 +46,12 @@ export interface IStorage {
   // Search recipes by title (case-insensitive) for a user
   searchRecipes(query: string, userId: string): Promise<Recipe[]>;
   
+  // Update share token for a recipe
+  updateRecipeShareToken(recipeId: number, shareToken: string): Promise<void>;
+  
+  // Get recipe by share token (public access)
+  getRecipeByShareToken(shareToken: string): Promise<Recipe | undefined>;
+  
   // Trip methods
   // Get all trips for a user (returns newest first)
   getAllTrips(userId: string): Promise<Trip[]>;
@@ -286,6 +292,7 @@ export class MemStorage implements IStorage {
       ...insertRecipe,
       imageUrl: insertRecipe.imageUrl ?? null,
       sourceUrl: insertRecipe.sourceUrl ?? null,
+      shareToken: null,
       id: this.nextRecipeId++,
       userId,
       createdAt: new Date(),
@@ -300,6 +307,19 @@ export class MemStorage implements IStorage {
     return Array.from(this.recipes.values())
       .filter((recipe) => recipe.userId === userId && recipe.title.toLowerCase().includes(lowerQuery))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async updateRecipeShareToken(recipeId: number, shareToken: string): Promise<void> {
+    const recipe = this.recipes.get(recipeId);
+    if (recipe) {
+      recipe.shareToken = shareToken;
+      this.recipes.set(recipeId, recipe);
+    }
+  }
+
+  async getRecipeByShareToken(shareToken: string): Promise<Recipe | undefined> {
+    return Array.from(this.recipes.values())
+      .find((recipe) => recipe.shareToken === shareToken);
   }
 
   // Trip methods
@@ -951,6 +971,23 @@ export class DatabaseStorage implements IStorage {
       .from(recipes)
       .where(sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + query + '%'}) AND ${recipes.userId} = ${userId}`)
       .orderBy(desc(recipes.createdAt));
+  }
+
+  async updateRecipeShareToken(recipeId: number, shareToken: string): Promise<void> {
+    // Update the share token for a recipe
+    await db
+      .update(recipes)
+      .set({ shareToken })
+      .where(eq(recipes.id, recipeId));
+  }
+
+  async getRecipeByShareToken(shareToken: string): Promise<Recipe | undefined> {
+    // Get recipe by share token (public access - no ownership check)
+    const [recipe] = await db
+      .select()
+      .from(recipes)
+      .where(eq(recipes.shareToken, shareToken));
+    return recipe || undefined;
   }
 
   // Trip methods

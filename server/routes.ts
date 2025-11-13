@@ -11,6 +11,7 @@ import { promises as dns } from "dns";
 import * as net from "net";
 import * as path from "path";
 import * as fs from "fs";
+import crypto from "crypto";
 import { initializeEmailService, sendWelcomeToProEmail, sendProPaymentReceiptEmail } from "./emailService";
 
 /**
@@ -2075,6 +2076,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.error("Error creating recipe:", error);
       res.status(500).json({ error: "Failed to create recipe" });
+    }
+  });
+
+  // POST /api/recipes/:id/share
+  // Generate a shareable link for a recipe
+  // Query parameter: regenerate=true to create a new token (revokes old link)
+  // Returns: { shareUrl: string }
+  // Protected route - requires authentication and ownership
+  app.post("/api/recipes/:id/share", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const regenerate = req.query.regenerate === 'true';
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid recipe ID" });
+      }
+
+      // Verify user owns this recipe
+      const recipe = await storage.getRecipeById(id, userId);
+      if (!recipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      // Generate or regenerate share token with collision protection
+      let shareToken = recipe.shareToken;
+      if (!shareToken || regenerate) {
+        // Generate a unique token with collision check
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        while (attempts < maxAttempts) {
+          shareToken = crypto.randomBytes(16).toString('hex');
+          
+          // Check if token already exists
+          const existing = await storage.getRecipeByShareToken(shareToken);
+          if (!existing || existing.id === id) {
+            // Token is unique or belongs to this recipe
+            break;
+          }
+          attempts++;
+        }
+        
+        if (attempts >= maxAttempts) {
+          throw new Error("Failed to generate unique share token");
+        }
+        
+        await storage.updateRecipeShareToken(id, shareToken);
+      }
+
+      // Build share URL
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const shareUrl = `${baseUrl}/recipes/shared/${shareToken}`;
+
+      res.json({ shareUrl });
+    } catch (error) {
+      console.error("Error generating share link:", error);
+      res.status(500).json({ error: "Failed to generate share link" });
+    }
+  });
+
+  // GET /api/recipes/shared/:token
+  // Get a shared recipe by token (public endpoint, no auth required)
+  // Returns: Sanitized recipe data (no userId or shareToken)
+  app.get("/api/recipes/shared/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const recipe = await storage.getRecipeByShareToken(token);
+      
+      if (!recipe) {
+        return res.status(404).json({ error: "Shared recipe not found" });
+      }
+
+      // Sanitize response - only return safe fields for public viewing
+      const sanitizedRecipe = {
+        id: recipe.id,
+        title: recipe.title,
+        ingredients: recipe.ingredients,
+        steps: recipe.steps,
+        imageUrl: recipe.imageUrl,
+        sourceUrl: recipe.sourceUrl,
+        createdAt: recipe.createdAt,
+      };
+
+      res.json(sanitizedRecipe);
+    } catch (error) {
+      console.error("Error fetching shared recipe:", error);
+      res.status(500).json({ error: "Failed to fetch shared recipe" });
+    }
+  });
+
+  // POST /api/recipes/shared/:token/save
+  // Save a shared recipe to user's own collection
+  // Protected route - requires authentication
+  app.post("/api/recipes/shared/:token/save", isAuthenticated, async (req: any, res) => {
+    try {
+      const { token } = req.params;
+      const userId = req.user.claims.sub;
+      
+      // Get the shared recipe
+      const sharedRecipe = await storage.getRecipeByShareToken(token);
+      
+      if (!sharedRecipe) {
+        return res.status(404).json({ error: "Shared recipe not found" });
+      }
+
+      // Prevent saving your own recipe
+      if (sharedRecipe.userId === userId) {
+        return res.status(400).json({ error: "You already own this recipe" });
+      }
+
+      // Create a copy in user's collection (without share token or source URL from shared recipe)
+      const newRecipe = await storage.createRecipe({
+        title: sharedRecipe.title,
+        ingredients: sharedRecipe.ingredients,
+        steps: sharedRecipe.steps,
+        imageUrl: sharedRecipe.imageUrl,
+        sourceUrl: sharedRecipe.sourceUrl,
+      }, userId);
+
+      res.status(201).json(newRecipe);
+    } catch (error) {
+      console.error("Error saving shared recipe:", error);
+      res.status(500).json({ error: "Failed to save recipe" });
     }
   });
 

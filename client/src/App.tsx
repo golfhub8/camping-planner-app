@@ -17,6 +17,7 @@ import Printables from "@/pages/Printables";
 import Checkout from "@/pages/Checkout";
 import Subscribe from "@/pages/Subscribe";
 import SharedGroceryView from "@/pages/SharedGroceryView";
+import SharedRecipe from "@/pages/SharedRecipe";
 import CampingMap from "@/pages/CampingMap";
 import Account from "@/pages/Account";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,6 +88,9 @@ function Router() {
     <Switch>
       {/* Public shared grocery list view - no auth required */}
       <Route path="/shared/:token" component={SharedGroceryView} />
+      
+      {/* Public shared recipe view - no auth required */}
+      <Route path="/recipes/shared/:token" component={SharedRecipe} />
       
       {/* All other routes require authentication */}
       <Route>

@@ -32,9 +32,8 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   
   // State for the share dialog
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [shareEmail, setShareEmail] = useState("");
-  const [isSharing, setIsSharing] = useState(false);
-  const [shareMessage, setShareMessage] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   
   // State for trip selector (external recipes)
   const [tripSelectorOpen, setTripSelectorOpen] = useState(false);
@@ -48,72 +47,67 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   const displayIngredients = ingredients.slice(0, 3);
   const hasMore = ingredients.length > 3;
 
-  // Handle sharing a recipe with a collaborator
-  // Sends the recipe details to the backend which generates a shareable message
-  const handleShare = async () => {
-    if (!shareEmail.trim()) {
+  // Generate shareable link for recipe
+  const handleGenerateLink = async (regenerate = false) => {
+    // Only works for internal recipes
+    if (source === "external") {
       toast({
-        title: "Email Required",
-        description: "Please enter an email address",
+        title: "Cannot Share External Recipes",
+        description: "You can only share recipes from your collection",
         variant: "destructive",
       });
       return;
     }
 
-    setIsSharing(true);
+    setIsGeneratingLink(true);
     
     try {
-      // Call the backend API to generate a shareable message
-      const response = await apiRequest("POST", "/api/recipes/share", {
-        recipeId: id,
-        toEmail: shareEmail,
-      });
-
+      const queryParam = regenerate ? '?regenerate=true' : '';
+      const response = await apiRequest("POST", `/api/recipes/${id}/share${queryParam}`);
       const data = await response.json();
 
       if (response.ok) {
-        // Show the generated message that can be copied
-        setShareMessage(data.message);
-        
+        setShareUrl(data.shareUrl);
         toast({
-          title: "Recipe Share Message Ready",
-          description: "Copy the message below and send it to your friend!",
+          title: "Share Link Ready!",
+          description: "Anyone with this link can view and save your recipe",
         });
       } else {
-        throw new Error(data.error || "Failed to share recipe");
+        throw new Error(data.error || "Failed to generate share link");
       }
     } catch (error: any) {
       toast({
-        title: "Error Sharing Recipe",
-        description: error.message || "Failed to share recipe. Please try again.",
+        title: "Error Generating Link",
+        description: error.message || "Failed to generate share link. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsSharing(false);
+      setIsGeneratingLink(false);
     }
   };
 
-  // Copy message to clipboard
-  const handleCopyMessage = async () => {
+  // Copy share link to clipboard
+  const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(shareMessage);
+      await navigator.clipboard.writeText(shareUrl);
       toast({
-        title: "Copied!",
-        description: "Message copied to clipboard. You can now paste and send it!",
+        title: "Link Copied!",
+        description: "Share link copied to clipboard",
       });
-      
-      // Reset and close dialog after successful copy
-      setTimeout(() => {
-        setShareDialogOpen(false);
-        setShareEmail("");
-        setShareMessage("");
-      }, 1000);
     } catch (error) {
       toast({
         title: "Copy Failed",
         description: "Failed to copy to clipboard. Please copy manually.",
         variant: "destructive",
       });
+    }
+  };
+
+  // Open share dialog and generate link automatically
+  const handleShareClick = () => {
+    setShareDialogOpen(true);
+    if (!shareUrl && source === "internal") {
+      handleGenerateLink(false);
     }
   };
 
@@ -249,17 +243,19 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               </Button>
             )}
             
-            {/* Share button - works for both internal and external recipes */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setShareDialogOpen(true)}
-              data-testid={`button-share-recipe-${id}`}
-            >
-              <Share2 className="h-4 w-4" />
-              Share
-            </Button>
+            {/* Share button - only for internal recipes */}
+            {source === "internal" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={handleShareClick}
+                data-testid={`button-share-recipe-${id}`}
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </Button>
+            )}
             
             {/* View button - opens modal for external recipes or links to internal recipe page */}
             {source === "external" ? (
@@ -286,92 +282,84 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
       </Card>
 
       {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+      <Dialog open={shareDialogOpen} onOpenChange={(open) => {
+        setShareDialogOpen(open);
+        if (!open) {
+          // Reset state when closing
+          setShareUrl("");
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Share Recipe with Collaborator</DialogTitle>
+            <DialogTitle>Share Recipe</DialogTitle>
             <DialogDescription>
-              Share "{title}" with a friend via email
+              Anyone with this link can view and save "{title}" to their collection
             </DialogDescription>
           </DialogHeader>
 
-          {!shareMessage ? (
-            // Step 1: Enter email address
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="share-email">Email Address</Label>
-                <Input
-                  id="share-email"
-                  type="email"
-                  placeholder="friend@example.com"
-                  value={shareEmail}
-                  onChange={(e) => setShareEmail(e.target.value)}
-                  data-testid="input-share-email"
-                />
+          <div className="space-y-4 py-4">
+            {isGeneratingLink ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-muted-foreground">Generating share link...</p>
               </div>
-            </div>
-          ) : (
-            // Step 2: Show generated message to copy
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="share-message">Message to Send</Label>
-                <Textarea
-                  id="share-message"
-                  value={shareMessage}
-                  readOnly
-                  rows={10}
-                  className="font-mono text-sm"
-                  data-testid="textarea-share-message"
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Copy this message and send it to your friend manually, or we can add automatic email sending in the future!
-              </p>
-            </div>
-          )}
-
-          <DialogFooter>
-            {!shareMessage ? (
+            ) : shareUrl ? (
               <>
+                <div className="space-y-2">
+                  <Label htmlFor="share-url">Share Link</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="share-url"
+                      type="text"
+                      value={shareUrl}
+                      readOnly
+                      className="font-mono text-sm"
+                      data-testid="input-share-url"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyLink}
+                      data-testid="button-copy-link"
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Share this link with anyone! They can view the recipe and save it to their own collection.
+                </p>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setShareDialogOpen(false);
-                    setShareEmail("");
-                  }}
-                  data-testid="button-cancel-share"
+                  size="sm"
+                  onClick={() => handleGenerateLink(true)}
+                  disabled={isGeneratingLink}
+                  className="w-full"
+                  data-testid="button-regenerate-link"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleShare}
-                  disabled={isSharing}
-                  data-testid="button-generate-message"
-                >
-                  {isSharing ? "Generating..." : "Generate Message"}
+                  Regenerate Link (Revokes Old Link)
                 </Button>
               </>
             ) : (
-              <>
+              <div className="flex items-center justify-center py-8">
                 <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShareDialogOpen(false);
-                    setShareEmail("");
-                    setShareMessage("");
-                  }}
-                  data-testid="button-close-share"
+                  onClick={() => handleGenerateLink(false)}
+                  disabled={isGeneratingLink}
+                  data-testid="button-generate-link"
                 >
-                  Close
+                  Generate Share Link
                 </Button>
-                <Button
-                  onClick={handleCopyMessage}
-                  data-testid="button-copy-message"
-                >
-                  Copy & Close
-                </Button>
-              </>
+              </div>
             )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShareDialogOpen(false)}
+              data-testid="button-close-share"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

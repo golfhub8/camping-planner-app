@@ -26,6 +26,11 @@ export const recipes = pgTable("recipes", {
   // When users save an external WordPress recipe, this stores the original URL
   sourceUrl: text("source_url"),
   
+  // Share token for public recipe sharing
+  // Unique token that allows anyone with the link to view and save this recipe
+  // Generated when user clicks "Share Recipe" button
+  shareToken: varchar("share_token"),
+  
   // User who created this recipe (foreign key to users table)
   userId: varchar("user_id").notNull().references(() => users.id),
   
