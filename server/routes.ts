@@ -1675,7 +1675,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
             foundIngredients = true;
           }
           
-          // Method 1b: Try Tasty Recipes plugin
+          // Method 1b: Try "Ingredients Checklist" table format (TheCampingPlanner.com)
+          if (!foundIngredients) {
+            console.log('[Recipe Parser] Checking for Ingredients Checklist table');
+            $('h2, h3, h4').each((_, elem) => {
+              if (foundIngredients) return;
+              
+              const headingText = $(elem).text().toLowerCase();
+              if (headingText.includes('ingredient')) {
+                console.log(`[Recipe Parser] Found ingredients heading: "${$(elem).text().trim()}"`);
+                
+                // Look for a table after this heading
+                const table = $(elem).nextAll('.wp-block-table, table').first();
+                if (table.length > 0) {
+                  console.log('[Recipe Parser] Found ingredients table, extracting data');
+                  foundIngredients = true;
+                  
+                  // Extract ingredients from table rows
+                  table.find('tbody tr').each((_, row) => {
+                    const cells = $(row).find('td');
+                    if (cells.length >= 2) {
+                      // Skip header row or checkbox-only rows
+                      const firstCell = cells.eq(0).text().trim();
+                      if (firstCell === '☐' || firstCell === '') {
+                        // Table format: [checkbox, ingredient, amount (imperial), metric, notes]
+                        const ingredient = cells.eq(1).text().trim(); // Ingredient name
+                        const amount = cells.eq(2).text().trim();     // Amount (imperial)
+                        const notes = cells.length > 4 ? cells.eq(4).text().trim() : ''; // Notes
+                        
+                        if (ingredient && ingredient !== 'Ingredient') {
+                          // Combine amount + ingredient + notes
+                          let ingredientText = '';
+                          if (amount && amount !== '—') ingredientText += amount + ' ';
+                          ingredientText += ingredient;
+                          if (notes && notes !== '—') ingredientText += ' (' + notes + ')';
+                          
+                          ingredients.push(ingredientText.trim());
+                        }
+                      }
+                    }
+                  });
+                  
+                  console.log(`[Recipe Parser] Extracted ${ingredients.length} ingredients from table`);
+                }
+              }
+            });
+          }
+          
+          // Method 1c: Try Tasty Recipes plugin
           if (!foundIngredients) {
             const tastyIngredients = $('.tasty-recipes-ingredients li, .tasty-recipes-ingredients-body li');
             if (tastyIngredients.length > 0) {
