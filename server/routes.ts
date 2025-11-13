@@ -3165,6 +3165,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success_url: successUrl,
         cancel_url: cancelUrl,
         allow_promotion_codes: true,
+        subscription_data: {
+          trial_period_days: 7,
+          metadata: {
+            userId: userId,
+            app_user_id: userId,
+          },
+        },
       };
 
       // If user already has a Stripe customer ID, reuse it
@@ -3196,7 +3203,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create checkout session using Dashboard Price ID
       const session = await stripe.checkout.sessions.create(sessionParams);
 
-      console.log(`[Checkout] Created session: ${session.id}, URL: ${session.url}`);
+      console.log(`[Checkout] Created session: ${session.id}`);
+      console.log(`[Checkout] Trial period: 7 days`);
+      console.log(`[Checkout] Customer: ${sessionParams.customer}`);
+      console.log(`[Checkout] Success URL: ${successUrl}`);
+      console.log(`[Checkout] Session URL: ${session.url}`);
       return res.json({ url: session.url });
     } catch (error: any) {
       console.error("[Checkout] Error creating checkout session:", error);
