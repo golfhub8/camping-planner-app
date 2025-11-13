@@ -808,22 +808,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = user.claims.sub;
         const dbUser = await storage.getUser(userId);
         
-        // Check if user has active Pro membership (proMembershipEndDate is in the future)
+        // Check if user has active Pro membership using same logic as /api/auth/user
+        // Pro status is determined by subscription status OR future membership end date
+        const status = dbUser?.subscriptionStatus;
+        const hasActiveSubscription = status === 'trialing' || status === 'active' || status === 'past_due';
+        
+        // Also check membership end date as fallback
+        let hasFutureMembership = false;
         if (dbUser?.proMembershipEndDate) {
           const now = new Date();
           const endDate = new Date(dbUser.proMembershipEndDate);
-          isPro = endDate > now;
-          
-          // Debug logging to track Pro detection
-          console.log(`[Printables] User ${userId} Pro check:`, {
-            proMembershipEndDate: dbUser.proMembershipEndDate,
-            currentDate: now,
-            isPro,
-            daysRemaining: Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-          });
-        } else {
-          console.log(`[Printables] User ${userId} has no proMembershipEndDate`);
+          hasFutureMembership = endDate > now;
         }
+        
+        // User is Pro if they have active subscription OR future membership date
+        isPro = hasActiveSubscription || hasFutureMembership;
+        
+        // Debug logging to track Pro detection
+        console.log(`[Printables] User ${userId} Pro check:`, {
+          subscriptionStatus: status,
+          proMembershipEndDate: dbUser?.proMembershipEndDate,
+          hasActiveSubscription,
+          hasFutureMembership,
+          isPro
+        });
       } catch (error) {
         console.error("Error checking Pro status:", error);
       }
