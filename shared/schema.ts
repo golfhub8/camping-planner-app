@@ -65,7 +65,8 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
   // Replit Auth fields
-  email: varchar("email").unique(),
+  // Note: Email is not unique since OIDC sub (id) is the stable unique identifier
+  email: varchar("email"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),

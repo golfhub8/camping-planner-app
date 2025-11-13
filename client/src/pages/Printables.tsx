@@ -26,7 +26,7 @@ interface PrintablesResponse {
 export default function Printables() {
   const { toast } = useToast();
   const [showPersonalUseModal, setShowPersonalUseModal] = useState(false);
-  const [pendingDownload, setPendingDownload] = useState<{ url: string; isPro: boolean } | null>(null);
+  const [pendingDownload, setPendingDownload] = useState<{ url: string; isPro: boolean; filename?: string } | null>(null);
 
   // Get all printables (free and Pro)
   const { data, isLoading } = useQuery<PrintablesResponse>({
@@ -43,9 +43,18 @@ export default function Printables() {
   const isPro = data?.user?.isPro || false;
   const isStripeConfigured = configData?.configured !== false;
 
+  // Mapping of printable IDs to actual PDF filenames for proper download naming
+  const filenameMap: Record<string, string> = {
+    'camping-planner-us': 'THE CAMPING PLANNER US LETTER.pdf',
+    'camping-planner-a4': 'THE CAMPING PLANNER A4 SIZE.pdf',
+    'ultimate-planner': 'THE ULTIMATE CAMPING PLANNER US LETTER.pdf',
+    'games-bundle': 'CAMPING GAMES BUNDLE US LETTER.pdf',
+    'mega-activity-book': 'MEGA CAMPING ACTIVITY BOOK A4.pdf',
+  };
+
   // Handle download initiation - show personal use modal first
-  const initiateDownload = (url: string, isProFile: boolean) => {
-    setPendingDownload({ url, isPro: isProFile });
+  const initiateDownload = (url: string, isProFile: boolean, filename?: string) => {
+    setPendingDownload({ url, isPro: isProFile, filename });
     setShowPersonalUseModal(true);
   };
 
@@ -54,6 +63,9 @@ export default function Printables() {
     if (!pendingDownload) return;
 
     setShowPersonalUseModal(false);
+    
+    // Clear pending download on cancel path
+    const cleanup = () => setPendingDownload(null);
 
     // For Pro files, use the protected endpoint which requires authentication
     if (pendingDownload.isPro) {
@@ -74,12 +86,13 @@ export default function Printables() {
           throw new Error('Download failed');
         }
 
-        // Download the PDF blob
+        // Download the PDF blob with correct filename
         const blob = await response.blob();
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = pendingDownload.url.split('/').pop() || 'printable.pdf';
+        // Use provided filename or try to extract from Content-Disposition header
+        link.download = pendingDownload.filename || 'printable.pdf';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -91,13 +104,14 @@ export default function Printables() {
           description: "Unable to download the printable. Please try again.",
           variant: "destructive",
         });
+      } finally {
+        cleanup();
       }
     } else {
       // For free files, use direct download
       window.open(pendingDownload.url, '_blank');
+      cleanup();
     }
-
-    setPendingDownload(null);
   };
 
   if (isLoading) {
@@ -197,7 +211,7 @@ export default function Printables() {
                   ) : p.requiresPro && isPro ? (
                     // Pro printables: Show download button for Pro members (uses protected endpoint)
                     <Button
-                      onClick={() => initiateDownload(`/api/printables/download/${p.id}`, true)}
+                      onClick={() => initiateDownload(`/api/printables/download/${p.id}`, true, filenameMap[p.id])}
                       className="w-full bg-emerald-600 hover:bg-emerald-700"
                       data-testid={`button-download-${index}`}
                     >
