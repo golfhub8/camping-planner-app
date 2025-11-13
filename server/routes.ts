@@ -3448,12 +3448,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Helper function to fetch hiking trails from National Park Service API
-  async function fetchNPSTrails(query: string, limit: number = 5) {
+  // Returns structured result with trails and optional warning message
+  async function fetchNPSTrails(query: string, limit: number = 5): Promise<{ trails: any[], warning?: string }> {
     const NPS_API_KEY = process.env.NPS_API_KEY;
     
     if (!NPS_API_KEY) {
       console.warn("[NPS API] API key not configured, returning empty trails");
-      return [];
+      return { 
+        trails: [], 
+        warning: "Trail suggestions temporarily unavailable - API key not configured" 
+      };
     }
     
     try {
@@ -3461,57 +3465,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const response = await fetch(url);
       
       if (!response.ok) {
-        console.error(`[NPS API] Request failed with status ${response.status}`);
-        return [];
+        const errorText = await response.text().catch(() => 'Unable to read error body');
+        console.error(`[NPS API] Request failed with status ${response.status}: ${errorText}`);
+        
+        if (response.status === 429) {
+          console.error("[NPS API] Rate limit exceeded");
+          return { 
+            trails: [], 
+            warning: "Trail suggestions temporarily unavailable - rate limit exceeded. Please try again later." 
+          };
+        } else if (response.status >= 500) {
+          console.error("[NPS API] Server error, service may be temporarily unavailable");
+          return { 
+            trails: [], 
+            warning: "Trail suggestions temporarily unavailable - National Park Service API is experiencing issues." 
+          };
+        }
+        
+        return { 
+          trails: [], 
+          warning: "Trail suggestions temporarily unavailable - external API error." 
+        };
       }
       
       const data = await response.json();
       const activities = data.data || [];
       
+      if (activities.length === 0) {
+        console.log(`[NPS API] No results found for query: "${query}"`);
+        return { trails: [] };
+      }
+      
       // Map NPS activities to trail suggestions
       const trails = activities
         .filter((activity: any) => {
-          const title = (activity.title || "").toLowerCase();
+          if (!activity || !activity.title) return false;
+          
+          const title = activity.title.toLowerCase();
           const shortDesc = (activity.shortDescription || "").toLowerCase();
           return title.includes("trail") || title.includes("hike") || 
                  shortDesc.includes("trail") || shortDesc.includes("hike");
         })
         .map((activity: any) => {
+          const desc = (activity.shortDescription || "").toLowerCase();
+          
           // Extract difficulty from description or tags
           let difficulty: "easy" | "moderate" | "hard" = "moderate";
-          const desc = (activity.shortDescription || "").toLowerCase();
-          if (desc.includes("easy") || desc.includes("beginner")) {
+          if (desc.includes("easy") || desc.includes("beginner") || desc.includes("family")) {
             difficulty = "easy";
-          } else if (desc.includes("difficult") || desc.includes("strenuous") || desc.includes("challenging")) {
+          } else if (desc.includes("difficult") || desc.includes("strenuous") || desc.includes("challenging") || desc.includes("advanced")) {
             difficulty = "hard";
           }
           
-          // Parse distance and elevation from description (if available)
+          // Parse distance from description (only include if explicitly mentioned)
           const distanceMatch = desc.match(/(\d+\.?\d*)\s*(mile|km)/i);
-          const distance = distanceMatch ? parseFloat(distanceMatch[1]) : 3.0;
           
+          // Parse elevation from description (only include if explicitly mentioned)
           const elevationMatch = desc.match(/(\d+)\s*(feet|ft|meters|m)\s*(elevation|gain)/i);
-          const elevationGain = elevationMatch ? parseInt(elevationMatch[1]) : 500;
           
-          return {
+          // Build highlights array from description
+          const highlights = activity.shortDescription 
+            ? [activity.shortDescription]
+            : [];
+          
+          const trail: any = {
             id: activity.id,
             name: activity.title,
             location: activity.relatedParks?.map((p: any) => p.fullName).join(", ") || "National Park",
-            distance,
-            elevationGain,
             difficulty,
-            highlights: [activity.shortDescription || "Scenic trail"],
+            highlights,
             estimatedTime: difficulty === "easy" ? "1-2 hours" : difficulty === "moderate" ? "2-4 hours" : "4-6 hours",
             parkName: activity.relatedParks?.[0]?.fullName,
             url: activity.url,
           };
+          
+          // Only include distance if found in description
+          if (distanceMatch) {
+            trail.distance = parseFloat(distanceMatch[1]);
+          }
+          
+          // Only include elevation gain if found in description
+          if (elevationMatch) {
+            trail.elevationGain = parseInt(elevationMatch[1]);
+          }
+          
+          return trail;
         })
+        .filter((trail: any) => trail.highlights.length > 0)
         .slice(0, limit);
       
-      return trails;
+      console.log(`[NPS API] Successfully fetched ${trails.length} trail(s) for query: "${query}"`);
+      return { trails };
     } catch (error) {
       console.error("[NPS API] Error fetching trails:", error);
-      return [];
+      return { 
+        trails: [], 
+        warning: "Trail suggestions temporarily unavailable - network error." 
+      };
     }
   }
 
@@ -3661,14 +3711,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         hasFamily && hasEasy ? "easy family hiking" :
                         "hiking trail";
       
-      const trails = await fetchNPSTrails(trailQuery, 5);
+      const trailResult = await fetchNPSTrails(trailQuery, 5);
       
-      return res.json({
+      // Collect warnings from integrations
+      const warnings: string[] = [];
+      if (trailResult.warning) {
+        warnings.push(trailResult.warning);
+      }
+      
+      const response: any = {
         campgrounds,
         mealPlan,
         packingTips,
-        trails,
-      });
+        trails: trailResult.trails,
+      };
+      
+      // Only include warnings if there are any
+      if (warnings.length > 0) {
+        response.warnings = warnings;
+      }
+      
+      return res.json(response);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 

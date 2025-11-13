@@ -552,8 +552,8 @@ export const trailSuggestionSchema = z.object({
   id: z.string(),
   name: z.string(),
   location: z.string(),
-  distance: z.number(),
-  elevationGain: z.number(),
+  distance: z.number().optional(),
+  elevationGain: z.number().optional(),
   difficulty: z.enum(["easy", "moderate", "hard"]),
   highlights: z.array(z.string()),
   estimatedTime: z.string(),
@@ -569,6 +569,7 @@ export const tripAssistantResponseSchema = z.object({
   mealPlan: z.array(mealPlanSuggestionSchema),
   packingTips: z.array(z.string()),
   trails: z.array(trailSuggestionSchema),
+  warnings: z.array(z.string()).optional(),
 });
 
 export type TripAssistantResponse = z.infer<typeof tripAssistantResponseSchema>;
