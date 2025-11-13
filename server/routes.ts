@@ -11,7 +11,7 @@ import { promises as dns } from "dns";
 import * as net from "net";
 import * as path from "path";
 import * as fs from "fs";
-import { initializeEmailService, sendWelcomeToProEmail } from "./emailService";
+import { initializeEmailService, sendWelcomeToProEmail, sendProPaymentReceiptEmail } from "./emailService";
 
 /**
  * Converts IPv6 address to bytes for proper IPv4-mapped detection
@@ -475,6 +475,85 @@ export function registerWebhookRoute(app: Express): void {
             // Subscription canceled, expired, or in other non-active state - revoke access
             await storage.updateProMembershipEndDate(userId, null);
             console.log(`[Webhook] Revoked Pro membership for user ${userId} - status: ${subscription.status}`);
+          }
+          break;
+        }
+
+        case 'invoice.payment_succeeded': {
+          console.log(`[Webhook] Processing invoice.payment_succeeded`);
+          const invoice = event.data.object as Stripe.Invoice;
+          
+          console.log(`[Webhook] Invoice ID: ${invoice.id}`);
+          console.log(`[Webhook] Invoice number: ${invoice.number}`);
+          console.log(`[Webhook] Customer: ${invoice.customer}`);
+          console.log(`[Webhook] Amount paid: ${invoice.amount_paid}`);
+          
+          // Only process if this invoice has a customer
+          if (!invoice.customer) {
+            console.log(`[Webhook] Invoice has no customer, skipping email`);
+            break;
+          }
+          
+          try {
+            // Find user by Stripe customer ID
+            const user = await storage.getUserByStripeCustomerId(invoice.customer as string);
+            
+            if (!user) {
+              console.log(`[Webhook] No user found for customer ${invoice.customer}, skipping email`);
+              break;
+            }
+            
+            if (!user.email) {
+              console.log(`[Webhook] User ${user.id} has no email, skipping payment receipt`);
+              break;
+            }
+            
+            console.log(`[Webhook] Found user ${user.id} for customer ${invoice.customer}`);
+            
+            // Generate customer portal URL for billing management
+            let customerPortalUrl: string | undefined;
+            try {
+              const portalSession = await stripe.billingPortal.sessions.create({
+                customer: invoice.customer as string,
+                return_url: `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000'}/account`,
+              });
+              customerPortalUrl = portalSession.url;
+            } catch (portalError) {
+              console.error(`[Webhook] Failed to create portal session:`, portalError);
+            }
+            
+            // Extract period dates from invoice line items
+            const firstLine = invoice.lines.data[0];
+            const periodStart = firstLine?.period?.start 
+              ? new Date(firstLine.period.start * 1000) 
+              : undefined;
+            const periodEnd = firstLine?.period?.end 
+              ? new Date(firstLine.period.end * 1000) 
+              : undefined;
+            
+            // Send payment receipt email
+            try {
+              await sendProPaymentReceiptEmail({
+                to: user.email,
+                name: user.firstName || undefined,
+                amount: invoice.amount_paid,
+                currency: invoice.currency,
+                invoiceNumber: invoice.number ?? undefined,
+                invoiceDate: new Date((invoice.status_transitions?.paid_at || invoice.created) * 1000),
+                periodStart,
+                periodEnd,
+                manageBillingUrl: customerPortalUrl,
+                invoicePdfUrl: invoice.hosted_invoice_url ?? undefined,
+              });
+              
+              console.log(`[Webhook] ✅ Payment receipt email sent to ${user.email}`);
+            } catch (emailError) {
+              // Don't fail the webhook if email fails
+              console.error(`[Webhook] ⚠️ Failed to send payment receipt email:`, emailError);
+            }
+          } catch (error) {
+            console.error(`[Webhook] Error processing invoice.payment_succeeded:`, error);
+            // Don't fail the webhook - invoice was still processed by Stripe
           }
           break;
         }

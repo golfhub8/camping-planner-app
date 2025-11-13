@@ -1,0 +1,213 @@
+2) Payment receipt / invoice email
+
+
+
+
+
+Prompt for Replit (Payment Receipt Email):
+
+
+
+I’m building The Camping Planner app on Replit. SMTP is already configured and working.
+
+
+
+I want you to add a payment receipt / invoice email that goes out after a user’s Camping Planner Pro payment succeeds.
+
+
+
+
+
+Requirements
+
+
+
+
+
+Create a reusable function called sendProPaymentReceiptEmail in src/emails/proPaymentReceipt.ts.
+Reuse my existing email transport / sendEmail helper (do not create a new transporter). If needed, import from src/utils/email.
+Support both HTML and plain-text versions.
+I will call this from my Stripe webhook handler for invoice.payment_succeeded.
+
+
+
+
+
+
+Function signature
+
+
+
+export async function sendProPaymentReceiptEmail(options: {
+
+  to: string;
+
+  name?: string;
+
+  amount: number;              // in cents
+
+  currency: string;            // e.g. "usd"
+
+  invoiceNumber?: string;
+
+  invoiceDate: Date;
+
+  periodStart?: Date;
+
+  periodEnd?: Date;
+
+  manageBillingUrl?: string;   // link to Stripe customer portal
+
+  invoicePdfUrl?: string;      // optional link to Stripe-hosted invoice PDF
+
+}) { ... }
+
+
+
+Inside, default name to "camper" if missing.
+
+
+
+
+
+Email content
+
+
+
+
+
+Subject:
+
+Your Camping Planner Pro receipt {{invoice_number}}
+
+If invoiceNumber is not provided, just use:
+
+Your Camping Planner Pro receipt
+
+HTML body:
+
+
+
+Use this structure and interpolate values:
+
+<p>Hi {{user_name}},</p>
+
+<p>Thanks for your payment! Here’s your receipt for <strong>Camping Planner Pro</strong>.</p>
+
+<h3>Payment Details</h3>
+<ul>
+  <li><strong>Amount:</strong> {{amount_formatted}}</li>
+  <li><strong>Date:</strong> {{invoice_date}}</li>
+  {{#if period_start}}
+  <li><strong>Coverage period:</strong> {{period_start}} – {{period_end}}</li>
+  {{/if}}
+  {{#if invoice_number}}
+  <li><strong>Invoice #:</strong> {{invoice_number}}</li>
+  {{/if}}
+</ul>
+
+{{#if invoice_pdf_url}}
+<p>You can <a href="{{invoice_pdf_url}}" target="_blank" rel="noopener noreferrer">download a PDF copy of your invoice here</a>.</p>
+{{/if}}
+
+{{#if manage_billing_url}}
+<p>To update your billing details or payment method at any time, visit your
+<a href="{{manage_billing_url}}" target="_blank" rel="noopener noreferrer">subscription settings</a>.</p>
+{{/if}}
+
+<p>Thanks again for supporting The Camping Planner — we’re excited to help you plan many more trips.</p>
+
+<p>Happy camping,<br>
+<strong>The Camping Planner Team</strong><br>
+<a href="mailto:hello@thecampingplanner.com">hello@thecampingplanner.com</a><br>
+<a href="https://thecampingplanner.com">https://thecampingplanner.com</a>
+</p>
+
+{{amount_formatted}} should be computed from amount and currency (e.g., $29.99 USD).
+
+
+Hi {{user_name}},
+
+Thanks for your payment! Here’s your receipt for Camping Planner Pro.
+
+Payment Details
+- Amount: {{amount_formatted}}
+- Date: {{invoice_date}}
+{{#if period_start}}
+- Coverage period: {{period_start}} – {{period_end}}
+{{/if}}
+{{#if invoice_number}}
+- Invoice #: {{invoice_number}}
+{{/if}}
+
+{{#if invoice_pdf_url}}
+PDF invoice: {{invoice_pdf_url}}
+{{/if}}
+
+{{#if manage_billing_url}}
+You can update your billing details or payment method here:
+{{manage_billing_url}}
+{{/if}}
+
+Thanks again for supporting The Camping Planner — we’re excited to help you plan many more trips.
+
+Happy camping,
+The Camping Planner Team
+hello@thecampingplanner.com
+https://thecampingplanner.com
+
+
+
+
+Integration with Stripe webhook
+
+
+
+
+
+In the webhook handler for invoice.payment_succeeded:
+
+
+
+Find the user by Stripe customer ID.
+After making sure the invoice relates to a Pro subscription, call:
+
+
+await sendProPaymentReceiptEmail({
+
+  to: user.email,
+
+  name: user.name,
+
+  amount: invoice.amount_paid,
+
+  currency: invoice.currency,
+
+  invoiceNumber: invoice.number ?? undefined,
+
+  invoiceDate: new Date(invoice.status_transitions.paid_at * 1000),
+
+  periodStart: invoice.lines.data[0]?.period?.start
+
+    ? new Date(invoice.lines.data[0].period.start * 1000)
+
+    : undefined,
+
+  periodEnd: invoice.lines.data[0]?.period?.end
+
+    ? new Date(invoice.lines.data[0].period.end * 1000)
+
+    : undefined,
+
+  manageBillingUrl: customerPortalUrl,
+
+  invoicePdfUrl: invoice.hosted_invoice_url ?? undefined,
+
+});
+
+
+
+Wrap the email call in try/catch so a mail failure doesn’t break the webhook.
+
+
+

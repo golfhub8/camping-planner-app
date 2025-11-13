@@ -18,6 +18,7 @@ export interface IStorage {
   // User methods (IMPORTANT: required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
   // Stripe methods for payment integration
@@ -143,6 +144,11 @@ export class MemStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const allUsers = Array.from(this.users.values());
     return allUsers.find(user => user.email === email);
+  }
+
+  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
+    const allUsers = Array.from(this.users.values());
+    return allUsers.find(user => user.stripeCustomerId === stripeCustomerId);
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -754,6 +760,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.stripeCustomerId, stripeCustomerId));
     return user || undefined;
   }
 

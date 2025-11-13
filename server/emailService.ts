@@ -105,3 +105,116 @@ https://thecampingplanner.com
     throw error;
   }
 }
+
+// Send payment receipt/invoice email after successful payment
+export async function sendProPaymentReceiptEmail(options: {
+  to: string;
+  name?: string;
+  amount: number;              // in cents
+  currency: string;            // e.g. "usd"
+  invoiceNumber?: string;
+  invoiceDate: Date;
+  periodStart?: Date;
+  periodEnd?: Date;
+  manageBillingUrl?: string;   // link to Stripe customer portal
+  invoicePdfUrl?: string;      // optional link to Stripe-hosted invoice PDF
+}) {
+  if (!transporter) {
+    console.warn("[Email] Cannot send email - transporter not initialized");
+    return;
+  }
+
+  const { to, name, amount, currency, invoiceNumber, invoiceDate, periodStart, periodEnd, manageBillingUrl, invoicePdfUrl } = options;
+  const userName = name || "camper";
+
+  // Format amount (convert cents to dollars)
+  // Add defensive default for null/undefined currency
+  const currencyFormatted = (currency || 'usd').toUpperCase();
+  const amountFormatted = `$${(amount / 100).toFixed(2)} ${currencyFormatted}`;
+
+  // Format dates
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  const invoiceDateFormatted = formatDate(invoiceDate);
+  const periodStartFormatted = periodStart ? formatDate(periodStart) : null;
+  const periodEndFormatted = periodEnd ? formatDate(periodEnd) : null;
+
+  // Subject
+  const subject = invoiceNumber
+    ? `Your Camping Planner Pro receipt ${invoiceNumber}`
+    : "Your Camping Planner Pro receipt";
+
+  // HTML body
+  const htmlBody = `
+    <p>Hi ${userName},</p>
+
+    <p>Thanks for your payment! Here's your receipt for <strong>Camping Planner Pro</strong>.</p>
+
+    <h3>Payment Details</h3>
+    <ul>
+      <li><strong>Amount:</strong> ${amountFormatted}</li>
+      <li><strong>Date:</strong> ${invoiceDateFormatted}</li>
+      ${periodStartFormatted && periodEndFormatted ? `<li><strong>Coverage period:</strong> ${periodStartFormatted} – ${periodEndFormatted}</li>` : ''}
+      ${invoiceNumber ? `<li><strong>Invoice #:</strong> ${invoiceNumber}</li>` : ''}
+    </ul>
+
+    ${invoicePdfUrl ? `<p>You can <a href="${invoicePdfUrl}" target="_blank" rel="noopener noreferrer">download a PDF copy of your invoice here</a>.</p>` : ''}
+
+    ${manageBillingUrl ? `<p>To update your billing details or payment method at any time, visit your
+<a href="${manageBillingUrl}" target="_blank" rel="noopener noreferrer">subscription settings</a>.</p>` : ''}
+
+    <p>Thanks again for supporting The Camping Planner — we're excited to help you plan many more trips.</p>
+
+    <p>Happy camping,<br>
+    <strong>The Camping Planner Team</strong><br>
+    <a href="mailto:hello@thecampingplanner.com">hello@thecampingplanner.com</a><br>
+    <a href="https://thecampingplanner.com">https://thecampingplanner.com</a>
+    </p>
+  `;
+
+  // Plain text body
+  const textBody = `
+Hi ${userName},
+
+Thanks for your payment! Here's your receipt for Camping Planner Pro.
+
+Payment Details
+- Amount: ${amountFormatted}
+- Date: ${invoiceDateFormatted}
+${periodStartFormatted && periodEndFormatted ? `- Coverage period: ${periodStartFormatted} – ${periodEndFormatted}` : ''}
+${invoiceNumber ? `- Invoice #: ${invoiceNumber}` : ''}
+
+${invoicePdfUrl ? `PDF invoice: ${invoicePdfUrl}` : ''}
+
+${manageBillingUrl ? `You can update your billing details or payment method here:
+${manageBillingUrl}` : ''}
+
+Thanks again for supporting The Camping Planner — we're excited to help you plan many more trips.
+
+Happy camping,
+The Camping Planner Team
+hello@thecampingplanner.com
+https://thecampingplanner.com
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM!,
+      to,
+      subject,
+      text: textBody,
+      html: htmlBody,
+    });
+
+    console.log(`[Email] Payment receipt email sent to ${to}${invoiceNumber ? ` (Invoice: ${invoiceNumber})` : ''}`);
+  } catch (error) {
+    console.error(`[Email] Failed to send payment receipt email to ${to}:`, error);
+    throw error;
+  }
+}
