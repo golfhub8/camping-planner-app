@@ -72,19 +72,34 @@ export default function Account() {
           
           if (response.ok) {
             console.log('Subscription synced successfully');
+            // Invalidate auth query to update Pro status in navbar immediately
+            queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+            // Also refetch plan data and show success toast
+            refetchPlan();
+            toast({
+              title: "Welcome to Pro!",
+              description: "Your subscription is now active. Enjoy unlimited access to all features.",
+            });
           } else {
             console.error('Failed to sync subscription');
+            // Still invalidate cache even if sync fails - the webhook may have already updated it
+            queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+            refetchPlan();
+            toast({
+              title: "Subscription Processing",
+              description: "Your payment is being processed. Your Pro status will activate shortly.",
+              variant: "default",
+            });
           }
         } catch (error) {
           console.error('Error syncing subscription:', error);
-        } finally {
-          // Invalidate auth query to update Pro status in navbar immediately
+          // Still invalidate cache to refresh data
           queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
-          // Also refetch plan data and show success toast
           refetchPlan();
           toast({
-            title: "Welcome to Pro!",
-            description: "Your subscription is now active. Enjoy unlimited access to all features.",
+            title: "Subscription Processing",
+            description: "Your payment is being processed. Your Pro status will activate shortly.",
+            variant: "default",
           });
         }
       };

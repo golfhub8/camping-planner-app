@@ -107,6 +107,11 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
+// API response type for authenticated user (includes computed fields)
+export type AuthUser = User & {
+  isPro: boolean;
+};
+
 // Grocery List schemas
 // Categories for grouping grocery items
 export const groceryCategories = ["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"] as const;
