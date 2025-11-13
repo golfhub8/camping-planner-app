@@ -1,0 +1,128 @@
+You are updating an existing TypeScript React + Vite + React Query app called “The Camping Planner,” hosted on Replit, with a small backend (Node/Express or similar) plus Stripe subscriptions.
+
+Please carefully review the existing codebase and then implement the changes below. Follow the current patterns for state management, routing, auth, and styling (buttons, cards, etc.). Do not introduce new UI libraries.
+
+IMPORTANT HIGH-LEVEL GOALS
+	•	Stripe Pro subscription must be reliable and persistent across reloads and logins.
+	•	Trips, recipes, and grocery lists must all work together without runtime errors.
+	•	Recipe saving must be robust even when auto-import fails.
+	•	Forms should give clear, user-friendly error messages.
+
+TASK 1 – Make Stripe subscriptions reliable and persistent
+	1.	Audit the existing Stripe integration on both client and server:
+– Find where the “Start 7-Day Free Trial” / “Go Pro” buttons are wired.
+– Find the backend route(s) that create the Stripe Checkout Session and any webhooks already defined.
+– Find how a user’s subscription status (“Free / Trial / Pro”) is stored (e.g., user table, plan field, isPro boolean, or just in session).
+	2.	Implement a proper subscription state in the database:
+– On the user model, create a clear field such as plan (enum: ‘free’ | ‘pro’) and, if not already present, stripeCustomerId and optionally stripeSubscriptionId.
+– Ensure the plan field is loaded whenever the frontend fetches the current user profile (e.g., /api/me or similar).
+	3.	Handle Stripe webhooks correctly:
+– Set up or fix a webhook endpoint (e.g., POST /api/stripe/webhook) that listens for at least:
+• checkout.session.completed
+• invoice.payment_succeeded (for renewals)
+• customer.subscription.deleted or customer.subscription.updated (cancellations, expirations)
+– When a checkout.session.completed event for a subscription succeeds, look up the user based on the attached metadata (e.g., userId) or customer ID, and set plan = 'pro'. Save stripeCustomerId and stripeSubscriptionId if available.
+– When a subscription is cancelled or ends, update the user to plan = 'free'.
+	4.	Fix the success redirect and “app goes down” issue:
+– The Stripe success URL currently points to something like /trips?status=success and sometimes causes “We couldn’t reach this app” in Replit.
+– Ensure the success URL is a simple, valid frontend route (e.g., /account?billing=success or /trips?checkout=success) that does NOT require the backend to restart or any non-existent route.
+– The frontend should not crash if the app restarts between payment and redirect; it should simply re-fetch the user from /api/me, see plan = 'pro', and render “Pro” correctly.
+	5.	Make the subscription UI consistent:
+– In the “My Account” page:
+• Show the current plan as “Free” or “Pro” based on the plan field from the backend.
+• Under “Plan Benefits”, for Free: “Up to 5 trips, Up to 5 grocery lists, Free printables.”
+• For Pro: “Unlimited trips, Unlimited grocery lists, All printables & games, Full packing checklists, Priority updates.”
+– Replace the “Start 7-Day Free Trial” CTA with a “Go Pro”/“Upgrade to Pro” button that triggers the updated checkout flow.
+– Once plan = 'pro', hide or disable the “Go Pro” header button globally, and instead show either:
+• A simple “Pro” badge; or
+• A “Manage Billing” button that links to the Stripe customer portal if it exists.
+	6.	Persist plan status across sessions:
+– On every login / page refresh, the frontend should call an auth endpoint (e.g., /api/me) and store the user in a global auth context or React Query.
+– All feature gating (trip limit, grocery list limit, printable locking) should be based on this plan field from the backend, never from just URL params.
+	7.	Cancellation flow:
+– On the account page, under “Manage Subscription”, either:
+• Link to the Stripe customer portal for cancellations and billing, or
+• Provide a “Cancel subscription” button that calls a backend endpoint to cancel the Stripe subscription and then sets plan = 'free'.
+– Show a small text line: “Your Camping Planner Pro subscription renews annually until cancelled.”
+
+TASK 2 – Fix the weather hook runtime error
+
+Users sometimes see a React runtime error “Rendered more hooks than during the previous render” in useWeather.ts.
+	1.	Open client/src/hooks/useWeather.ts and any hooks that call it (useWeatherCard.ts etc.).
+	2.	Ensure React Query hooks and custom hooks are NEVER called conditionally. For example:
+– useWeather must always call useQuery on every render; it should not be inside an if (lat && lng) block.
+	3.	Update useWeather so it always returns a consistent hook call, but passes an enabled: !!lat && !!lng option to useQuery to prevent firing when location is missing.
+	4.	Make sure the weather card component checks for loading/error states gracefully and does not crash when lat/lng are null or the API fails.
+
+TASK 3 – Add basic date validation to Trip creation
+
+When planning a trip, users can currently enter impossible dates (e.g., end date before start date) and no error shows.
+	1.	In the Trip creation form component, add client-side validation:
+– Require both start and end dates.
+– Validate that startDate <= endDate.
+– If invalid, prevent submission and show a clear message under the date fields like:
+“Please choose a valid date range (start date must be before the end date).”
+	2.	Mirror this validation on the backend when creating a trip:
+– If the dates are invalid, return a 400 response with an error message.
+– Display this error message near the form submit button or in a toast so the user knows what to fix.
+
+TASK 4 – Make recipe saving robust (auto-import optional, manual always works)
+
+Saving recipes is still flaky (auto-import fails, ingredients/instructions fields are confusing).
+	1.	Open the “Save Recipe to My Recipes” modal and improve its behavior:
+– Ingredients and Instructions textareas must always be editable (not greyed out / disabled).
+– If auto-import fails, show a small, non-blocking alert at the top:
+“We couldn’t auto-import this recipe. You can paste ingredients and steps manually below.”
+– Pre-fill the textareas with whatever the parser could get (even partial), but always allow the user to edit or fully replace the content.
+	2.	Refine auto-import logic:
+– For URLs from thecampingplanner.com, implement a dedicated parser that looks for the recipe plugin markup we use (e.g., ingredient and step selectors).
+– Only attempt structured parsing for known patterns; if the HTML doesn’t match, fall back quickly and mark auto-import as failed rather than half-filling fields in a weird way.
+– Do not block saving if parsing fails. Treat the modal primarily as a manual recipe editor that sometimes gets a head start from the auto-parser.
+	3.	Data model for recipes:
+– Ensure that when the recipe is saved, each line in “Ingredients (one per line)” is stored as a separate ingredient in the DB or as a structured array.
+– Ensure the “Instructions” field is stored as either:
+• An array of steps (split by blank line or newline); or
+• A single text block that can still be displayed step-by-step later.
+– Confirm that the Meals -> Grocery list flow uses the saved recipe data, not a stub.
+	4.	Grocery list integration:
+– When a user builds a grocery list from a trip:
+• The system should gather all selected recipes from that trip.
+• Combine their ingredients into one list (deduplicate if we already do that).
+• Show the combined list on the “Build Your Grocery List” review screen and allow export/share.
+– Fix the bug where the user gets “No recipes selected” after adding recipes; that means the state or query of “selected recipe IDs” isn’t wired to the actual saved recipes. Trace and correct this.
+	5.	Future-proofing for community recipes:
+– Make sure the “Create New Recipe” flow (manual recipe entry) and “Save external recipe” flow both end up using the same recipe model.
+– The UI should reflect whether a recipe is “External” (has a source URL link) or “My Recipe” (user-created).
+– Keep the structure generic enough that later we can add sharing with other users without changing the schema.
+
+TASK 5 – Small UX/consistency fixes
+	1.	After successful payment:
+– Instead of crashing or showing a generic Replit error page, the app should cleanly reload, fetch the updated user, and show the account page with plan = 'pro'.
+– Display a small success banner on the account page: “Thanks for upgrading to Camping Planner Pro! Your subscription is now active.”
+	2.	Printables page:
+– If plan = 'pro', all Pro printables should show an active “Download” button instead of “Start Free Trial” and no lock icon.
+– Before download, show a small confirmation modal reminding users not to redistribute the printables (e.g., “These printables are for your personal use. Please don’t resell or share the files publicly.”) with a confirm button that proceeds with the download.
+	3.	Header “Go Pro” button:
+– When plan = 'free', show “Go Pro” linking to the subscription/checkout flow.
+– When plan = 'pro', remove that and either show nothing or a small “Pro” badge / account shortcut instead.
+	4.	Account usage statistics:
+– Ensure the numbers (“Trips Planned”, “Meals Added”, “Grocery Lists Generated”) are pulled from real data and stay correct after subscription changes.
+
+GENERAL IMPLEMENTATION NOTES
+
+– Follow React hook rules strictly (no conditional hooks).
+– Use existing React Query patterns for data fetching and caching.
+– Keep all new text copy simple, friendly, and on-brand for “The Camping Planner.”
+– Test as both:
+• A brand-new Free user (no trips, no recipes).
+• A Pro user who just paid and then returns the next day.
+– Make sure nothing crashes if a user has zero trips, zero recipes, or no weather data.
+
+When you’re done, run through a full flow manually:
+	1.	Sign up as a new user.
+	2.	Create a trip with valid dates.
+	3.	Save a recipe from TheCampingPlanner.com, editing ingredients and instructions in the modal.
+	4.	Add that recipe as a meal to the trip.
+	5.	Build a grocery list from that trip and confirm ingredients show up.
+	6.	Upgrade to Pro via Stripe; confirm the app reloads, account shows “Pro”, and Pro printables unlock.
+	7.	Refresh the browser and re-log in to verify the Pro status persists
