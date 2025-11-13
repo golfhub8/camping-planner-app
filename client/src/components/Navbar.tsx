@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -9,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, LogOut, User, CreditCard } from "lucide-react";
+import { Search, LogOut, User, CreditCard, Crown } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLogout } from "@/hooks/useLogout";
@@ -90,7 +91,17 @@ export default function Navbar() {
           </form>
 
           <div className="flex items-center gap-3">
-            <SubscribeButton label="Go Pro" />
+            {/* Show "Go Pro" button for free users, "Pro Member" badge for Pro users */}
+            {(user as any)?.isPro ? (
+              <Link href="/account">
+                <Badge variant="default" className="gap-1.5 px-3 py-1.5 hover-elevate cursor-pointer" data-testid="badge-pro-member">
+                  <Crown className="w-3.5 h-3.5" />
+                  Pro Member
+                </Badge>
+              </Link>
+            ) : (
+              <SubscribeButton label="Go Pro" />
+            )}
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
