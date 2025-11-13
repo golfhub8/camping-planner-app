@@ -1,0 +1,150 @@
+I’m building The Camping Planner app on Replit. I already have SMTP working and I can successfully send a test email from hello@thecampingplanner.com using smtpout.secureserver.net.
+
+
+
+I want you to:
+
+
+
+Create (or update) a reusable function called sendWelcomeToProEmail that sends a Welcome to Camping Planner Pro email to a user after their Stripe payment succeeds and their account is upgraded to Pro.
+Use my existing email transport (don’t create a new transporter – import and reuse the one I already have).
+Support both HTML and plain-text versions of the email.
+Expose the function so I can call it from my Stripe webhook handler right after we mark the user as plan: 'pro'.
+
+
+
+
+Assume I have a TypeScript / Node backend with something like sendEmail(to, subject, html, text) or a Nodemailer transporter already defined. If I don’t, create a simple sendEmail helper in a separate file src/utils/email.ts and import it.
+
+
+
+
+
+Email content to implement
+
+
+
+
+
+Use this exact copy, but make {{user_name}} a parameter in the function (fall back to “camper” if no name is provided).
+
+
+
+Subject:
+
+
+Welcome to Camping Planner Pro — You’re All Set!
+
+HTML body:
+
+<p>Hi {{user_name}},</p>
+
+<p>Thanks for subscribing to <strong>Camping Planner Pro</strong>! Your account is now fully upgraded and you can enjoy:</p>
+
+<ul>
+  <li>Unlimited trips</li>
+  <li>Unlimited grocery lists</li>
+  <li>Full access to all Pro printables &amp; game bundles</li>
+  <li>Premium packing checklists</li>
+  <li>Priority feature updates</li>
+  <li>Offline-ready recipe saving</li>
+</ul>
+
+<p>Your subscription has been successfully activated and you can start using all Pro features right away.</p>
+
+<p>If you ever need help or have ideas for new features, just reply to this email — we’d love to hear from you.</p>
+
+<p>Happy camping,<br>
+<strong>The Camping Planner Team</strong><br>
+<a href="mailto:hello@thecampingplanner.com">hello@thecampingplanner.com</a><br>
+<a href="https://thecampingplanner.com">https://thecampingplanner.com</a>
+</p>
+
+Plain-text body (for text field):
+
+
+Hi {{user_name}},
+
+Thanks for subscribing to Camping Planner Pro! Your account is now fully upgraded and you can enjoy:
+
+- Unlimited trips
+- Unlimited grocery lists
+- Full access to all Pro printables & game bundles
+- Premium packing checklists
+- Priority feature updates
+- Offline-ready recipe saving
+
+Your subscription has been successfully activated and you can start using all Pro features right away.
+
+If you ever need help or have ideas for new features, just reply to this email — we’d love to hear from you.
+
+Happy camping,
+The Camping Planner Team
+hello@thecampingplanner.com
+https://thecampingplanner.com
+
+
+
+Function signature
+
+
+
+
+
+Create something like:
+
+
+// src/emails/welcomeToPro.ts
+export async function sendWelcomeToProEmail(options: {
+  to: string;
+  name?: string;
+}) { ... }
+
+Inside, replace {{user_name}} in both HTML and text with the provided name or "camper".
+
+
+
+
+
+Integration with Stripe
+
+
+
+
+
+In my Stripe webhook handler (the one that handles checkout.session.completed or customer.subscription.created / customer.subscription.updated where status becomes active):
+
+
+
+After you successfully:
+Look up the user by Stripe customer ID,
+Mark them as Pro in my database,
+
+Call:
+
+
+await sendWelcomeToProEmail({
+
+  to: user.email,
+
+  name: user.name,
+
+
+});
+
+
+
+Make sure this call is awaited but guarded with try/catch so a mail failure does not break the webhook response to Stripe.
+
+
+
+Please write or update the necessary files with idiomatic, clean TypeScript, and show me the final code for:
+
+
+
+sendWelcomeToProEmail implementation
+Any new or updated sendEmail/mailer utility
+The exact snippet to add in my Stripe webhook handler where you call sendWelcomeToProEmail.
+
+
+
