@@ -1538,12 +1538,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   .map((s: string) => s.trim())
                   .filter((s: string) => s && s.length > 10);
               } else if (Array.isArray(recipe.recipeInstructions)) {
-                steps = recipe.recipeInstructions.map((step: any) => {
-                  if (typeof step === 'string') return step;
-                  if (step['@type'] === 'HowToStep') return step.text || step.name || '';
-                  if (step.text) return step.text;
-                  return '';
-                }).filter(Boolean);
+                // Flatten nested structures (HowToSection → HowToStep)
+                const flattenSteps = (items: any[]): string[] => {
+                  const result: string[] = [];
+                  items.forEach((step: any) => {
+                    if (typeof step === 'string') {
+                      result.push(step);
+                    } else if (step['@type'] === 'HowToStep') {
+                      // Direct HowToStep
+                      const text = step.text || step.name || '';
+                      if (text) result.push(text);
+                    } else if (step['@type'] === 'HowToSection' && step.itemListElement) {
+                      // Nested HowToSection with steps inside
+                      result.push(...flattenSteps(step.itemListElement));
+                    } else if (Array.isArray(step.itemListElement)) {
+                      // Generic nested array
+                      result.push(...flattenSteps(step.itemListElement));
+                    } else if (step.text) {
+                      // Fallback to text field
+                      result.push(step.text);
+                    }
+                  });
+                  return result;
+                };
+                steps = flattenSteps(recipe.recipeInstructions).filter(Boolean);
               }
             }
             
@@ -1629,30 +1647,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const steps: string[] = [];
           let foundSteps = false;
           
-          $('h2, h3, h4').each((_, elem) => {
-            if (foundSteps) return; // Stop after first section
-            
-            const headingText = $(elem).text().toLowerCase();
-            if (headingText.includes('instruction') || headingText.includes('direction') || headingText.includes('step')) {
+          // Try WordPress Recipe Maker (WPRM) plugin selectors first
+          const wprmSteps = $('.wprm-recipe-instruction-text');
+          if (wprmSteps.length > 0) {
+            wprmSteps.each((_, elem) => {
+              const text = $(elem).text().trim();
+              if (text && text.length > 10) {
+                steps.push(text);
+              }
+            });
+            foundSteps = true;
+          }
+          
+          // Try other common recipe plugin selectors
+          if (!foundSteps) {
+            const tastySteps = $('.tasty-recipes-instructions li');
+            if (tastySteps.length > 0) {
+              tastySteps.each((_, elem) => {
+                const text = $(elem).text().trim();
+                if (text && text.length > 10) {
+                  steps.push(text);
+                }
+              });
               foundSteps = true;
-              
-              // Get the next ol or ul list
-              let list = $(elem).next('ol, ul');
-              if (list.length === 0) {
-                list = $(elem).nextAll('ol, ul').first();
-              }
-              
-              if (list.length > 0) {
-                list.find('li').each((_, li) => {
-                  const text = $(li).text().trim();
-                  if (text && text.length > 10) {
-                    steps.push(text);
-                  }
-                });
-              }
-              // Remove paragraph fallback to avoid capturing narrative text
             }
-          });
+          }
+          
+          // Fallback to generic heading-based search
+          if (!foundSteps) {
+            $('h2, h3, h4').each((_, elem) => {
+              if (foundSteps) return; // Stop after first section
+              
+              const headingText = $(elem).text().toLowerCase();
+              if (headingText.includes('instruction') || headingText.includes('direction') || headingText.includes('step')) {
+                foundSteps = true;
+                
+                // Get the next ol or ul list
+                let list = $(elem).next('ol, ul');
+                if (list.length === 0) {
+                  list = $(elem).nextAll('ol, ul').first();
+                }
+                
+                if (list.length > 0) {
+                  list.find('li').each((_, li) => {
+                    const text = $(li).text().trim();
+                    if (text && text.length > 10) {
+                      steps.push(text);
+                    }
+                  });
+                }
+              }
+            });
+          }
+          
+          // Additional fallback: Look for numbered paragraphs (e.g., "1. Do this", "2. Do that")
+          // This handles sites using simple <p> tags for instructions
+          if (!foundSteps || steps.length === 0) {
+            $('.entry-content p, .post-content p, article p').each((_, elem) => {
+              const text = $(elem).text().trim();
+              // Match paragraphs that start with a number followed by period or parenthesis
+              if (text.match(/^\d+[\.)]\s+/)) {
+                // Remove the number prefix for cleaner storage
+                const cleanedText = text.replace(/^\d+[\.)]\s+/, '').trim();
+                if (cleanedText.length > 10) {
+                  steps.push(cleanedText);
+                }
+              }
+            });
+          }
           
           // Extract image from .entry-content img or first img
           let imageUrl: string | undefined;
@@ -2668,14 +2730,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Trip not found" });
       }
 
+      // Get trip meals from trip_meals table
+      const tripMeals = await storage.getTripMeals(tripId, userId);
+      
       // Check if trip has any meals
-      if (trip.meals.length === 0) {
+      if (tripMeals.length === 0) {
         return res.status(400).json({ error: "Cannot share grocery list - trip has no meals" });
       }
 
-      // Fetch all recipes for the trip's meals
+      // Filter to internal meals only (external recipes don't have ingredients stored)
+      const internalMeals = tripMeals.filter(meal => !meal.isExternal && meal.recipeId !== null);
+      
+      if (internalMeals.length === 0) {
+        return res.status(400).json({ error: "Cannot share grocery list - no recipes with ingredients found" });
+      }
+
+      // Fetch all recipes for the internal meals
       const recipes = await Promise.all(
-        trip.meals.map(id => storage.getRecipeById(id, userId))
+        internalMeals.map(meal => storage.getRecipeById(meal.recipeId!, userId))
       );
       
       // Filter out any null recipes
