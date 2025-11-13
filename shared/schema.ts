@@ -547,11 +547,28 @@ export const mealPlanSuggestionSchema = z.object({
 
 export type MealPlanSuggestion = z.infer<typeof mealPlanSuggestionSchema>;
 
+// Trail suggestion schema for hiking recommendations
+export const trailSuggestionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  location: z.string(),
+  distance: z.number(),
+  elevationGain: z.number(),
+  difficulty: z.enum(["easy", "moderate", "hard"]),
+  highlights: z.array(z.string()),
+  estimatedTime: z.string(),
+  parkName: z.string().optional(),
+  url: z.string().optional(),
+});
+
+export type TrailSuggestion = z.infer<typeof trailSuggestionSchema>;
+
 // Response schema for trip assistant endpoint
 export const tripAssistantResponseSchema = z.object({
   campgrounds: z.array(campgroundSuggestionSchema),
   mealPlan: z.array(mealPlanSuggestionSchema),
   packingTips: z.array(z.string()),
+  trails: z.array(trailSuggestionSchema),
 });
 
 export type TripAssistantResponse = z.infer<typeof tripAssistantResponseSchema>;
