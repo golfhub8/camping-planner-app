@@ -1,0 +1,185 @@
+I already have SMTP working and a sendEmail helper in my backend. I now want you to implement the remaining email templates starting from #3:
+	3.	Renewal Reminder Email
+	4.	Payment Failed Email
+	5.	Trial Started Email
+	6.	Trial Ending Soon Email
+	7.	Cancellation Confirmation Email
+
+Create each email as a separate file under src/emails/. Reuse the existing mailer utility (sendEmail) rather than creating a new transporter. Each email must support HTML and text versions, accept a name field that defaults to “camper”, format currency amounts from cents into a human-readable string, and use a shared date formatting helper if needed.
+
+Also create a barrel export file at src/emails/index.ts that re-exports all new email functions.
+
+Here are the specifications for EACH email:
+
+⸻
+
+EMAIL 3 — RENEWAL REMINDER EMAIL
+File: src/emails/renewalReminder.ts
+
+Create a function:
+export async function sendRenewalReminderEmail(options: {
+to: string;
+name?: string;
+renewalDate: Date;
+amount: number;
+currency: string;
+manageBillingUrl?: string;
+})
+
+Subject:
+Your Camping Planner Pro renewal is coming up
+
+HTML body:
+“Hi {{name}},
+Just a quick heads up — your Camping Planner Pro subscription is scheduled to renew on {{renewalDateFormatted}}.
+On that date, we’ll automatically charge {{amountFormatted}} to your saved payment method to keep your Pro benefits active:
+• Unlimited trips & grocery lists
+• Full access to all printable planners & games
+• Premium packing checklists
+• Priority feature updates
+If you want to update your card or cancel before renewal, you can manage your subscription here: {{manageBillingUrl}}
+If everything looks good, you don’t need to do anything — your plan will renew automatically.
+Happy camping,
+The Camping Planner Team”
+
+Plain text version should mirror the same content.
+
+⸻
+
+EMAIL 4 — PAYMENT FAILED
+File: src/emails/paymentFailed.ts
+
+Create a function:
+export async function sendPaymentFailedEmail(options: {
+to: string;
+name?: string;
+amount: number;
+currency: string;
+manageBillingUrl?: string;
+})
+
+Subject:
+We couldn’t process your Camping Planner Pro payment
+
+HTML body:
+“Hi {{name}},
+We tried to process your latest Camping Planner Pro payment for {{amountFormatted}}, but your bank declined the charge.
+This can happen if a card expires, a bank blocks the transaction, or there are insufficient funds.
+Please update your payment method or retry the payment here: {{manageBillingUrl}}
+We’ll keep your Pro features available for a short grace period. If payment still fails, your subscription may be paused.
+If you believe this was a mistake, reply to this email.
+Thank you,
+The Camping Planner Team”
+
+Plain text version should match the above.
+
+⸻
+
+EMAIL 5 — TRIAL STARTED
+File: src/emails/trialStarted.ts
+
+Create a function:
+export async function sendTrialStartedEmail(options: {
+to: string;
+name?: string;
+trialEndDate: Date;
+manageBillingUrl?: string;
+})
+
+Subject:
+Your Camping Planner Pro trial is live!
+
+HTML body:
+“Hi {{name}},
+Welcome to your Camping Planner Pro trial!
+For the next 7 days (until {{trialEndDateFormatted}}), you’ll have full access to:
+• Unlimited trips
+• Unlimited grocery lists
+• All printable planners & game bundles
+• Premium packing checklists
+• Offline-ready saved recipes
+If you’re enjoying Pro, you don’t need to do anything — your subscription will continue automatically.
+To review or cancel your trial, visit: {{manageBillingUrl}}
+Happy camping,
+The Camping Planner Team”
+
+Plain text version should match the above.
+
+⸻
+
+EMAIL 6 — TRIAL ENDING SOON
+File: src/emails/trialEndingSoon.ts
+
+Create a function:
+export async function sendTrialEndingSoonEmail(options: {
+to: string;
+name?: string;
+trialEndDate: Date;
+amount: number;
+currency: string;
+manageBillingUrl?: string;
+})
+
+Subject:
+Your Camping Planner Pro trial ends soon
+
+HTML body:
+“Hi {{name}},
+Just a reminder — your Camping Planner Pro trial ends on {{trialEndDateFormatted}}.
+Unless canceled before that date, your subscription will continue and you’ll be charged {{amountFormatted}} for the next billing period.
+With Pro, you’ll keep access to:
+• Unlimited trips and grocery lists
+• All printable planners and games
+• Premium packing checklists
+• Offline-ready recipe saving
+Manage your subscription here: {{manageBillingUrl}}
+Happy camping,
+The Camping Planner Team”
+
+Plain text version should match the above.
+
+⸻
+
+EMAIL 7 — CANCELLATION CONFIRMATION
+File: src/emails/cancellation.ts
+
+Create a function:
+export async function sendCancellationEmail(options: {
+to: string;
+name?: string;
+currentPeriodEnd?: Date;
+reactivateUrl?: string;
+})
+
+Subject:
+Your Camping Planner Pro subscription has been cancelled
+
+HTML body:
+“Hi {{name}},
+This is a confirmation that your Camping Planner Pro subscription has been cancelled.
+{{If currentPeriodEnd exists}}
+You will continue to have Pro access until {{currentPeriodEndFormatted}}.
+{{Else}}
+Your account will now return to the free plan.
+{{End}}
+If you change your mind, you can restart your Pro membership here: {{reactivateUrl}}
+Thank you for being part of The Camping Planner community.
+The Camping Planner Team”
+
+Plain text version should match the above.
+
+⸻
+
+Finally, create src/emails/index.ts that exports:
+
+sendRenewalReminderEmail
+sendPaymentFailedEmail
+sendTrialStartedEmail
+sendTrialEndingSoonEmail
+sendCancellationEmail
+
+Use named exports.
+
+Make sure the code is clean, typed, and consistent across all files. Reuse formatting helpers for dates and currency.
+
+END OF PROMPT.

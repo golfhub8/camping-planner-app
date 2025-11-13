@@ -2,6 +2,49 @@ import nodemailer from "nodemailer";
 
 let transporter: nodemailer.Transporter | null = null;
 
+// Shared email utilities
+export async function sendEmail(options: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}): Promise<void> {
+  if (!transporter) {
+    console.warn("[Email] Cannot send email - transporter not initialized");
+    return;
+  }
+
+  const { to, subject, text, html } = options;
+
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM!,
+      to,
+      subject,
+      text,
+      html,
+    });
+
+    console.log(`[Email] Email sent to ${to}: ${subject}`);
+  } catch (error) {
+    console.error(`[Email] Failed to send email to ${to}:`, error);
+    throw error;
+  }
+}
+
+export function formatCurrency(amountInCents: number, currency: string): string {
+  const currencyFormatted = (currency || 'usd').toUpperCase();
+  return `$${(amountInCents / 100).toFixed(2)} ${currencyFormatted}`;
+}
+
+export function formatDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 // Initialize email transporter
 export function initializeEmailService() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
