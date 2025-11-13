@@ -1,0 +1,196 @@
+m building The Camping Planner app with Stripe subscriptions and SMTP emails already working.
+
+I now have these email helpers (or will have them after previous prompts):
+	•	sendWelcomeToProEmail
+	•	sendProPaymentReceiptEmail
+	•	sendRenewalReminderEmail
+	•	sendPaymentFailedEmail
+	•	sendTrialStartedEmail
+	•	sendTrialEndingSoonEmail
+	•	sendCancellationEmail
+
+They live under src/emails/ and are re-exported from src/emails/index.ts.
+
+I want you to:
+	1.	Create or clean up a central Stripe webhook handler, and
+	2.	Wire each of these email helpers into the correct Stripe lifecycle events, and
+	3.	Keep the user’s plan in sync in my database (free / trial / pro), and
+	4.	Make the code clean, well-typed, and idempotent (no duplicate upgrades or duplicate emails).
+
+Assume:
+	•	Node + TypeScript backend using Express (or similar).
+	•	We already have a User model in the database with at least: id, email, name, plan (“free” | “trial” | “pro”), stripeCustomerId, stripeSubscriptionId, and maybe trial_end, current_period_end, etc.
+	•	We already have a Stripe secret key and webhook secret set in env vars (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET).
+
+If some pieces are missing, please create them in a minimal but sensible way.
+
+GOAL OVERVIEW
+
+Create a single webhook handler at POST /api/stripe/webhook that:
+	•	Verifies the signature using STRIPE_WEBHOOK_SECRET
+	•	Switches on relevant event types and:
+	•	Keeps the user’s plan field accurate
+	•	Triggers the right email(s) once per important state change
+
+We’re dealing with annual Pro subscriptions and a 7-day trial.
+
+EVENTS TO HANDLE
+
+At minimum, handle these Stripe event types:
+	•	checkout.session.completed
+	•	invoice.payment_succeeded
+	•	invoice.payment_failed
+	•	invoice.upcoming (for renewal reminders, optional but preferred)
+	•	customer.subscription.trial_will_end
+	•	customer.subscription.updated
+	•	customer.subscription.deleted
+
+If some of these are not yet subscribed in Stripe, write the handler assuming they will be; I’ll subscribe them in the Stripe Dashboard.
+
+DETAILS PER EVENT
+
+A) checkout.session.completed
+
+Use this event when the initial checkout finishes.
+	•	Extract the session: customer, subscription, mode, status, and any metadata or client_reference_id we used to link to our User.
+	•	Find the user in our DB by:
+	1.	session.client_reference_id if we used our internal user id there, OR
+	2.	session.customer (Stripe customer id) mapped to our user’s stripeCustomerId.
+	•	Update the user record:
+	•	stripeCustomerId = customer id
+	•	stripeSubscriptionId = subscription id (if provided)
+	•	If this session starts a trial:
+	•	set plan = “trial”
+	•	set trial_end based on the subscription trial_end timestamp
+	•	call sendTrialStartedEmail with { to, name, trialEndDate, manageBillingUrl? }
+	•	If it starts immediately as active (no trial):
+	•	set plan = “pro”
+	•	set current_period_end based on subscription.current_period_end
+	•	call sendWelcomeToProEmail with { to, name }
+	•	Do NOT also send the full receipt email from here; that will come from invoice.payment_succeeded.
+
+B) invoice.payment_succeeded
+
+Use this event for receipts and renewals (initial and subsequent).
+	•	Extract the invoice and its customer, subscription, amount_paid, currency, hosted_invoice_url, number, and billing period (lines[0].period.start/end).
+	•	Find the user by stripeCustomerId.
+	•	If this invoice’s subscription matches the user’s stripeSubscriptionId and it represents an active Pro subscription:
+	•	Ensure user.plan = “pro”
+	•	Update current_period_end based on the subscription period end (subscription object or invoice lines period).
+	•	Call sendProPaymentReceiptEmail with:
+	•	to: user.email
+	•	name: user.name
+	•	amount: invoice.amount_paid
+	•	currency: invoice.currency
+	•	invoiceNumber: invoice.number
+	•	invoiceDate: new Date(invoice.status_transitions.paid_at * 1000) or invoice.created
+	•	periodStart/periodEnd: from invoice.lines[0].period if available
+	•	manageBillingUrl: if we have a customer portal URL or a link to our /account
+	•	invoicePdfUrl: invoice.hosted_invoice_url
+
+Optional: If this invoice is not the first one (i.e., a renewal), you can also send sendRenewalReminderEmail via invoice.upcoming instead (see below).
+
+C) invoice.upcoming (for renewal reminder)
+
+Use this event to send a reminder before a renewal. If you prefer a scheduled job instead, you can stub this out, but wire the logic.
+	•	Extract the upcoming invoice: customer, amount_due, currency, next_payment_attempt (or due date).
+	•	Find the user via stripeCustomerId.
+	•	Call sendRenewalReminderEmail with:
+	•	to: user.email
+	•	name: user.name
+	•	renewalDate: new Date(next_payment_attempt * 1000) or from the upcoming period
+	•	amount: invoice.amount_due
+	•	currency: invoice.currency
+	•	manageBillingUrl: link to billing portal or /account
+
+D) invoice.payment_failed
+
+Use this event to notify user that payment failed.
+	•	Extract invoice: amount_due, currency, customer.
+	•	Find user via stripeCustomerId.
+	•	Optionally, update some “payment_status” or mark subscription as “past_due” locally if you track it.
+	•	Call sendPaymentFailedEmail with:
+	•	to
+	•	name
+	•	amount: invoice.amount_due
+	•	currency: invoice.currency
+	•	manageBillingUrl
+
+E) customer.subscription.trial_will_end
+
+Use this event to warn that the trial is ending soon.
+	•	Extract subscription: customer, trial_end, items, plan amount/currency if available.
+	•	Find user via stripeCustomerId.
+	•	Call sendTrialEndingSoonEmail with:
+	•	to: user.email
+	•	name: user.name
+	•	trialEndDate: new Date(subscription.trial_end * 1000)
+	•	amount: plan amount (from subscription.items[0].price.unit_amount)
+	•	currency: subscription.items[0].price.currency
+	•	manageBillingUrl
+
+F) customer.subscription.updated
+
+Use this event to manage transitions such as trial → active → canceled → past_due.
+	•	Extract subscription: id, customer, status, cancel_at_period_end, canceled_at, trial_end, current_period_end.
+	•	Find user by stripeSubscriptionId or stripeCustomerId.
+	•	Logic:
+	•	If status === “active” and not in trial:
+	•	set plan = “pro”
+	•	set current_period_end = new Date(subscription.current_period_end * 1000)
+	•	If they were previously “trial”, consider this the point where we confirm they converted; no extra email is necessary beyond the invoice.receipt.
+	•	If status === “trialing”:
+	•	set plan = “trial”
+	•	set trial_end = new Date(subscription.trial_end * 1000)
+	•	If status === “past_due”:
+	•	optional: store a flag, rely on invoice.payment_failed email for user notification.
+	•	If status === “canceled” or “incomplete_expired”:
+	•	set plan = “free”
+	•	set stripeSubscriptionId = null or keep as historical
+	•	Call sendCancellationEmail with:
+	•	to
+	•	name
+	•	currentPeriodEnd: new Date(subscription.current_period_end * 1000) if they keep access until end
+	•	reactivateUrl: a link to our /account page where they can re-upgrade.
+
+G) customer.subscription.deleted
+
+If you prefer, handle hard cancellations here too (similar to the canceled branch above):
+	•	set plan = “free”
+	•	call sendCancellationEmail as above, if not already sent.
+
+IDEMPOTENCY & SAFETY
+	•	Make sure the webhook handler always returns a 200 response quickly after processing, and no thrown errors leak to Stripe.
+	•	Wrap each email call in try/catch so a failure to send email does NOT cause the webhook to fail.
+	•	When updating the user’s plan, only set the new value if it’s actually changed. This reduces pointless DB writes and makes the code clearer to read.
+
+STRUCTURE
+
+Please:
+	1.	Create a file like src/routes/stripeWebhook.ts or src/api/stripeWebhook.ts that:
+	•	Exports an Express router or handler for POST /api/stripe/webhook
+	•	Uses stripe.webhooks.constructEvent to verify the signature
+	•	Switches on event.type and calls helper functions for each event type
+	2.	Create a helper module src/services/subscriptionService.ts that:
+	•	Contains reusable functions:
+	•	attachCustomerToUser
+	•	setUserPlanAndSubscription
+	•	getUserByStripeCustomerId
+	•	getUserByStripeSubscriptionId
+	•	Handles the DB updates for plan/period_end/trial_end, etc.
+	3.	Import the email functions from src/emails/index.ts and call them in the relevant branches as described above.
+	4.	Ensure the webhook route is actually mounted in the main server (e.g., in server/index.ts or app.ts), at the correct path that matches what I configured in Stripe (for example /api/stripe/webhook).
+	5.	Add basic logging for event types so I can see in logs what’s being processed.
+
+SUMMARY OF EMAIL MAPPINGS
+	•	sendWelcomeToProEmail: after initial successful subscription when user becomes Pro (checkout without trial, or after trial if you prefer to use this as a welcome).
+	•	sendProPaymentReceiptEmail: on invoice.payment_succeeded.
+	•	sendRenewalReminderEmail: on invoice.upcoming (or a scheduled job) before renewal.
+	•	sendPaymentFailedEmail: on invoice.payment_failed.
+	•	sendTrialStartedEmail: when a trial is first created (checkout.session.completed with trial).
+	•	sendTrialEndingSoonEmail: on customer.subscription.trial_will_end.
+	•	sendCancellationEmail: when subscription status becomes canceled / deleted and user is downgraded to free.
+
+Implement all of this in clean TypeScript with proper imports, and show me the main webhook handler file plus any new service modules you created.
+
+END OF PROMPT
