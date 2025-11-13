@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import RecipeCard from "@/components/RecipeCard";
 import RecipeForm from "@/components/RecipeForm";
 import EmptyState from "@/components/EmptyState";
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import type { Recipe } from "@shared/schema";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 // Type definition for external recipes from WordPress
 // These recipes come from TheCampingPlanner.com and have a different structure
@@ -23,6 +25,8 @@ interface ExternalRecipe {
 
 export default function Home() {
   const recipeFormRef = useRef<HTMLDivElement>(null);
+  const [location, navigate] = useLocation();
+  const { toast } = useToast();
   
   // State for search query - filters recipes by title and ingredients
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,9 +65,51 @@ export default function Home() {
       
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async (newRecipe: Recipe) => {
       // Invalidate and refetch recipes after creating a new one
       queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
+      
+      // Check if we should auto-add the recipe to a trip
+      const queryString = location.includes('?') ? location.split('?')[1] : '';
+      const searchParams = new URLSearchParams(queryString);
+      const tripIdToAdd = searchParams.get('addToTrip');
+      
+      if (tripIdToAdd && newRecipe.id) {
+        try {
+          // Add the newly created recipe to the trip
+          // apiRequest returns parsed JSON and throws on non-2xx responses
+          await apiRequest("POST", `/api/trips/${tripIdToAdd}/meals`, { 
+            recipeId: newRecipe.id 
+          });
+          
+          // Success! Invalidate trip queries and show success message
+          queryClient.invalidateQueries({ queryKey: ["/api/trips", tripIdToAdd, "meals"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/trips", tripIdToAdd] });
+          
+          toast({
+            title: "Recipe created and added to trip!",
+            description: `"${newRecipe.title}" has been added to your meal plan.`,
+          });
+          
+          // Navigate back to the trip
+          navigate(`/trips/${tripIdToAdd}`, { replace: true });
+        } catch (error: any) {
+          // Show error toast but don't fail the whole operation
+          toast({
+            title: "Recipe created",
+            description: "Recipe was created but couldn't be added to the trip. You can add it manually.",
+            variant: "destructive",
+          });
+          
+          // Clean up URL params
+          navigate('/recipes', { replace: true });
+        }
+      } else {
+        // No trip to add to, just clean up URL if needed
+        if (searchParams.get('createNew')) {
+          navigate('/recipes', { replace: true });
+        }
+      }
     },
   });
 

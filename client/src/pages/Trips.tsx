@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, PencilIcon, SparklesIcon } from "lucide-react";
@@ -32,6 +33,7 @@ export default function Trips() {
   const [, navigate] = useLocation();
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [showUpsellModal, setShowUpsellModal] = useState(false);
+  const [aiDescription, setAiDescription] = useState("");
   const { toast } = useToast();
   
   // Fetch user entitlements to check trip limits
@@ -170,6 +172,14 @@ export default function Trips() {
 
   const handleCreateTrip = (data: InsertTrip) => {
     createTripMutation.mutate(data);
+  };
+
+  const handleAIGenerate = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast({
+      title: "Coming Soon!",
+      description: "AI-powered trip planning will be available soon. Stay tuned!",
+    });
   };
 
   if (isLoading || entitlementsLoading) {
@@ -340,6 +350,39 @@ export default function Trips() {
                 </Button>
               </form>
             </Form>
+          </CardContent>
+        </Card>
+
+        {/* AI Trip Planner - Coming Soon */}
+        <Card className="max-w-4xl mx-auto opacity-75">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <SparklesIcon className="h-5 w-5 text-primary" />
+              Describe your trip and we'll build it for you
+            </CardTitle>
+            <CardDescription>
+              Tell us what you're looking for and our AI will help plan your perfect camping adventure
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAIGenerate} className="space-y-4">
+              <Textarea
+                placeholder="e.g., I have March 12–21 free, want to camp near San Diego with my family of 4..."
+                rows={4}
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                data-testid="textarea-ai-trip-description"
+              />
+              <Button 
+                type="submit" 
+                disabled 
+                className="w-full md:w-auto"
+                data-testid="button-ai-generate-trip"
+              >
+                <SparklesIcon className="h-4 w-4 mr-2" />
+                Generate Trip (Coming Soon)
+              </Button>
+            </form>
           </CardContent>
         </Card>
 

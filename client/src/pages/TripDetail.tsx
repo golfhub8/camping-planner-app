@@ -842,7 +842,7 @@ export default function TripDetail() {
                         <Button
                           onClick={() => {
                             setAddMealDialogOpen(false);
-                            navigate("/");
+                            navigate(`/recipes?createNew=true&addToTrip=${params.id}`);
                           }}
                           data-testid="button-create-recipe"
                         >

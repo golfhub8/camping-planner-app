@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +12,24 @@ interface RecipeFormProps {
 }
 
 export default function RecipeForm({ onSubmit }: RecipeFormProps) {
+  const [location] = useLocation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [title, setTitle] = useState("");
   const [ingredients, setIngredients] = useState("");
   const [steps, setSteps] = useState("");
+
+  // Auto-expand form when navigating with createNew=true query param
+  // Only expands when param is explicitly true, never interferes with manual expansion
+  useEffect(() => {
+    const queryString = location.includes('?') ? location.split('?')[1] : '';
+    if (queryString) {
+      const searchParams = new URLSearchParams(queryString);
+      const shouldExpand = searchParams.get('createNew') === 'true';
+      if (shouldExpand) {
+        setIsExpanded(true);
+      }
+    }
+  }, [location]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
