@@ -259,15 +259,60 @@ export default function Account() {
             )}
 
             {accountPlan?.hasStripeCustomer && (
-              <div className="pt-4 border-t">
-                <Button 
-                  variant="outline" 
-                  onClick={handleManageSubscription}
-                  data-testid="button-manage-subscription"
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Manage Subscription
-                </Button>
+              <div className="pt-4 border-t flex gap-2">
+                {isPro && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleManageSubscription}
+                    data-testid="button-manage-subscription"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Manage Subscription
+                  </Button>
+                )}
+                {!isPro && (
+                  <Button 
+                    variant="outline" 
+                    onClick={async () => {
+                      try {
+                        toast({
+                          title: "Syncing...",
+                          description: "Checking for your subscription in Stripe.",
+                        });
+                        const response = await fetch('/api/billing/sync-subscription', {
+                          method: 'POST',
+                          credentials: 'include',
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                          queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/account/plan'] });
+                          refetchPlan();
+                          toast({
+                            title: "Success!",
+                            description: "Your subscription has been synced.",
+                          });
+                        } else {
+                          toast({
+                            title: "No subscription found",
+                            description: data.message || "Please try completing checkout again.",
+                            variant: "destructive",
+                          });
+                        }
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to sync subscription. Please try again.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    data-testid="button-sync-subscription"
+                  >
+                    <TrendingUp className="mr-2 h-4 w-4" />
+                    Sync Subscription
+                  </Button>
+                )}
               </div>
             )}
 
