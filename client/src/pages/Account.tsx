@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, CreditCard, Package, AlertCircle, Check, Mail, TrendingUp } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import SubscribeButton from "@/components/SubscribeButton";
@@ -78,7 +78,9 @@ export default function Account() {
         } catch (error) {
           console.error('Error syncing subscription:', error);
         } finally {
-          // Always refetch plan data and show success toast
+          // Invalidate auth query to update Pro status in navbar immediately
+          queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+          // Also refetch plan data and show success toast
           refetchPlan();
           toast({
             title: "Welcome to Pro!",
