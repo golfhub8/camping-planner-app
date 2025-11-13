@@ -155,17 +155,21 @@ export default function Subscribe() {
                 <li>Access all printables during your trial</li>
                 <li>After 7 days, you'll be billed $29.99/year</li>
                 <li>Cancel anytime before the trial ends for $0</li>
+                <li>Subscription renews automatically every year until canceled</li>
               </ol>
             </div>
 
             <div className="pt-4 border-t">
-              <div className="flex items-baseline justify-between mb-4">
+              <div className="flex items-baseline justify-between mb-2">
                 <span className="text-lg font-semibold">Annual Membership</span>
                 <div className="text-right">
                   <span className="text-3xl font-bold">$29.99</span>
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Billed annually. Renews automatically until canceled.
+              </p>
               
               {!user ? (
                 <Button 
@@ -190,7 +194,7 @@ export default function Subscribe() {
               )}
               
               <p className="text-xs text-center text-muted-foreground mt-4">
-                Secure payment powered by Stripe. Cancel anytime during trial for $0 charge.
+                Secure payment powered by Stripe. Cancel anytime during trial for $0 charge. After the trial, your subscription will renew automatically every 12 months unless you cancel. Manage or cancel your subscription anytime from your account page.
               </p>
             </div>
           </CardContent>

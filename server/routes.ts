@@ -9,6 +9,7 @@ import { load as cheerioLoad } from "cheerio";
 import nodemailer from "nodemailer";
 import { promises as dns } from "dns";
 import * as net from "net";
+import { initializeEmailService, sendProSubscriptionEmail } from "./emailService";
 
 /**
  * Converts IPv6 address to bytes for proper IPv4-mapped detection
@@ -372,6 +373,36 @@ export function registerWebhookRoute(app: Express): void {
               
               console.log(`[Webhook] ✅ SUCCESS: Activated Pro membership for user ${userId}`);
               console.log(`[Webhook] Status: ${subscriptionResponse.status}, Expires: ${endDate}`);
+              
+              // Send confirmation email to user
+              try {
+                const user = await storage.getUser(userId);
+                if (user && user.email) {
+                  console.log(`[Webhook] Sending confirmation email to ${user.email}...`);
+                  
+                  // Create Stripe billing portal URL for subscription management
+                  const portalSession = await stripe.billingPortal.sessions.create({
+                    customer: session.customer as string,
+                    return_url: `${process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPLIT_DEPLOYMENT ? 'replit.app' : 'replit.dev'}/account` : 'http://localhost:5000/account'}`,
+                  });
+                  
+                  await sendProSubscriptionEmail({
+                    to: user.email,
+                    firstName: user.firstName || 'Camper',
+                    amount: subscriptionResponse.items.data[0]?.price?.unit_amount || 2999,
+                    currency: subscriptionResponse.currency || 'usd',
+                    periodEnd: endDate,
+                    manageUrl: portalSession.url,
+                  });
+                  
+                  console.log(`[Webhook] ✅ Confirmation email sent successfully`);
+                } else {
+                  console.log(`[Webhook] ⚠️ Could not send email - user or email not found`);
+                }
+              } catch (emailError) {
+                // Don't fail the webhook if email fails
+                console.error(`[Webhook] ⚠️ Failed to send confirmation email:`, emailError);
+              }
             }
           }
           break;
@@ -501,6 +532,9 @@ function requirePrintableAccess(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize email service for sending subscription confirmations
+  initializeEmailService();
+  
   // Set up authentication middleware (Replit Auth integration)
   await setupAuth(app);
 
