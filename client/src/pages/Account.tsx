@@ -62,15 +62,17 @@ export default function Account() {
     const status = params.get('status');
     
     if (status === 'success') {
-      // Sync subscription status from Stripe before showing success
-      const syncSubscription = async () => {
+      // Sync subscription status from Stripe with automatic retries
+      const syncSubscription = async (attempt = 1, maxAttempts = 5) => {
         try {
           const response = await fetch('/api/billing/sync-subscription', {
             method: 'POST',
             credentials: 'include',
           });
           
-          if (response.ok) {
+          const data = await response.json();
+          
+          if (data.success) {
             console.log('Subscription synced successfully');
             // Invalidate auth query to update Pro status in navbar immediately
             queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
@@ -81,15 +83,23 @@ export default function Account() {
               description: "Your subscription is now active. Enjoy unlimited access to all features.",
             });
           } else {
-            console.error('Failed to sync subscription');
-            // Still invalidate cache even if sync fails - the webhook may have already updated it
-            queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
-            refetchPlan();
-            toast({
-              title: "Subscription Processing",
-              description: "Your payment is being processed. Your Pro status will activate shortly.",
-              variant: "default",
-            });
+            // Subscription not found yet - retry with exponential backoff
+            if (attempt < maxAttempts) {
+              console.log(`Subscription not found, retrying in ${attempt * 1000}ms (attempt ${attempt}/${maxAttempts})...`);
+              setTimeout(() => {
+                syncSubscription(attempt + 1, maxAttempts);
+              }, attempt * 1000); // 1s, 2s, 3s, 4s delays
+            } else {
+              // Max retries reached - show processing message
+              console.error('Failed to sync subscription after multiple attempts');
+              queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+              refetchPlan();
+              toast({
+                title: "Subscription Processing",
+                description: "Your payment is being processed. Please refresh the page in a moment.",
+                variant: "default",
+              });
+            }
           }
         } catch (error) {
           console.error('Error syncing subscription:', error);
@@ -258,61 +268,16 @@ export default function Account() {
               </div>
             )}
 
-            {accountPlan?.hasStripeCustomer && (
-              <div className="pt-4 border-t flex gap-2">
-                {isPro && (
-                  <Button 
-                    variant="outline" 
-                    onClick={handleManageSubscription}
-                    data-testid="button-manage-subscription"
-                  >
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Manage Subscription
-                  </Button>
-                )}
-                {!isPro && (
-                  <Button 
-                    variant="outline" 
-                    onClick={async () => {
-                      try {
-                        toast({
-                          title: "Syncing...",
-                          description: "Checking for your subscription in Stripe.",
-                        });
-                        const response = await fetch('/api/billing/sync-subscription', {
-                          method: 'POST',
-                          credentials: 'include',
-                        });
-                        const data = await response.json();
-                        if (data.success) {
-                          queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
-                          queryClient.invalidateQueries({ queryKey: ['/api/account/plan'] });
-                          refetchPlan();
-                          toast({
-                            title: "Success!",
-                            description: "Your subscription has been synced.",
-                          });
-                        } else {
-                          toast({
-                            title: "No subscription found",
-                            description: data.message || "Please try completing checkout again.",
-                            variant: "destructive",
-                          });
-                        }
-                      } catch (error) {
-                        toast({
-                          title: "Error",
-                          description: "Failed to sync subscription. Please try again.",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                    data-testid="button-sync-subscription"
-                  >
-                    <TrendingUp className="mr-2 h-4 w-4" />
-                    Sync Subscription
-                  </Button>
-                )}
+            {accountPlan?.hasStripeCustomer && isPro && (
+              <div className="pt-4 border-t">
+                <Button 
+                  variant="outline" 
+                  onClick={handleManageSubscription}
+                  data-testid="button-manage-subscription"
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Manage Subscription
+                </Button>
               </div>
             )}
 
