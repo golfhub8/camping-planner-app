@@ -1603,6 +1603,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const $ = cheerioLoad(html);
           
+          // Diagnostic: Check for common recipe container classes
+          console.log('[Recipe Parser] Diagnostic checks:');
+          console.log(`  - .wprm-recipe: ${$('.wprm-recipe').length}`);
+          console.log(`  - .wprm-recipe-container: ${$('.wprm-recipe-container').length}`);
+          console.log(`  - .wp-block-wpzoom-recipe-card-block-recipe-card: ${$('.wp-block-wpzoom-recipe-card-block-recipe-card').length}`);
+          console.log(`  - [class*="recipe"]: ${$('[class*="recipe"]').length}`);
+          
+          // Sample first few classes to help debug
+          const sampleClasses = $('[class]').slice(0, 20).map((_, el) => $(el).attr('class')).get();
+          console.log(`  - Sample classes:`, sampleClasses.slice(0, 5));
+          
           // Extract title from h1 or .entry-title
           let title = '';
           const h1Text = $('h1.entry-title').first().text().trim();
@@ -1613,43 +1624,166 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Extract ingredients from list under "Ingredients" heading
-          // Only process the FIRST ingredients section to avoid duplicates
+          // Try popular WordPress recipe plugin selectors first
           const ingredients: string[] = [];
           let foundIngredients = false;
           
-          $('h2, h3, h4').each((_, elem) => {
-            if (foundIngredients) return; // Stop after first section
-            
-            const headingText = $(elem).text().toLowerCase();
-            if (headingText.includes('ingredient')) {
+          // Method 1: Try WPRM (WordPress Recipe Maker) ingredients checklist structure
+          const wprmIngredients = $('.wprm-recipe-ingredient');
+          console.log(`[Recipe Parser] Checking for WPRM ingredients (.wprm-recipe-ingredient): ${wprmIngredients.length} found`);
+          
+          // Also check for other WPRM selectors
+          const wprmContainer = $('.wprm-recipe-ingredients-container');
+          const wprmList = $('.wprm-recipe-ingredients');
+          console.log(`[Recipe Parser] WPRM container: ${wprmContainer.length}, WPRM list: ${wprmList.length}`);
+          
+          if (wprmIngredients.length > 0) {
+            console.log(`[Recipe Parser] Found ${wprmIngredients.length} WPRM ingredients - extracting`);
+            wprmIngredients.each((_, elem) => {
+              // WPRM uses structured spans for amount, unit, name, and notes
+              const amount = $(elem).find('.wprm-recipe-ingredient-amount').text().trim();
+              const unit = $(elem).find('.wprm-recipe-ingredient-unit').text().trim();
+              const name = $(elem).find('.wprm-recipe-ingredient-name').text().trim();
+              const notes = $(elem).find('.wprm-recipe-ingredient-notes').text().trim();
+              
+              // Combine parts into a single ingredient string
+              let ingredientText = '';
+              if (amount) ingredientText += amount + ' ';
+              if (unit) ingredientText += unit + ' ';
+              if (name) ingredientText += name;
+              if (notes) ingredientText += ' ' + notes;
+              
+              ingredientText = ingredientText.trim();
+              
+              // Fallback: if structured extraction failed, get full text
+              if (!ingredientText) {
+                ingredientText = $(elem).text().trim();
+              }
+              
+              if (ingredientText) {
+                ingredients.push(ingredientText);
+              }
+            });
+            foundIngredients = true;
+          }
+          
+          // Method 1b: Try Tasty Recipes plugin
+          if (!foundIngredients) {
+            const tastyIngredients = $('.tasty-recipes-ingredients li, .tasty-recipes-ingredients-body li');
+            if (tastyIngredients.length > 0) {
+              console.log(`[Recipe Parser] Found ${tastyIngredients.length} Tasty Recipes ingredients`);
+              tastyIngredients.each((_, elem) => {
+                const text = $(elem).text().trim();
+                if (text) {
+                  ingredients.push(text);
+                }
+              });
               foundIngredients = true;
-              
-              // Get the next ul or ol list after this heading
-              let list = $(elem).next('ul, ol');
-              if (list.length === 0) {
-                // Try finding the list in the next sibling(s)
-                list = $(elem).nextAll('ul, ol').first();
-              }
-              
-              if (list.length > 0) {
-                list.find('li').each((_, li) => {
-                  const text = $(li).text().trim();
-                  if (text) {
-                    ingredients.push(text);
-                  }
-                });
-              }
             }
-          });
+          }
+          
+          // Method 2: Fallback to heading-based extraction
+          if (!foundIngredients) {
+            console.log('[Recipe Parser] Trying heading-based extraction (h2/h3/h4)');
+            $('h2, h3, h4').each((_, elem) => {
+              if (foundIngredients) return; // Stop after first section
+              
+              const headingText = $(elem).text().toLowerCase();
+              if (headingText.includes('ingredient')) {
+                console.log(`[Recipe Parser] Found ingredients heading: "${$(elem).text().trim()}"`);
+                foundIngredients = true;
+                
+                // Get the next ul or ol list after this heading
+                let list = $(elem).next('ul, ol');
+                if (list.length === 0) {
+                  // Try finding the list in the next sibling(s)
+                  list = $(elem).nextAll('ul, ol').first();
+                }
+                
+                if (list.length > 0) {
+                  list.find('li').each((_, li) => {
+                    const text = $(li).text().trim();
+                    if (text) {
+                      ingredients.push(text);
+                    }
+                  });
+                }
+              }
+            });
+          }
+          
+          // Method 3: Look for bold/strong ingredients labels in paragraphs
+          if (!foundIngredients) {
+            console.log('[Recipe Parser] Trying bold paragraph extraction (<strong> labels)');
+            $('p strong, p b').each((_, elem) => {
+              if (foundIngredients) return;
+              
+              const labelText = $(elem).text().toLowerCase().trim();
+              if (labelText.includes('ingredient')) {
+                console.log(`[Recipe Parser] Found bold ingredients label: "${$(elem).text().trim()}"`);
+                foundIngredients = true;
+                
+                // Check if the list is within the same paragraph or the next element
+                const paragraph = $(elem).parent();
+                let list = paragraph.find('ul, ol').first();
+                
+                if (list.length === 0) {
+                  // Try next siblings
+                  list = paragraph.nextAll('ul, ol').first();
+                }
+                
+                if (list.length > 0) {
+                  list.find('li').each((_, li) => {
+                    const text = $(li).text().trim();
+                    if (text) {
+                      ingredients.push(text);
+                    }
+                  });
+                }
+              }
+            });
+          }
+          
+          // Method 4: Scan for any list near "ingredient" keyword in text
+          if (!foundIngredients) {
+            console.log('[Recipe Parser] Trying keyword-based scanning for ingredient lists');
+            const allText = $('.entry-content, .post-content, article').text().toLowerCase();
+            if (allText.includes('ingredient')) {
+              console.log('[Recipe Parser] Found "ingredient" keyword in content, scanning for lists');
+              // Find the first ul/ol that appears to contain ingredients
+              $('.entry-content ul, .post-content ul, article ul').each((_, list) => {
+                if (foundIngredients) return;
+                
+                const listItems = $(list).find('li');
+                if (listItems.length >= 3 && listItems.length <= 50) {
+                  // Check if this looks like an ingredients list
+                  const firstItem = listItems.first().text().trim().toLowerCase();
+                  const hasQuantity = /\d|cup|tbsp|tsp|oz|lb|gram|kg|ml|teaspoon|tablespoon/.test(firstItem);
+                  
+                  if (hasQuantity) {
+                    console.log(`[Recipe Parser] Found ingredient list with ${listItems.length} items`);
+                    foundIngredients = true;
+                    listItems.each((_, li) => {
+                      const text = $(li).text().trim();
+                      if (text) {
+                        ingredients.push(text);
+                      }
+                    });
+                  }
+                }
+              });
+            }
+          }
           
           // Extract instructions/steps
-          // Only process the FIRST instructions section to avoid duplicates
+          // Try multiple fallback methods similar to ingredients
           const steps: string[] = [];
           let foundSteps = false;
           
-          // Try WordPress Recipe Maker (WPRM) plugin selectors first
+          // Method 1: Try WordPress Recipe Maker (WPRM) plugin selectors first
           const wprmSteps = $('.wprm-recipe-instruction-text');
           if (wprmSteps.length > 0) {
+            console.log(`[Recipe Parser] Found ${wprmSteps.length} WPRM instruction steps`);
             wprmSteps.each((_, elem) => {
               const text = $(elem).text().trim();
               if (text && text.length > 10) {
@@ -1659,10 +1793,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             foundSteps = true;
           }
           
-          // Try other common recipe plugin selectors
+          // Method 2: Try Tasty Recipes plugin selectors
           if (!foundSteps) {
             const tastySteps = $('.tasty-recipes-instructions li');
             if (tastySteps.length > 0) {
+              console.log(`[Recipe Parser] Found ${tastySteps.length} Tasty Recipes instruction steps`);
               tastySteps.each((_, elem) => {
                 const text = $(elem).text().trim();
                 if (text && text.length > 10) {
@@ -1673,19 +1808,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          // Fallback to generic heading-based search
+          // Method 3: Heading-based search
           if (!foundSteps) {
+            console.log('[Recipe Parser] Trying heading-based extraction for instructions (h2/h3/h4)');
             $('h2, h3, h4').each((_, elem) => {
               if (foundSteps) return; // Stop after first section
               
               const headingText = $(elem).text().toLowerCase();
-              if (headingText.includes('instruction') || headingText.includes('direction') || headingText.includes('step')) {
+              if (headingText.includes('instruction') || headingText.includes('direction') || headingText.includes('step') || headingText.includes('method')) {
+                console.log(`[Recipe Parser] Found instructions heading: "${$(elem).text().trim()}"`);
                 foundSteps = true;
                 
                 // Get the next ol or ul list
                 let list = $(elem).next('ol, ul');
                 if (list.length === 0) {
                   list = $(elem).nextAll('ol, ul').first();
+                }
+                
+                // Also check for Gutenberg blocks
+                if (list.length === 0) {
+                  const gutenberg = $(elem).nextAll('.wp-block-group, .wp-block-list').first();
+                  list = gutenberg.find('ol, ul').first();
                 }
                 
                 if (list.length > 0) {
@@ -1700,20 +1843,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Additional fallback: Look for numbered paragraphs (e.g., "1. Do this", "2. Do that")
-          // This handles sites using simple <p> tags for instructions
+          // Method 4: Look for bold/strong instruction labels in paragraphs
+          if (!foundSteps) {
+            console.log('[Recipe Parser] Trying bold paragraph extraction for instructions (<strong> labels)');
+            $('p strong, p b').each((_, elem) => {
+              if (foundSteps) return;
+              
+              const labelText = $(elem).text().toLowerCase().trim();
+              if (labelText.includes('instruction') || labelText.includes('direction') || labelText.includes('method') || labelText.includes('step')) {
+                console.log(`[Recipe Parser] Found bold instructions label: "${$(elem).text().trim()}"`);
+                foundSteps = true;
+                
+                const paragraph = $(elem).parent();
+                let list = paragraph.find('ul, ol').first();
+                
+                if (list.length === 0) {
+                  list = paragraph.nextAll('ul, ol').first();
+                }
+                
+                // Check for Gutenberg blocks
+                if (list.length === 0) {
+                  const gutenberg = paragraph.nextAll('.wp-block-group, .wp-block-list').first();
+                  list = gutenberg.find('ol, ul').first();
+                }
+                
+                if (list.length > 0) {
+                  list.find('li').each((_, li) => {
+                    const text = $(li).text().trim();
+                    if (text && text.length > 10) {
+                      steps.push(text);
+                    }
+                  });
+                }
+              }
+            });
+          }
+          
+          // Method 5: Look for numbered paragraphs (e.g., "1. Do this", "2. Do that")
           if (!foundSteps || steps.length === 0) {
+            console.log('[Recipe Parser] Trying numbered paragraph extraction for instructions');
             $('.entry-content p, .post-content p, article p').each((_, elem) => {
               const text = $(elem).text().trim();
               // Match paragraphs that start with a number followed by period or parenthesis
               if (text.match(/^\d+[\.)]\s+/)) {
-                // Remove the number prefix for cleaner storage
                 const cleanedText = text.replace(/^\d+[\.)]\s+/, '').trim();
                 if (cleanedText.length > 10) {
+                  if (!foundSteps) {
+                    console.log('[Recipe Parser] Found numbered paragraphs for instructions');
+                    foundSteps = true;
+                  }
                   steps.push(cleanedText);
                 }
               }
             });
+          }
+          
+          // Method 6: Smart scanning for instruction-like content
+          if (!foundSteps) {
+            console.log('[Recipe Parser] Trying keyword-based scanning for instruction lists');
+            const allText = $('.entry-content, .post-content, article').text().toLowerCase();
+            if (allText.includes('instruction') || allText.includes('direction') || allText.includes('method')) {
+              console.log('[Recipe Parser] Found instruction keyword in content, scanning for lists');
+              // Find lists that appear to contain instructions
+              $('.entry-content ol, .post-content ol, article ol').each((_, list) => {
+                if (foundSteps) return;
+                
+                const listItems = $(list).find('li');
+                if (listItems.length >= 2 && listItems.length <= 50) {
+                  // Check if this looks like an instructions list
+                  const firstItem = listItems.first().text().trim();
+                  const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice/i.test(firstItem);
+                  
+                  if (hasInstructionWords || firstItem.length > 20) {
+                    console.log(`[Recipe Parser] Found instruction list with ${listItems.length} items`);
+                    foundSteps = true;
+                    listItems.each((_, li) => {
+                      const text = $(li).text().trim();
+                      if (text && text.length > 10) {
+                        steps.push(text);
+                      }
+                    });
+                  }
+                }
+              });
+            }
           }
           
           // Extract image from .entry-content img or first img
