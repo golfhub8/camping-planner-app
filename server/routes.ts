@@ -3788,6 +3788,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate request
       const data = tripAssistantRequestSchema.parse(req.body);
+      const userId = req.user.claims.sub;
+      
+      // Fetch trip data if tripId is provided to get coordinates
+      let tripLat: number | null = null;
+      let tripLon: number | null = null;
+      let tripLocation: string | null = null;
+      
+      if (data.tripId) {
+        const trip = await storage.getTripById(data.tripId, userId);
+        console.log(`[Trip Assistant] Fetched trip ${data.tripId}:`, trip ? `${trip.location} (${trip.lat}, ${trip.lng})` : 'not found');
+        if (trip && trip.lat && trip.lng) {
+          // Convert string coordinates to numbers
+          tripLat = parseFloat(trip.lat);
+          tripLon = parseFloat(trip.lng);
+          tripLocation = trip.location;
+          console.log(`[Trip Assistant] Parsed coordinates: lat=${tripLat}, lon=${tripLon}, location="${tripLocation}"`);
+        }
+      }
+      
+      // Detect if location is outside the US (National Park Service is US-only)
+      const isOutsideUS = tripLat !== null && tripLon !== null && (
+        tripLon < -168 || tripLon > -65 || // Outside continental US longitude range
+        tripLat < 24 || tripLat > 72 // Outside US latitude range (including Alaska, Hawaii)
+      );
+      
+      console.log(`[Trip Assistant] Geographic check: isOutsideUS=${isOutsideUS}, lat=${tripLat}, lon=${tripLon}`);
       
       // Extract keywords from prompt for basic keyword matching
       const promptLower = data.prompt.toLowerCase();
@@ -3919,12 +3945,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
       
       // Fetch real hiking trails from National Park Service API
-      const trailQuery = hasMountain ? "mountain hiking" : 
-                        hasBeach ? "coastal hiking" :
-                        hasFamily && hasEasy ? "easy family hiking" :
-                        "hiking trail";
+      // Note: NPS API only covers United States locations
+      let trailResult: { trails: any[], warning?: string };
       
-      const trailResult = await fetchNPSTrails(trailQuery, 5);
+      if (isOutsideUS) {
+        // Location is outside the US - NPS doesn't cover international locations
+        console.log(`[NPS API] Skipping trail search - location outside US: ${tripLocation || 'unknown'} (${tripLat}, ${tripLon})`);
+        trailResult = {
+          trails: [],
+          warning: `Hiking trail suggestions are currently limited to United States locations. Your trip location (${tripLocation || 'international'}) is outside our coverage area. We're working on adding international trail data soon!`
+        };
+      } else {
+        // Fetch trails for US locations
+        const trailQuery = hasMountain ? "mountain hiking" : 
+                          hasBeach ? "coastal hiking" :
+                          hasFamily && hasEasy ? "easy family hiking" :
+                          "hiking trail";
+        
+        trailResult = await fetchNPSTrails(trailQuery, 5);
+      }
       
       // Collect warnings from integrations
       const warnings: string[] = [];
