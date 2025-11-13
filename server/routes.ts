@@ -9,6 +9,8 @@ import { load as cheerioLoad } from "cheerio";
 import nodemailer from "nodemailer";
 import { promises as dns } from "dns";
 import * as net from "net";
+import * as path from "path";
+import * as fs from "fs";
 import { initializeEmailService, sendWelcomeToProEmail } from "./emailService";
 
 /**
@@ -716,10 +718,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const now = new Date();
           const endDate = new Date(dbUser.proMembershipEndDate);
           isPro = endDate > now;
+          
+          // Debug logging to track Pro detection
+          console.log(`[Printables] User ${userId} Pro check:`, {
+            proMembershipEndDate: dbUser.proMembershipEndDate,
+            currentDate: now,
+            isPro,
+            daysRemaining: Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          });
+        } else {
+          console.log(`[Printables] User ${userId} has no proMembershipEndDate`);
         }
       } catch (error) {
         console.error("Error checking Pro status:", error);
       }
+    } else {
+      console.log(`[Printables] Anonymous user request`);
     }
 
     const printables = [
@@ -783,6 +797,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     res.json({ printables: visible, user: user ? { isPro } : null });
+  });
+
+  // GET /api/printables/download/:id
+  // Protected endpoint to serve Pro printable PDFs
+  // Requires authentication and Pro membership
+  app.get('/api/printables/download/:id', isAuthenticated, requirePrintableAccess, async (req: any, res) => {
+    const { id } = req.params;
+    
+    // Whitelist mapping of file IDs to actual PDF filenames
+    // This prevents path traversal attacks and ensures only approved files are served
+    const fileMap: Record<string, string> = {
+      'camping-planner-us': 'THE CAMPING PLANNER US LETTER.pdf',
+      'camping-planner-a4': 'THE CAMPING PLANNER A4 SIZE.pdf',
+      'ultimate-planner': 'THE ULTIMATE CAMPING PLANNER US LETTER.pdf',
+      'games-bundle': 'CAMPING GAMES BUNDLE  US LETTER.pdf',
+      'mega-activity-book': 'MEGA CAMPING ACTIVITY BOOK A4.pdf',
+    };
+    
+    const filename = fileMap[id];
+    
+    if (!filename) {
+      console.log(`[Printables] Invalid file ID requested: ${id}`);
+      return res.status(404).json({ error: 'Printable not found' });
+    }
+    
+    const filePath = path.resolve(import.meta.dirname, '../client/public/printables', filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      console.error(`[Printables] File not found on disk: ${filePath}`);
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    console.log(`[Printables] Serving ${filename} to user ${req.user.claims.sub}`);
+    
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Stream the file
+    res.sendFile(filePath);
   });
 
   // Recipe Routes
