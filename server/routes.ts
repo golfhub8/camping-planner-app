@@ -1662,9 +1662,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Method 1b: Try "Ingredients Checklist" table format (TheCampingPlanner.com)
+          // Required format: "Ingredient name — Amount — Notes (optional)"
           if (!foundIngredients) {
             console.log('[Recipe Parser] Checking for Ingredients Checklist table');
-            $('h2, h3, h4').each((_, elem) => {
+            // Check both heading tags AND bold paragraph tags (TheCampingPlanner.com uses <p><strong>)
+            $('h2, h3, h4, p strong, p b').each((_, elem) => {
               if (foundIngredients) return;
               
               const headingText = $(elem).text().toLowerCase();
@@ -1672,32 +1674,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 console.log(`[Recipe Parser] Found ingredients heading: "${$(elem).text().trim()}"`);
                 
                 // Look for a table after this heading
-                const table = $(elem).nextAll('.wp-block-table, table').first();
+                // For <p><strong>, we need to check the parent paragraph's next siblings
+                const searchRoot = $(elem).is('p strong, p b') ? $(elem).parent() : $(elem);
+                const table = searchRoot.nextAll('.wp-block-table, table').first();
                 if (table.length > 0) {
                   console.log('[Recipe Parser] Found ingredients table, extracting data');
                   foundIngredients = true;
                   
                   // Extract ingredients from table rows
-                  table.find('tbody tr').each((_, row) => {
+                  table.find('tbody tr, tr').each((_, row) => {
                     const cells = $(row).find('td');
                     if (cells.length >= 2) {
-                      // Skip header row or checkbox-only rows
+                      // TheCampingPlanner.com table format: [checkbox, ingredient, amount (imperial), metric, notes]
+                      // or simpler format: [ingredient, amount, notes]
+                      
+                      let ingredient = '';
+                      let amount = '';
+                      let notes = '';
+                      
+                      // Check if first cell is a checkbox
                       const firstCell = cells.eq(0).text().trim();
-                      if (firstCell === '☐' || firstCell === '') {
-                        // Table format: [checkbox, ingredient, amount (imperial), metric, notes]
-                        const ingredient = cells.eq(1).text().trim(); // Ingredient name
-                        const amount = cells.eq(2).text().trim();     // Amount (imperial)
-                        const notes = cells.length > 4 ? cells.eq(4).text().trim() : ''; // Notes
+                      if (firstCell === '☐' || firstCell === '' || firstCell === '□') {
+                        // Format with checkbox: [☐, ingredient, amount, metric, notes]
+                        ingredient = cells.eq(1).text().trim();
+                        amount = cells.eq(2).text().trim();
+                        notes = cells.length > 4 ? cells.eq(4).text().trim() : '';
+                      } else {
+                        // Format without checkbox: [ingredient, amount, notes]
+                        ingredient = cells.eq(0).text().trim();
+                        amount = cells.eq(1).text().trim();
+                        notes = cells.length > 2 ? cells.eq(2).text().trim() : '';
+                      }
+                      
+                      // Skip header rows
+                      if (ingredient && ingredient !== 'Ingredient' && ingredient !== '☐') {
+                        // Format: "Ingredient name — Amount — Notes (optional)"
+                        let ingredientText = ingredient;
                         
-                        if (ingredient && ingredient !== 'Ingredient') {
-                          // Combine amount + ingredient + notes
-                          let ingredientText = '';
-                          if (amount && amount !== '—') ingredientText += amount + ' ';
-                          ingredientText += ingredient;
-                          if (notes && notes !== '—') ingredientText += ' (' + notes + ')';
-                          
-                          ingredients.push(ingredientText.trim());
+                        if (amount && amount !== '—' && amount !== '' && amount !== 'Amount') {
+                          ingredientText += ' — ' + amount;
                         }
+                        
+                        if (notes && notes !== '—' && notes !== '' && notes !== 'Notes') {
+                          ingredientText += ' — ' + notes;
+                        }
+                        
+                        ingredients.push(ingredientText);
                       }
                     }
                   });
@@ -1821,20 +1843,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const steps: string[] = [];
           let foundSteps = false;
           
-          // Method 1: Try WordPress Recipe Maker (WPRM) plugin selectors first
-          const wprmSteps = $('.wprm-recipe-instruction-text');
-          if (wprmSteps.length > 0) {
-            console.log(`[Recipe Parser] Found ${wprmSteps.length} WPRM instruction steps`);
-            wprmSteps.each((_, elem) => {
-              const text = $(elem).text().trim();
-              if (text && text.length > 10) {
-                steps.push(text);
+          // Method 1: TheCampingPlanner.com specific - extract from "Home Prep Before the Trip" and "Cooking at Camp" sections
+          // This must run first to avoid generic fallbacks capturing random content
+          const homePrepHeading = $('h2, h3, h4').filter((_, elem) => {
+            const text = $(elem).text().toLowerCase();
+            return text.includes('home prep') || text.includes('prep before');
+          }).first();
+          
+          const cookingAtCampHeading = $('h2, h3, h4').filter((_, elem) => {
+            const text = $(elem).text().toLowerCase();
+            return text.includes('cooking at camp') || text.includes('at camp');
+          }).first();
+          
+          if (homePrepHeading.length > 0 || cookingAtCampHeading.length > 0) {
+            console.log('[Recipe Parser] TheCampingPlanner.com specific instruction extraction');
+            
+            // Extract Home Prep steps
+            if (homePrepHeading.length > 0) {
+              console.log(`[Recipe Parser] Found "Home Prep" heading: "${homePrepHeading.text().trim()}"`);
+              let prepList = homePrepHeading.next('ol, ul');
+              if (prepList.length === 0) {
+                prepList = homePrepHeading.nextAll('ol, ul').first();
               }
-            });
-            foundSteps = true;
+              // Check Gutenberg blocks too
+              if (prepList.length === 0) {
+                const gutenberg = homePrepHeading.nextAll('.wp-block-group, .wp-block-list').first();
+                prepList = gutenberg.find('ol, ul').first();
+              }
+              
+              if (prepList.length > 0) {
+                prepList.find('li').each((_, li) => {
+                  let text = $(li).text().trim();
+                  // Strip leading numbers (e.g., "1. " or "1) ")
+                  text = text.replace(/^\d+[\.)]\s*/, '');
+                  if (text && text.length > 10) {
+                    steps.push(text);
+                    foundSteps = true;
+                  }
+                });
+                console.log(`[Recipe Parser] Extracted ${steps.length} Home Prep steps`);
+              }
+            }
+            
+            // Extract Cooking at Camp steps
+            if (cookingAtCampHeading.length > 0) {
+              console.log(`[Recipe Parser] Found "Cooking at Camp" heading: "${cookingAtCampHeading.text().trim()}"`);
+              let campList = cookingAtCampHeading.next('ol, ul');
+              if (campList.length === 0) {
+                campList = cookingAtCampHeading.nextAll('ol, ul').first();
+              }
+              // Check Gutenberg blocks too
+              if (campList.length === 0) {
+                const gutenberg = cookingAtCampHeading.nextAll('.wp-block-group, .wp-block-list').first();
+                campList = gutenberg.find('ol, ul').first();
+              }
+              
+              if (campList.length > 0) {
+                const beforeCampCount = steps.length;
+                campList.find('li').each((_, li) => {
+                  let text = $(li).text().trim();
+                  // Strip leading numbers
+                  text = text.replace(/^\d+[\.)]\s*/, '');
+                  if (text && text.length > 10) {
+                    steps.push(text);
+                    foundSteps = true;
+                  }
+                });
+                console.log(`[Recipe Parser] Extracted ${steps.length - beforeCampCount} Cooking at Camp steps`);
+              }
+            }
+            
+            if (foundSteps) {
+              console.log(`[Recipe Parser] TheCampingPlanner.com: Combined ${steps.length} total instruction steps`);
+            }
           }
           
-          // Method 2: Try Tasty Recipes plugin selectors
+          // Method 2: Try WordPress Recipe Maker (WPRM) plugin selectors
+          if (!foundSteps) {
+            const wprmSteps = $('.wprm-recipe-instruction-text');
+            if (wprmSteps.length > 0) {
+              console.log(`[Recipe Parser] Found ${wprmSteps.length} WPRM instruction steps`);
+              wprmSteps.each((_, elem) => {
+                const text = $(elem).text().trim();
+                if (text && text.length > 10) {
+                  steps.push(text);
+                }
+              });
+              foundSteps = true;
+            }
+          }
+          
+          // Method 3: Try Tasty Recipes plugin selectors
           if (!foundSteps) {
             const tastySteps = $('.tasty-recipes-instructions li');
             if (tastySteps.length > 0) {
@@ -1849,7 +1948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          // Method 3: Heading-based search
+          // Method 4: Heading-based search (generic instructions/directions/steps)
           if (!foundSteps) {
             console.log('[Recipe Parser] Trying heading-based extraction for instructions (h2/h3/h4)');
             $('h2, h3, h4').each((_, elem) => {
@@ -1884,7 +1983,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Method 4: Look for bold/strong instruction labels in paragraphs
+          // Method 5: Look for bold/strong instruction labels in paragraphs
           if (!foundSteps) {
             console.log('[Recipe Parser] Trying bold paragraph extraction for instructions (<strong> labels)');
             $('p strong, p b').each((_, elem) => {
@@ -1920,7 +2019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Method 5: Look for numbered paragraphs (e.g., "1. Do this", "2. Do that")
+          // Method 6: Look for numbered paragraphs (e.g., "1. Do this", "2. Do that")
           if (!foundSteps || steps.length === 0) {
             console.log('[Recipe Parser] Trying numbered paragraph extraction for instructions');
             $('.entry-content p, .post-content p, article p').each((_, elem) => {
@@ -1939,9 +2038,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Method 6: TheCampingPlanner.com specific - check for Gutenberg column blocks
+          // Method 7: Check for Gutenberg column blocks (fallback for other sites)
           if (!foundSteps) {
-            console.log('[Recipe Parser] Trying TheCampingPlanner.com Gutenberg column block extraction');
+            console.log('[Recipe Parser] Trying Gutenberg column block extraction');
             // Look for instructions inside .wp-block-columns wrapper
             $('.wp-block-columns').each((_, columnBlock) => {
               if (foundSteps) return;
@@ -1971,7 +2070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Method 7: Check .wp-block-list class (WordPress Gutenberg list blocks)
+          // Method 8: Check .wp-block-list class (WordPress Gutenberg list blocks)
           if (!foundSteps) {
             console.log('[Recipe Parser] Trying .wp-block-list extraction');
             $('.wp-block-list').each((_, listBlock) => {
@@ -1996,7 +2095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          // Method 8: Smart scanning for instruction-like content (generic fallback)
+          // Method 9: Smart scanning for instruction-like content (generic fallback)
           if (!foundSteps) {
             console.log('[Recipe Parser] Trying keyword-based scanning for instruction lists');
             const allText = $('.entry-content, .post-content, article').text().toLowerCase();

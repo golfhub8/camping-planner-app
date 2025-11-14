@@ -1,0 +1,125 @@
+When a user clicks Save Recipe, the parser incorrectly extracts ingredients and instructions. It’s currently scraping random paragraphs instead of the structured recipe sections.
+
+Goal:
+Parse recipe data accurately from TheCampingPlanner.com posts using the recipe’s built-in structured sections:
+
+✔ Must Pull Ingredients From:
+Section Title: “Ingredients Checklist”
+
+Located inside the HTML block that renders the table.
+
+The parser should extract:
+
+Ingredient name
+
+Amount
+
+Notes
+
+⚡ Final format inserted into the app should be:
+
+Ingredient — Amount — Notes (optional)
+
+
+Example:
+
+Steak (sirloin or ribeye) — 1 lb
+Baby potatoes — 1 lb — Halved
+Olive oil — 3 tbsp
+Butter — 2 tbsp — For potatoes
+Garlic — 2 cloves — For chimichurri
+Fresh parsley — ½ cup — Chopped
+Red wine vinegar — 1 tbsp
+Chili flakes — pinch — Optional heat
+Salt & pepper — to taste
+
+✔ Must Pull Instructions From Two Sections:
+
+“Home Prep Before the Trip”
+
+“Cooking at Camp”
+
+The app should combine these two into a single ordered instruction list.
+
+⚡ Format for the final instructions should be:
+
+Step 1...
+Step 2...
+Step 3...
+
+
+Pull each numbered item as a separate step.
+
+🔍 HTML Structure to Target
+
+Tell your developer to scrape based on these selectors (these are consistent on all recipe pages):
+
+Ingredients
+<div class="wp-block-table"> … table rows … </div>
+
+
+or detect table following an <h2> or <h3> containing:
+
+“Ingredients Checklist”
+
+“Ingredients”
+
+Instructions Sections
+
+Home Prep Before the Trip
+
+<h2>Home Prep Before the Trip</h2>
+<ol> … list items … </ol>
+
+
+Cooking at Camp
+
+<h2>Cooking at Camp</h2>
+<ol> … list items … </ol>
+
+❗Important: Do NOT Parse Sections Outside These Zones
+
+Ignore:
+
+Ads
+
+Intro paragraphs
+
+Image captions
+
+SEO snippets
+
+Nutritional info
+
+Suggested recipe links
+
+Only parse the three areas listed above.
+
+🚀 Expected Behavior After Fix
+
+When clicking Save Recipe:
+
+✔ Ingredients field auto-fills with correct items
+✔ Instructions field shows combined prep + camp steps
+✔ No more random or irrelevant text
+✔ All recipes on the site import correctly
+✔ User doesn’t have to manually adjust anything
+📌 Developer Checklist (copy/paste)
+
+ Update recipe parser to target Ingredients Checklist table
+
+ Normalize ingredient rows into “name — amount — notes”
+
+ Extract both instruction groups by heading text
+
+ Combine into one ordered list
+
+ Load results into the Save Recipe modal
+
+ Add fallback error if sections are missing
+
+ Test all 10–12 existing recipe posts
+
+ Ensure grocery list categorization still works
+
+ Deploy to test instance before production
