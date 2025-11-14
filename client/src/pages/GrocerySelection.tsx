@@ -30,11 +30,12 @@ export default function GrocerySelection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState<Step>(Step.SELECTION);
-  const [selectedRecipeIds, setSelectedRecipeIds] = useState<number[]>([]);
-  const [manuallySelectedRecipeIds, setManuallySelectedRecipeIds] = useState<Set<number>>(new Set());
+  // Single source of truth: all selected recipe IDs (from trip meals + manual selections)
+  const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<number>>(new Set());
   const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [selectedTripMealIds, setSelectedTripMealIds] = useState<number[]>([]);
   const [externalMealsTitles, setExternalMealsTitles] = useState<string[]>([]);
+  // Map trip meal IDs to their recipe IDs for syncing
   const [tripMealRecipeIds, setTripMealRecipeIds] = useState<Map<number, number>>(new Map());
   
   // Confirmation step state
@@ -99,6 +100,48 @@ export default function GrocerySelection() {
     });
   };
 
+  // Sync trip meals with selected recipes when trip meals data changes
+  // This ensures bidirectional sync even when trip meals load after recipes are selected
+  useEffect(() => {
+    if (!tripMeals || tripMeals.length === 0) return;
+    
+    // Build lists of meals to select
+    const mealsToSelect: number[] = [];
+    const recipeIdsToMap = new Map<number, number>(); // meal.id -> recipe.id
+    
+    // For each selected recipe, find matching trip meals that aren't already selected
+    selectedRecipeIds.forEach(recipeId => {
+      const matchingMeals = tripMeals.filter(meal => meal.recipeId === recipeId);
+      
+      matchingMeals.forEach(meal => {
+        mealsToSelect.push(meal.id);
+        recipeIdsToMap.set(meal.id, recipeId);
+      });
+    });
+    
+    if (mealsToSelect.length > 0) {
+      // Batch update selected trip meals
+      setSelectedTripMealIds(prevMealIds => {
+        const newMealIds = [...prevMealIds];
+        mealsToSelect.forEach(mealId => {
+          if (!newMealIds.includes(mealId)) {
+            newMealIds.push(mealId);
+          }
+        });
+        return newMealIds;
+      });
+      
+      // Batch update tripMealRecipeIds map
+      setTripMealRecipeIds(prevMap => {
+        const newMap = new Map(prevMap);
+        recipeIdsToMap.forEach((recipeId, mealId) => {
+          newMap.set(mealId, recipeId);
+        });
+        return newMap;
+      });
+    }
+  }, [tripMeals]);
+
   // Check for pending grocery items from RecipeDetail on mount
   useEffect(() => {
     const pendingData = sessionStorage.getItem('pendingGroceryItems');
@@ -119,9 +162,8 @@ export default function GrocerySelection() {
           });
           
           // Auto-select the recipe from TripDetail
-          if (data.recipeId && !selectedRecipeIds.includes(data.recipeId)) {
-            setSelectedRecipeIds(prev => [...prev, data.recipeId]);
-            setManuallySelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
+          if (data.recipeId && !selectedRecipeIds.has(data.recipeId)) {
+            setSelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
           }
         } else if (data.recipeId !== undefined && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
           // Minimal payload from RecipeDetail/IngredientPicker: use ONLY selected ingredients
@@ -133,9 +175,8 @@ export default function GrocerySelection() {
           });
           
           // Auto-select the recipe (recipeId can be 0 for external recipes)
-          if (!selectedRecipeIds.includes(data.recipeId)) {
-            setSelectedRecipeIds(prev => [...prev, data.recipeId]);
-            setManuallySelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
+          if (!selectedRecipeIds.has(data.recipeId)) {
+            setSelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
           }
         }
         // DON'T clear pending data here - it will be cleared when user proceeds to confirmation
@@ -148,52 +189,95 @@ export default function GrocerySelection() {
   }, []);
 
   function toggleRecipe(recipeId: number) {
-    const isManuallySelected = manuallySelectedRecipeIds.has(recipeId);
-    
-    if (isManuallySelected) {
-      setManuallySelectedRecipeIds(prevManual => {
-        const newManual = new Set(prevManual);
-        newManual.delete(recipeId);
-        return newManual;
-      });
+    setSelectedRecipeIds(prev => {
+      const newSelected = new Set(prev);
       
-      const isInTripMeals = Array.from(tripMealRecipeIds.values()).includes(recipeId);
-      
-      if (!isInTripMeals) {
-        setSelectedRecipeIds(prev => prev.filter(id => id !== recipeId));
+      if (newSelected.has(recipeId)) {
+        // Deselecting: remove from selected recipes
+        newSelected.delete(recipeId);
+        
+        // Also deselect from trip meals if it was selected there
+        setSelectedTripMealIds(prevMealIds => {
+          // Find all trip meals that use this recipe
+          const mealIdsToRemove = prevMealIds.filter(mealId => 
+            tripMealRecipeIds.get(mealId) === recipeId
+          );
+          
+          // Remove those meals from selection
+          if (mealIdsToRemove.length > 0) {
+            setTripMealRecipeIds(prevMap => {
+              const newMap = new Map(prevMap);
+              mealIdsToRemove.forEach(mealId => newMap.delete(mealId));
+              return newMap;
+            });
+            return prevMealIds.filter(id => !mealIdsToRemove.includes(id));
+          }
+          return prevMealIds;
+        });
         
         // Clear recipeDetailIngredients if this was the recipe from RecipeDetail
         if (recipeDetailIngredients && recipeDetailIngredients.recipeId === recipeId) {
           setRecipeDetailIngredients(null);
         }
-      }
-    } else {
-      setManuallySelectedRecipeIds(prevManual => new Set(prevManual).add(recipeId));
-      
-      setSelectedRecipeIds(prev => {
-        if (!prev.includes(recipeId)) {
-          return [...prev, recipeId];
+      } else {
+        // Selecting: add to selected recipes
+        newSelected.add(recipeId);
+        
+        // Also select matching trip meals (bidirectional sync)
+        if (tripMeals.length > 0) {
+          const matchingMeals = tripMeals.filter(meal => meal.recipeId === recipeId);
+          
+          if (matchingMeals.length > 0) {
+            // Batch update selected trip meals
+            setSelectedTripMealIds(prevMealIds => {
+              const newMealIds = [...prevMealIds];
+              matchingMeals.forEach(meal => {
+                if (!newMealIds.includes(meal.id)) {
+                  newMealIds.push(meal.id);
+                }
+              });
+              return newMealIds;
+            });
+            
+            // Batch update tripMealRecipeIds map
+            setTripMealRecipeIds(prevMap => {
+              const newMap = new Map(prevMap);
+              matchingMeals.forEach(meal => {
+                newMap.set(meal.id, recipeId);
+              });
+              return newMap;
+            });
+          }
         }
-        return prev;
-      });
-    }
+      }
+      
+      return newSelected;
+    });
   }
 
   function toggleTripMeal(mealId: number, meal: any) {
     setSelectedTripMealIds((prev) => {
       if (prev.includes(mealId)) {
+        // Deselecting trip meal
         if (meal.isExternal && !meal.recipeId) {
+          // External meal without recipe - remove title
           setExternalMealsTitles(prevTitles => prevTitles.filter(t => t !== meal.title));
         } else if (meal.recipeId) {
+          // Internal meal with recipe
           setTripMealRecipeIds(prevMap => {
             const newMap = new Map(prevMap);
             newMap.delete(mealId);
             
-            const wasManuallySelected = manuallySelectedRecipeIds.has(meal.recipeId);
+            // Check if this recipe is still used by other trip meals
             const stillInOtherMeals = Array.from(newMap.values()).includes(meal.recipeId);
             
-            if (!wasManuallySelected && !stillInOtherMeals) {
-              setSelectedRecipeIds(prevIds => prevIds.filter(id => id !== meal.recipeId));
+            // If not used by other meals, remove from selected recipes
+            if (!stillInOtherMeals) {
+              setSelectedRecipeIds(prevIds => {
+                const newSelected = new Set(prevIds);
+                newSelected.delete(meal.recipeId);
+                return newSelected;
+              });
             }
             
             return newMap;
@@ -201,14 +285,17 @@ export default function GrocerySelection() {
         }
         return prev.filter(id => id !== mealId);
       } else {
+        // Selecting trip meal
         if (meal.isExternal && !meal.recipeId) {
+          // External meal without recipe - add title
           setExternalMealsTitles(prevTitles => [...prevTitles, meal.title]);
         } else if (meal.recipeId) {
-          const wasAlreadySelected = selectedRecipeIds.includes(meal.recipeId);
-          
-          if (!wasAlreadySelected) {
-            setSelectedRecipeIds(prevIds => [...prevIds, meal.recipeId]);
-          }
+          // Internal meal with recipe - add to selected recipes
+          setSelectedRecipeIds(prevIds => {
+            const newSelected = new Set(prevIds);
+            newSelected.add(meal.recipeId);
+            return newSelected;
+          });
           
           setTripMealRecipeIds(prevMap => {
             const newMap = new Map(prevMap);
@@ -229,7 +316,7 @@ export default function GrocerySelection() {
   // 3. External trip meals (WordPress recipes - prefetched via React Query)
   // 4. RecipeDetail/TripDetail payloads (from ingredient picker modal)
   function proceedToConfirmation() {
-    if (selectedRecipeIds.length === 0 && externalMealsTitles.length === 0) return;
+    if (selectedRecipeIds.size === 0 && externalMealsTitles.length === 0) return;
     
     // Block navigation if external ingredients are still loading
     if (externalIngredientsLoading) {
@@ -257,7 +344,7 @@ export default function GrocerySelection() {
     let alreadyHaveSet = new Set<string>();
     
     // Gather ingredients from selected internal recipes
-    const recipeIngredients = selectedRecipeIds
+    const recipeIngredients = Array.from(selectedRecipeIds)
       .map(id => {
         // Check if this is the recipe from RecipeDetail/TripDetail
         if (recipeDetailIngredients && recipeDetailIngredients.recipeId === id) {
@@ -312,7 +399,7 @@ export default function GrocerySelection() {
     // LOG AGGREGATION SUMMARY for verification
     console.info(`[GroceryAggregation] === MULTI-MEAL AGGREGATION SUMMARY ===`);
     console.info(`[GroceryAggregation] Processing ${recipeIngredients.length} meals/recipes total`);
-    console.info(`[GroceryAggregation] - Internal recipes: ${selectedRecipeIds.length}`);
+    console.info(`[GroceryAggregation] - Internal recipes: ${selectedRecipeIds.size}`);
     console.info(`[GroceryAggregation] - External meals: ${selectedExternalMeals.length}`);
     console.info(`[GroceryAggregation] - From ingredient picker: ${recipeDetailIngredients ? 1 : 0}`);
     
@@ -491,7 +578,7 @@ export default function GrocerySelection() {
       return false;
     }
   })();
-  const hasSelectedRecipes = selectedRecipeIds.length > 0;
+  const hasSelectedRecipes = selectedRecipeIds.size > 0;
   
   // Only show "No Recipes Yet" if user has no recipes AND no pending items from ingredient picker
   if (!recipes || (recipes.length === 0 && !hasPendingGroceryItems && !hasSelectedRecipes)) {
@@ -752,7 +839,8 @@ export default function GrocerySelection() {
           </CardHeader>
           <CardContent className="space-y-3">
             {recipes.map((recipe) => {
-              const isManuallySelected = manuallySelectedRecipeIds.has(recipe.id);
+              // Single source of truth: check if recipe is in selectedRecipeIds
+              const isSelected = selectedRecipeIds.has(recipe.id);
               const isInTripMeals = Array.from(tripMealRecipeIds.values()).includes(recipe.id);
               
               return (
@@ -763,7 +851,7 @@ export default function GrocerySelection() {
                 >
                   <Checkbox
                     id={`recipe-${recipe.id}`}
-                    checked={isManuallySelected}
+                    checked={isSelected}
                     onCheckedChange={() => toggleRecipe(recipe.id)}
                     data-testid={`checkbox-recipe-${recipe.id}`}
                   />
@@ -776,7 +864,7 @@ export default function GrocerySelection() {
                       <Badge variant="secondary" className="text-xs">
                         {recipe.ingredients.length} ingredients
                       </Badge>
-                      {isInTripMeals && !isManuallySelected && (
+                      {isInTripMeals && (
                         <Badge variant="outline" className="text-xs">
                           In trip meals
                         </Badge>
@@ -821,7 +909,7 @@ export default function GrocerySelection() {
           <Button
             onClick={proceedToConfirmation}
             disabled={
-              (selectedRecipeIds.length === 0 && externalMealsTitles.length === 0) ||
+              (selectedRecipeIds.size === 0 && externalMealsTitles.length === 0) ||
               externalIngredientsLoading
             }
             className="gap-2"
@@ -836,8 +924,8 @@ export default function GrocerySelection() {
               <>
                 <ShoppingCart className="h-4 w-4" />
                 Continue to Review
-                {(selectedRecipeIds.length > 0 || externalMealsTitles.length > 0) &&
-                  ` (${selectedRecipeIds.length + externalMealsTitles.length})`}
+                {(selectedRecipeIds.size > 0 || externalMealsTitles.length > 0) &&
+                  ` (${selectedRecipeIds.size + externalMealsTitles.length})`}
               </>
             )}
           </Button>

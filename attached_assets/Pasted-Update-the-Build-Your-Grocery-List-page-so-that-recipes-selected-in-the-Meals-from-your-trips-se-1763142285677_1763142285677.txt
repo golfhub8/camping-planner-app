@@ -1,0 +1,90 @@
+Update the “Build Your Grocery List” page so that recipes selected in the “Meals from your trips” section are correctly included in the grocery list and stay in sync with the “Select Recipes” section.
+
+Current issue
+
+On /grocery (Build Your Grocery List):
+
+I choose a trip in “Meals from your trips” (e.g., “Edmonton”).
+
+I tick 3 meals in that top list.
+
+In the “Select Recipes” section below, those same recipes are not checked automatically.
+
+When I click “Build / View Grocery List” (or equivalent), the resulting grocery list does not include all ingredients from the 3 selected trip meals.
+
+Visually, the top section and bottom section behave like two unrelated lists, but the user expects them to be merged.
+
+Desired behavior
+
+Single source of truth for selected recipes
+
+Maintain one state array like selectedRecipeIds for the page.
+
+Both:
+
+checkboxes in “Meals from your trips”, and
+
+checkboxes in “Select Recipes”
+must read from and write to this same array.
+
+Sync top and bottom sections
+
+When I select or deselect a meal in “Meals from your trips”, the matching recipe in “Select Recipes” must also become selected/deselected (and vice versa).
+
+The recipe objects are the same logical recipe, even if they come from different lists (trip meals vs library), so use a stable ID (recipe.id or externalId) to key them.
+
+Grocery list generation
+
+When the user clicks the button to build the grocery list:
+
+Use all IDs in selectedRecipeIds (regardless of which section they were chosen from).
+
+Fetch their ingredients from the saved recipe data.
+
+Merge and categorize them as normal into the grocery list (Pantry, Dairy, Meat, etc.).
+
+Edge cases
+
+If a trip has no meals, the “Meals from your trips” list should show an appropriate message.
+
+If no recipes are selected at all (top or bottom), show a friendly error/toast like:
+
+“Please select at least one meal to build your grocery list.”
+
+If the same recipe appears both as a trip meal and in the “Select Recipes” library, selecting it from either place should not duplicate its ingredients. It should only appear once in selectedRecipeIds.
+
+Implementation notes
+
+Refactor any local state like selectedTripMeals vs selectedRecipes into a single selectedRecipeIds array (or a map of IDs to boolean), used by both sections.
+
+In the JSX:
+
+Each checkbox should be checked if selectedRecipeIds.includes(recipe.id).
+
+On change, toggle that ID in selectedRecipeIds.
+
+In the grocery-building logic:
+
+Take selectedRecipeIds as input.
+
+Map to recipe objects.
+
+Combine all recipe.ingredients into the grocery list.
+
+Acceptance tests
+
+Choose a trip (e.g., Edmonton), tick 3 meals in “Meals from your trips”.
+
+Those 3 recipes are automatically marked as selected in “Select Recipes”.
+
+Building the grocery list shows ingredients from all 3 meals.
+
+Deselect 1 of those meals in “Select Recipes”.
+
+The corresponding checkbox in “Meals from your trips” is also unchecked.
+
+Grocery list updates to only include the remaining 2 meals.
+
+Select a recipe only from “Select Recipes” (not in the trip).
+
+Grocery list correctly includes that meal plus any selected trip meals.
