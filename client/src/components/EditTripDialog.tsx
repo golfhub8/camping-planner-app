@@ -184,23 +184,30 @@ export default function EditTripDialog({ trip, open, onOpenChange }: EditTripDia
               <FormField
                 control={form.control}
                 name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End Date</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        value={formatDateForInput(field.value)}
-                        onChange={(e) => {
-                          const dateValue = e.target.value ? new Date(e.target.value) : undefined;
-                          field.onChange(dateValue);
-                        }}
-                        data-testid="input-edit-end-date"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  // Watch start date to set minimum end date
+                  const startDate = form.watch('startDate');
+                  const minEndDate = startDate ? formatDateForInput(startDate) : undefined;
+                  
+                  return (
+                    <FormItem>
+                      <FormLabel>End Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          value={formatDateForInput(field.value)}
+                          onChange={(e) => {
+                            const dateValue = e.target.value ? new Date(e.target.value) : undefined;
+                            field.onChange(dateValue);
+                          }}
+                          min={minEndDate}
+                          data-testid="input-edit-end-date"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 

@@ -43,6 +43,18 @@ export default function Subscribe() {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Network error" }));
+        
+        // Handle 409 Conflict - user already has an active subscription
+        if (response.status === 409 && errorData.portalUrl) {
+          toast({
+            title: "Already subscribed",
+            description: "You already have an active subscription. Redirecting to your billing portal...",
+          });
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          window.location.href = errorData.portalUrl;
+          return;
+        }
+        
         throw new Error(errorData.error || "Failed to create checkout session");
       }
       

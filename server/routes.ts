@@ -3399,6 +3399,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Checkout] Creating checkout session for user: ${userId} (${user.email})`);
 
+      // Prevent duplicate subscriptions - always check Stripe API for existing customers
+      // to catch cancel_at_period_end and other edge cases that cached status misses
+      const blockedStatuses = ['active', 'trialing', 'past_due'];
+      
+      if (user.stripeCustomerId) {
+        try {
+          console.log(`[Checkout] Verifying subscription status with Stripe for customer: ${user.stripeCustomerId}`);
+          const subscriptions = await stripe.subscriptions.list({
+            customer: user.stripeCustomerId,
+            status: 'all',
+            limit: 100, // Increased limit to catch older active subscriptions
+          });
+          
+          // Check for any active/trialing/past_due subscriptions
+          // Block ALL active subscriptions, including those with cancel_at_period_end
+          // (users should resume via billing portal, not create duplicate subscriptions)
+          const activeSubscription = subscriptions.data.find(sub => 
+            blockedStatuses.includes(sub.status)
+          );
+          
+          if (activeSubscription) {
+            const isCancelScheduled = activeSubscription.cancel_at_period_end;
+            console.log(`[Checkout] Found ${activeSubscription.status} subscription${isCancelScheduled ? ' (scheduled for cancellation)' : ''} - blocking checkout`);
+            
+            // Update local cache to prevent future API calls
+            await storage.updateSubscriptionStatus(userId, activeSubscription.status);
+            
+            // Generate billing portal URL (fail gracefully if portal creation fails)
+            let portalUrl: string | undefined;
+            try {
+              const baseUrl = `${req.protocol}://${req.get('host')}`;
+              const portal = await stripe.billingPortal.sessions.create({
+                customer: user.stripeCustomerId,
+                return_url: `${baseUrl}/account`,
+              });
+              portalUrl = portal.url;
+            } catch (portalError) {
+              console.error("[Checkout] Failed to create billing portal URL:", portalError);
+              // Continue without portal URL - still block checkout
+            }
+            
+            // Provide helpful message based on subscription state
+            const errorMessage = isCancelScheduled
+              ? "You have a subscription scheduled for cancellation. You can resume it anytime before it ends via your billing portal."
+              : "You already have an active subscription";
+            
+            // Always return 409, even if portal creation failed
+            return res.status(409).json({ 
+              error: errorMessage,
+              portalUrl,
+            });
+          }
+          
+          // Update cache based on most recent subscription
+          // Sort by created date to get the latest subscription
+          if (subscriptions.data.length > 0) {
+            const sortedSubs = subscriptions.data.sort((a, b) => b.created - a.created);
+            const mostRecentSub = sortedSubs[0];
+            
+            // If most recent subscription is ended and cache shows active, clear it
+            if (['canceled', 'incomplete_expired', 'unpaid'].includes(mostRecentSub.status) && 
+                user.subscriptionStatus && 
+                blockedStatuses.includes(user.subscriptionStatus)) {
+              console.log(`[Checkout] Clearing stale subscription status - most recent sub is ${mostRecentSub.status}, cache was ${user.subscriptionStatus}`);
+              await storage.updateSubscriptionStatus(userId, null);
+            }
+          }
+        } catch (stripeError: any) {
+          console.error("[Checkout] Error verifying subscription with Stripe:", stripeError);
+          // Continue with checkout creation if Stripe API fails
+        }
+      }
+
       // Get return path from request body, default to /account
       const { returnPath = '/account' } = req.body || {};
       
@@ -3932,7 +4005,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to fetch hiking trails from National Park Service API
   // Returns structured result with trails and optional warning message
-  async function fetchNPSTrails(query: string, limit: number = 5): Promise<{ trails: any[], warning?: string }> {
+  async function fetchNPSTrails(
+    query: string, 
+    limit: number = 5, 
+    coordinates?: { lat: number; lon: number }
+  ): Promise<{ trails: any[], warning?: string }> {
     const NPS_API_KEY = process.env.NPS_API_KEY;
     
     if (!NPS_API_KEY) {
@@ -3944,7 +4021,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
-      const url = `https://developer.nps.gov/api/v1/thingstodo?q=${encodeURIComponent(query)}&limit=${limit}&api_key=${NPS_API_KEY}`;
+      let parkCodes: string[] = [];
+      
+      // If coordinates are provided, find nearby parks first
+      if (coordinates) {
+        try {
+          console.log(`[NPS API] Finding parks near coordinates: ${coordinates.lat}, ${coordinates.lon}`);
+          const parksUrl = `https://developer.nps.gov/api/v1/parks?latLong=${coordinates.lat},${coordinates.lon}&radius=100&limit=10&api_key=${NPS_API_KEY}`;
+          const parksResponse = await fetch(parksUrl);
+          
+          if (parksResponse.ok) {
+            const parksData = await parksResponse.json();
+            parkCodes = (parksData.data || [])
+              .filter((park: any) => park.parkCode)
+              .map((park: any) => park.parkCode);
+            
+            console.log(`[NPS API] Found ${parkCodes.length} parks near location:`, parkCodes.join(', '));
+          } else {
+            console.warn(`[NPS API] Park search failed with status ${parksResponse.status}, falling back to keyword search`);
+          }
+        } catch (parkError) {
+          console.error("[NPS API] Error finding nearby parks, falling back to keyword search:", parkError);
+        }
+      }
+      
+      // Build Things To Do API URL with optional parkCode filter
+      let url = `https://developer.nps.gov/api/v1/thingstodo?q=${encodeURIComponent(query)}&limit=${limit}`;
+      
+      // Add parkCode filter if we found nearby parks
+      if (parkCodes.length > 0) {
+        url += `&parkCode=${parkCodes.join(',')}`;
+        console.log(`[NPS API] Searching trails in parks: ${parkCodes.join(', ')}`);
+      } else {
+        console.log(`[NPS API] No nearby parks found, using keyword-only search`);
+      }
+      
+      url += `&api_key=${NPS_API_KEY}`;
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -4226,13 +4338,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           warning: `Hiking trail suggestions are currently limited to United States locations. Your trip location (${tripLocation || 'international'}) is outside our coverage area. We're working on adding international trail data soon!`
         };
       } else {
-        // Fetch trails for US locations
+        // Fetch trails for US locations using trip coordinates
         const trailQuery = hasMountain ? "mountain hiking" : 
                           hasBeach ? "coastal hiking" :
                           hasFamily && hasEasy ? "easy family hiking" :
                           "hiking trail";
         
-        trailResult = await fetchNPSTrails(trailQuery, 5);
+        // Pass coordinates if available for location-aware search
+        const coords = (tripLat !== null && tripLon !== null) 
+          ? { lat: tripLat, lon: tripLon }
+          : undefined;
+        
+        trailResult = await fetchNPSTrails(trailQuery, 5, coords);
       }
       
       // Collect warnings from integrations

@@ -37,6 +37,20 @@ export default function SubscribeButton({
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: "Network error" }));
         console.error("[SubscribeButton] Error response:", errorData);
+        
+        // Handle 409 Conflict - user already has an active subscription
+        if (res.status === 409 && errorData.portalUrl) {
+          console.log("[SubscribeButton] User already has subscription, redirecting to billing portal");
+          toast({
+            title: "Already subscribed",
+            description: "You already have an active subscription. Redirecting to your billing portal...",
+          });
+          setTimeout(() => {
+            window.location.href = errorData.portalUrl;
+          }, 1000);
+          return;
+        }
+        
         toast({
           title: "Error",
           description: errorData.error || "Failed to start checkout",
