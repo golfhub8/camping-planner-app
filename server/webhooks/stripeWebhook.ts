@@ -9,6 +9,7 @@ import {
   sendTrialStartedEmail,
   sendTrialEndingSoonEmail,
   sendCancellationEmail,
+  sendAdminNewSignupNotification,
 } from "../emails";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -216,6 +217,18 @@ async function handleCheckoutCompleted(
       'Welcome to Pro'
     );
   }
+  
+  // Send admin notification about new Pro signup
+  await safelySendEmail(
+    () => sendAdminNewSignupNotification({
+      userEmail: user.email!,
+      userName,
+      signupTime: new Date(),
+      subscriptionId: session.subscription as string,
+      renewalDate: endDate,
+    }),
+    'Admin New Signup Notification'
+  );
 }
 
 // Event Handler: invoice.payment_succeeded

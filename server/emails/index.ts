@@ -4,3 +4,4 @@ export { sendPaymentFailedEmail } from "./paymentFailed";
 export { sendTrialStartedEmail } from "./trialStarted";
 export { sendTrialEndingSoonEmail } from "./trialEndingSoon";
 export { sendCancellationEmail } from "./cancellation";
+export { sendAdminNewSignupNotification } from "./adminNewSignupNotification";
