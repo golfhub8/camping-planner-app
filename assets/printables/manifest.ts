@@ -50,21 +50,21 @@ export const PRINTABLES_MANIFEST: PrintableManifestEntry[] = [
   
   // ========== PRO PRINTABLES ==========
   {
-    slug: 'camping-games-a4',
-    title: 'Camping Games (A4)',
-    description: 'A collection of printable games for every age.',
-    filename: 'camping-games-a4.pdf',
-    tier: 'pro',
-    paperSize: 'A4',
-    icon: 'games',
-  },
-  {
-    slug: 'mega-activity-book',
+    slug: 'mega-activity-book-us-letter',
     title: 'Mega Camping Activity Book (US Letter)',
     description: 'Over 70 pages of fun activities for kids and families.',
     filename: 'mega-activity-book-us-letter.pdf',
     tier: 'pro',
     paperSize: 'US Letter',
+    icon: 'activities',
+  },
+  {
+    slug: 'mega-activity-book-a4',
+    title: 'Mega Camping Activity Book (A4)',
+    description: 'Over 70 pages of fun activities for kids and families.',
+    filename: 'mega-activity-book-a4.pdf',
+    tier: 'pro',
+    paperSize: 'A4',
     icon: 'activities',
   },
   
@@ -88,21 +88,21 @@ export const PRINTABLES_MANIFEST: PrintableManifestEntry[] = [
     icon: 'planner',
   },
   {
-    slug: 'ultimate-planner-us-letter',
-    title: 'The ULTIMATE Camping Planner (US Letter)',
-    description: 'All-in-one planner bundle for serious campers.',
-    filename: 'ultimate-planner-us-letter.pdf',
-    tier: 'pro',
-    paperSize: 'US Letter',
-    icon: 'planner',
-  },
-  {
     slug: 'games-bundle-us-letter',
     title: 'Camping Games Bundle (US Letter)',
     description: 'Complete collection of camping games.',
     filename: 'games-bundle-us-letter.pdf',
     tier: 'pro',
     paperSize: 'US Letter',
+    icon: 'games',
+  },
+  {
+    slug: 'games-bundle-a4',
+    title: 'Camping Games Bundle (A4)',
+    description: 'Complete collection of camping games.',
+    filename: 'games-bundle-a4.pdf',
+    tier: 'pro',
+    paperSize: 'A4',
     icon: 'games',
   },
 ];
