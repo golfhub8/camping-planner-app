@@ -20,7 +20,7 @@ export default function TripLimitUpsellModal({ open, onOpenChange }: TripLimitUp
 
   const handleStartTrial = () => {
     onOpenChange(false);
-    setLocation("/printables?upgrade=trial");
+    setLocation("/subscribe");
   };
 
   return (

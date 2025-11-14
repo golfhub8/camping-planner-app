@@ -2066,63 +2066,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Method 7: Check for Gutenberg column blocks (fallback for other sites)
+          // IMPORTANT: Only look within main content area to avoid sidebar navigation
           if (!foundSteps) {
             console.log('[Recipe Parser] Trying Gutenberg column block extraction');
-            // Look for instructions inside .wp-block-columns wrapper
-            $('.wp-block-columns').each((_, columnBlock) => {
-              if (foundSteps) return;
-              
-              // Find any ol/ul lists inside the column blocks
-              const lists = $(columnBlock).find('ol, ul');
-              if (lists.length > 0) {
-                lists.each((_, list) => {
-                  const listItems = $(list).find('li');
-                  if (listItems.length >= 2) {
-                    const firstItem = listItems.first().text().trim();
-                    const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice/i.test(firstItem);
-                    
-                    if (hasInstructionWords || firstItem.length > 20) {
-                      console.log(`[Recipe Parser] Found ${listItems.length} instruction steps in Gutenberg column block`);
-                      foundSteps = true;
-                      listItems.each((_, li) => {
-                        const text = $(li).text().trim();
-                        if (text && text.length > 10) {
-                          steps.push(text);
-                        }
-                      });
-                    }
-                  }
-                });
-              }
-            });
-          }
-          
-          // Method 8: Check .wp-block-list class (WordPress Gutenberg list blocks)
-          if (!foundSteps) {
-            console.log('[Recipe Parser] Trying .wp-block-list extraction');
-            $('.wp-block-list').each((_, listBlock) => {
-              if (foundSteps) return;
-              
-              const listItems = $(listBlock).find('li');
-              if (listItems.length >= 2) {
-                const firstItem = listItems.first().text().trim();
-                const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice/i.test(firstItem);
+            // Look for instructions inside .wp-block-columns wrapper, but ONLY within main content
+            const mainContent = $('.entry-content, article.post, .post-content').first();
+            if (mainContent.length > 0) {
+              mainContent.find('.wp-block-columns').each((_, columnBlock) => {
+                if (foundSteps) return;
                 
-                if (hasInstructionWords || firstItem.length > 20) {
-                  console.log(`[Recipe Parser] Found ${listItems.length} instruction steps in .wp-block-list`);
-                  foundSteps = true;
-                  listItems.each((_, li) => {
-                    const text = $(li).text().trim();
-                    if (text && text.length > 10) {
-                      steps.push(text);
+                // Find any ol/ul lists inside the column blocks
+                const lists = $(columnBlock).find('ol, ul');
+                if (lists.length > 0) {
+                  lists.each((_, list) => {
+                    const listItems = $(list).find('li');
+                    if (listItems.length >= 2) {
+                      // Filter out navigation lists: check if most items contain links
+                      const itemsWithLinks = listItems.filter((_, li) => $(li).find('a').length > 0).length;
+                      if (itemsWithLinks > listItems.length * 0.5) {
+                        console.log(`[Recipe Parser] Skipping list with ${itemsWithLinks}/${listItems.length} linked items (likely navigation)`);
+                        return; // Skip this list, it's navigation
+                      }
+                      
+                      const firstItem = listItems.first().text().trim();
+                      const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice|boil|bake|grill|simmer/i.test(firstItem);
+                      
+                      if (hasInstructionWords || firstItem.length > 20) {
+                        console.log(`[Recipe Parser] Found ${listItems.length} instruction steps in Gutenberg column block`);
+                        foundSteps = true;
+                        listItems.each((_, li) => {
+                          const text = $(li).text().trim();
+                          if (text && text.length > 10) {
+                            steps.push(text);
+                          }
+                        });
+                      }
                     }
                   });
                 }
-              }
-            });
+              });
+            }
+          }
+          
+          // Method 8: Check .wp-block-list class (WordPress Gutenberg list blocks)
+          // IMPORTANT: Only look within main content area to avoid sidebar navigation
+          if (!foundSteps) {
+            console.log('[Recipe Parser] Trying .wp-block-list extraction');
+            const mainContent = $('.entry-content, article.post, .post-content').first();
+            if (mainContent.length > 0) {
+              mainContent.find('.wp-block-list').each((_, listBlock) => {
+                if (foundSteps) return;
+                
+                const listItems = $(listBlock).find('li');
+                if (listItems.length >= 2) {
+                  // Filter out navigation lists: check if most items contain links
+                  const itemsWithLinks = listItems.filter((_, li) => $(li).find('a').length > 0).length;
+                  if (itemsWithLinks > listItems.length * 0.5) {
+                    console.log(`[Recipe Parser] Skipping .wp-block-list with ${itemsWithLinks}/${listItems.length} linked items (likely navigation)`);
+                    return; // Skip this list, it's navigation
+                  }
+                  
+                  const firstItem = listItems.first().text().trim();
+                  const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice|boil|bake|grill|simmer/i.test(firstItem);
+                  
+                  if (hasInstructionWords || firstItem.length > 20) {
+                    console.log(`[Recipe Parser] Found ${listItems.length} instruction steps in .wp-block-list`);
+                    foundSteps = true;
+                    listItems.each((_, li) => {
+                      const text = $(li).text().trim();
+                      if (text && text.length > 10) {
+                        steps.push(text);
+                      }
+                    });
+                  }
+                }
+              });
+            }
           }
           
           // Method 9: Smart scanning for instruction-like content (generic fallback)
+          // IMPORTANT: Filter out navigation lists
           if (!foundSteps) {
             console.log('[Recipe Parser] Trying keyword-based scanning for instruction lists');
             const allText = $('.entry-content, .post-content, article').text().toLowerCase();
@@ -2134,9 +2157,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 
                 const listItems = $(list).find('li');
                 if (listItems.length >= 2 && listItems.length <= 50) {
+                  // Filter out navigation lists: check if most items contain links
+                  const itemsWithLinks = listItems.filter((_, li) => $(li).find('a').length > 0).length;
+                  if (itemsWithLinks > listItems.length * 0.5) {
+                    console.log(`[Recipe Parser] Skipping list with ${itemsWithLinks}/${listItems.length} linked items (likely navigation)`);
+                    return; // Skip this list, it's navigation
+                  }
+                  
                   // Check if this looks like an instructions list
                   const firstItem = listItems.first().text().trim();
-                  const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice/i.test(firstItem);
+                  const hasInstructionWords = /cook|heat|add|mix|stir|combine|place|remove|serve|prepare|cut|chop|slice|boil|bake|grill|simmer/i.test(firstItem);
                   
                   if (hasInstructionWords || firstItem.length > 20) {
                     console.log(`[Recipe Parser] Found instruction list with ${listItems.length} items`);
