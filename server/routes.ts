@@ -3856,47 +3856,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Determine plan based on subscription status
+      // Initialize plan and subscription metadata
       let plan: 'free' | 'pro' = 'free';
-      const status = user.subscriptionStatus;
+      let subscriptionStatus: string | null = user.subscriptionStatus;
+      let currentPeriodEnd: string | null = null;
+      let cancelAtPeriodEnd: boolean | null = null;
 
-      // Pro users have active, trialing, or past_due status
-      if (status === 'trialing' || status === 'active' || status === 'past_due') {
-        plan = 'pro';
+      // If Stripe is available and user has a subscription ID, fetch live data from Stripe
+      if (stripe && user.stripeSubscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          
+          // Defensive type guards for Stripe subscription object
+          if (!subscription || 
+              !('object' in subscription) || 
+              subscription.object !== 'subscription' ||
+              !('status' in subscription) || 
+              typeof subscription.status !== 'string') {
+            console.error(`[Account] Invalid subscription object returned from Stripe for ${user.stripeSubscriptionId}`);
+            throw new Error('Invalid subscription object from Stripe');
+          }
+          
+          // Use Stripe subscription as source of truth
+          const stripeStatus = subscription.status;
+          subscriptionStatus = stripeStatus;
+          
+          // Valid statuses that grant Pro access
+          const validProStatuses = ['active', 'trialing', 'past_due'];
+          
+          if (validProStatuses.includes(stripeStatus)) {
+            plan = 'pro';
+            
+            // Extract renewal date from Stripe
+            if ('current_period_end' in subscription && typeof subscription.current_period_end === 'number') {
+              currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+            }
+            
+            // Extract cancellation status
+            if ('cancel_at_period_end' in subscription) {
+              cancelAtPeriodEnd = subscription.cancel_at_period_end;
+            }
+          } else {
+            // Subscription is canceled, incomplete, unpaid, etc. - downgrade to free
+            console.log(`[Account] Stripe subscription ${user.stripeSubscriptionId} has status: ${stripeStatus}, downgrading to free`);
+            plan = 'free';
+            
+            // Persist the downgrade to prevent fallback from reactivating Pro access
+            // Note: While mutating state in a GET endpoint is typically an anti-pattern,
+            // it's necessary here to prevent stale cached data from granting incorrect Pro access
+            // during Stripe API outages. Webhooks handle the primary sync, this is a safety net.
+            await storage.updateSubscriptionStatus(userId, stripeStatus);
+            
+            // For canceled-but-not-expired subscriptions, preserve period end and cancellation metadata
+            // This allows users to see "Ends on" date even after cancellation
+            if (stripeStatus === 'canceled' || 
+                (stripeStatus === 'incomplete_expired' && 'cancel_at_period_end' in subscription && subscription.cancel_at_period_end)) {
+              // Preserve renewal/end date for canceled subscriptions
+              if ('current_period_end' in subscription && typeof subscription.current_period_end === 'number') {
+                const endDate = new Date(subscription.current_period_end * 1000);
+                // Only show if end date is in the future
+                if (endDate > new Date()) {
+                  currentPeriodEnd = endDate.toISOString();
+                  cancelAtPeriodEnd = true;
+                } else {
+                  // End date has passed - clear it
+                  await storage.updateProMembershipEndDate(userId, null);
+                }
+              }
+            } else {
+              // Clear membership end date for non-canceled invalid statuses
+              await storage.updateProMembershipEndDate(userId, null);
+              currentPeriodEnd = null;
+              cancelAtPeriodEnd = null;
+            }
+          }
+          
+        } catch (error) {
+          console.error("[Account] Error fetching subscription from Stripe:", error);
+          console.log("[Account] Falling back to database subscription status");
+          
+          // On Stripe API error, fall back to database to avoid service disruption
+          // Use cached subscription status from database
+          const cachedStatus = user.subscriptionStatus;
+          const validProStatuses = ['active', 'trialing', 'past_due'];
+          
+          if (cachedStatus && validProStatuses.includes(cachedStatus)) {
+            plan = 'pro';
+            // Only return membershipEndDate if cached status is valid for Pro access
+            currentPeriodEnd = user.proMembershipEndDate?.toISOString() || null;
+            // Can't determine cancel status without Stripe, assume not canceled
+            cancelAtPeriodEnd = null;
+          } else {
+            // Cached status is invalid or missing - downgrade to free
+            plan = 'free';
+            currentPeriodEnd = null;
+            cancelAtPeriodEnd = null;
+            
+            if (cachedStatus) {
+              console.log(`[Account] Cached status "${cachedStatus}" is not in Pro whitelist, returning free plan`);
+            }
+          }
+        }
+      } else {
+        // No Stripe integration or no subscription ID - use database values
+        const cachedStatus = user.subscriptionStatus;
+        const validProStatuses = ['active', 'trialing', 'past_due'];
+        
+        if (cachedStatus && validProStatuses.includes(cachedStatus)) {
+          plan = 'pro';
+          // Only return membershipEndDate if cached status is valid for Pro access
+          currentPeriodEnd = user.proMembershipEndDate?.toISOString() || null;
+        } else {
+          // Cached status is invalid or missing - return free plan
+          plan = 'free';
+          currentPeriodEnd = null;
+          cancelAtPeriodEnd = null;
+        }
       }
 
       // Define limits based on plan
       const tripLimit = plan === 'pro' ? null : 5;
       const groceryLimit = plan === 'pro' ? null : 5;
-
-      // Fetch real-time subscription data from Stripe for Pro users
-      let currentPeriodEnd: string | null = null;
-      let cancelAtPeriodEnd: boolean | null = null;
-
-      if (stripe && user.stripeSubscriptionId && plan === 'pro') {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-          
-          // Use Stripe's current_period_end as the source of truth (type guard for Stripe types)
-          if ('current_period_end' in subscription && typeof subscription.current_period_end === 'number') {
-            currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
-          }
-          
-          // Check if subscription is set to cancel at period end
-          if ('cancel_at_period_end' in subscription) {
-            cancelAtPeriodEnd = subscription.cancel_at_period_end;
-          }
-          
-        } catch (error) {
-          console.error("Error fetching subscription from Stripe:", error);
-          // Fallback to database value if Stripe fetch fails
-          currentPeriodEnd = user.proMembershipEndDate?.toISOString() || null;
-          cancelAtPeriodEnd = null;
-        }
-      } else if (plan === 'pro') {
-        // Fallback to database value if no Stripe integration
-        currentPeriodEnd = user.proMembershipEndDate?.toISOString() || null;
-      }
 
       // Note: Portal URL is generated on-demand when user clicks "Manage Subscription"
       // to avoid creating unnecessary one-time-use sessions on every page load
@@ -3906,7 +3986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tripLimit,
         groceryLimit,
         hasStripeCustomer: !!user.stripeCustomerId,
-        subscriptionStatus: status || null,
+        subscriptionStatus: subscriptionStatus || null,
         membershipEndDate: currentPeriodEnd,
         cancelAtPeriodEnd,
       });
