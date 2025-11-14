@@ -325,40 +325,13 @@ export default function Trips() {
                   />
                 </div>
 
-                {/* Trip Limit Upsell Banner (only for free users who have hit the limit) */}
-                {entitlements && !entitlements.canCreateTrip && !entitlements.isPro && (
-                  <Alert className="border-primary/50 bg-primary/5" data-testid="alert-trip-limit">
-                    <SparklesIcon className="h-5 w-5 text-primary" />
-                    <AlertTitle className="text-base font-semibold">You've reached your free trip limit</AlertTitle>
-                    <AlertDescription className="space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        You've created {entitlements.tripsCount} of {entitlements.limit} free trips. 
-                        Upgrade to Pro for unlimited trips and exclusive features!
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <SubscribeButton 
-                          label="Upgrade to Pro - $29.99/year" 
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          7-day free trial included
-                        </span>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <Button 
                   type="submit" 
                   className="w-full md:w-auto"
-                  disabled={createTripMutation.isPending || (entitlements && !entitlements.canCreateTrip)}
+                  disabled={createTripMutation.isPending}
                   data-testid="button-create-trip"
                 >
-                  {createTripMutation.isPending 
-                    ? "Creating..." 
-                    : entitlements && !entitlements.canCreateTrip 
-                      ? "Upgrade to Create More Trips" 
-                      : "Create Trip"}
+                  {createTripMutation.isPending ? "Creating..." : "Create Trip"}
                 </Button>
               </form>
             </Form>
