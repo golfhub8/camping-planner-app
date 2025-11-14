@@ -73,22 +73,23 @@ export default function Trips() {
       const maxRetries = 3;
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        // Reset status code for this attempt (prevents carryover from previous attempt)
-        let statusCode: number | null = null;
-        
         try {
-          const response = await apiRequest("POST", "/api/trips", {
-            name: newTrip.name,
-            location: newTrip.location,
-            // Convert to ISO strings for the API (startDate and endDate are Date objects from the form)
-            startDate: newTrip.startDate.toISOString(),
-            endDate: newTrip.endDate.toISOString(),
-            // Include coordinates if provided
-            lat: newTrip.lat ?? null,
-            lng: newTrip.lng ?? null,
+          // Use fetch directly instead of apiRequest to handle 402 before throwing
+          const response = await fetch("/api/trips", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              name: newTrip.name,
+              location: newTrip.location,
+              // Convert to ISO strings for the API (startDate and endDate are Date objects from the form)
+              startDate: newTrip.startDate.toISOString(),
+              endDate: newTrip.endDate.toISOString(),
+              // Include coordinates if provided
+              lat: newTrip.lat ?? null,
+              lng: newTrip.lng ?? null,
+            }),
           });
-
-          statusCode = response.status;
 
           // Handle 402 paywall - show upsell modal instead of error toast (no retry)
           if (response.status === 402) {
@@ -107,6 +108,7 @@ export default function Trips() {
             throw new Error(errorData.message || errorData.error || "Failed to create trip");
           }
 
+          // Handle 5xx server errors
           if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || errorData.error || "Failed to create trip");
@@ -118,7 +120,7 @@ export default function Trips() {
           lastError = error;
           
           // Don't retry on client errors (4xx) or paywall errors
-          if (error.message === "PAYWALL" || (statusCode && statusCode >= 400 && statusCode < 500)) {
+          if (error.message === "PAYWALL" || error.message?.includes("402") || error.message?.includes("400")) {
             throw error;
           }
           

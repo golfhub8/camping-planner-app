@@ -1,0 +1,87 @@
+Please run a full end-to-end test pass on The Camping Planner app and fix any issues you find along the way. I want to confirm that free vs Pro, trips, recipes, grocery lists, printables, and cancel flows are all working correctly.
+
+Start from a completely fresh account:
+	1.	Create a brand-new user
+– Register a new account using a fresh test email address (not one that already exists in the database).
+– Confirm: signup works, verification/login works, and the account correctly shows as a free/trial user.
+	2.	Plan 5 new trips on this new account
+– Create 5 different trips with different locations and dates.
+– Confirm each trip saves correctly and appears on the Trips page and on its own detail page (weather, hikes block, etc).
+	3.	Add recipes: 5 custom + 5 suggested
+a) Custom recipes
+– Using the internal recipe builder, create 5 of your own recipes (title, ingredients, instructions).
+– Make sure they are saved as “My Recipes” and are selectable when adding meals to a trip.
+b) Suggested recipes from TheCampingPlanner.com
+– From the suggested/external recipes section, save 5 different recipes into “My Recipes”.
+– For each of these 5, confirm that:
+• Ingredients are pulled from the correct part of the blog post (the Ingredients Checklist table).
+• Instructions are pulled only from “Home Prep Before the Trip” and “Cooking at Camp”.
+• There are no extra “junk” lines (ads, unrelated text, etc).
+• Units and amounts are preserved correctly (cups, tbsp, ml, etc).
+If any recipe fails to import (shows the red “retry auto import” banner, or 0 items / 0 steps), please fix the scraper/parser so that all official TheCampingPlanner.com recipes import cleanly. The goal is that every official recipe on the blog can be auto-saved with correct ingredients and both sets of instructions.
+	4.	Meals on trips and selecting recipes
+– For at least one of the new trips, add meals using the “Add Meal” button.
+– When adding a meal:
+• User should see both their own custom recipes and the saved suggested recipes.
+• User should also have the option to “build your own meal” directly from that dialog if possible.
+– Make sure the chosen recipes correctly attach to the trip and show under “Meals for this Trip”.
+	5.	Build a grocery list with all ingredients
+– Go to the Grocery section and “Build Your Grocery List”.
+– In the top “Meals from your trips” area: select all 3+ meals from the chosen trip.
+– In the “Select Recipes” area: also select all 10 recipes (5 custom + 5 suggested).
+– Confirm:
+• All selected recipes are actually included in the grocery list.
+• All ingredients from these recipes are combined into the grocery list.
+• Ingredients are categorized correctly (Dairy, Meat, Pantry, etc.).
+• Specifically fix the earlier issue where elbow macaroni and bread crumbs were under “Camping Gear” – they should be under Pantry, and “Camping Gear” should not be used as an ingredient category.
+– Use the “share / email” feature to send a copy of the grocery list to golfhubmedia@gmail.com.
+• Confirm the email sends successfully via our SMTP (hello@thecampingplanner.com through smtpout.secureserver.net on port 587) and that the grocery list is readable in the email (HTML or PDF, not a corrupted PDF).
+	6.	Free plan limit: enforce 5-trip maximum
+– While still on the free/trial account, attempt to create a 6th trip.
+– Expected behavior:
+• The 6th trip creation should be blocked.
+• The user should see a clear message/upsell that they have reached the free limit and must upgrade to Pro to create more trips.
+– If the app currently allows more than 5 trips on a free account, please implement and enforce the 5-trip limit.
+	7.	Upgrade to Pro and verify renewal date logic
+– From this same account, go through the full Pro signup flow (Stripe test mode is fine).
+– After successful checkout, confirm:
+• The account page shows “Pro Member” (not “Pro Trial”) and the header button also shows Pro status (not “Go Pro”).
+• The renewal date shown on the account page is exactly one year from the actual subscription start date (use Stripe’s current_period_end, not a hard-coded date).
+• Stripe’s subscription object for this user is set to auto-renew every 365 days / 1 year.
+• Our webhook updates the user’s plan to “pro” when checkout.session.completed / customer.subscription.updated is received.
+	8.	Pro features: printables and packing lists
+– As a Pro member, verify that:
+• All Pro printables and games are unlocked and can be downloaded.
+• All PDFs open cleanly and are not corrupted (no “Failed to load PDF document” errors).
+• The full “What to Pack” packing checklist at the bottom of a trip is unlocked for Pro users (not greyed out).
+– Fix any remaining issues with PDF generation or file paths so downloads always work.
+	9.	Cancel subscription and re-lock Pro features
+– Using the “Manage Subscription” link (Stripe customer portal), cancel this user’s Pro subscription in test mode.
+– Then verify via the app:
+• Our Stripe webhook receives the cancellation event (customer.subscription.deleted) and updates the user’s plan back to Free/Trial.
+• On the account page, the plan is no longer shown as Pro Member.
+• The header button changes back from “Pro Member” to “Go Pro” or equivalent.
+• All Pro-only printables are again locked (only the free printables should be downloadable).
+• The full packing list / Pro-only checklists are locked again.
+• Free plan limits (max 5 trips, max 5 grocery lists if applicable) are enforced again.
+– Existing trips and existing grocery lists can remain visible, but the user should not be able to:
+• Create additional trips beyond the free limit, or
+• Download any Pro-only printable PDFs.
+	10.	Clean up and logging
+– Ensure the Stripe webhook endpoint we are using is the deployed one (not an old Replit preview URL that goes down when the repl sleeps).
+– The webhook should always return a 2xx status for valid events, and log any failures with enough info to debug.
+– Remove or update any outdated test webhook endpoints so Stripe stops sending to dead URLs.
+
+Deliverables / acceptance:
+
+– Free user is limited to 5 trips and cannot access Pro printables or full packing lists.
+– Pro user can:
+• Create unlimited trips and grocery lists,
+• Save recipes (custom and external) with correct ingredients and instructions,
+• Build grocery lists that include all selected recipes, categorized correctly,
+• Download all Pro printables with working PDFs,
+• Use full packing lists.
+– When Pro is canceled, all Pro benefits are removed, and printables/packing lists are locked again.
+– A test grocery list email has been successfully sent to golfhubmedia@gmail.com from hello@thecampingplanner.com.
+
+Please implement any missing functionality and fix any bugs you find while following these steps, then re-run the full flow once to confirm everything works end-to-end.
