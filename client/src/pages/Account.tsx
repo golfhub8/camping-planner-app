@@ -37,6 +37,7 @@ interface AccountPlan {
   hasStripeCustomer: boolean;
   subscriptionStatus: string | null;
   membershipEndDate: string | null;
+  cancelAtPeriodEnd: boolean | null;
 }
 
 export default function Account() {
@@ -254,7 +255,9 @@ export default function Account() {
 
             {isPro && !isTrialing && accountPlan?.membershipEndDate && (
               <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-muted-foreground">Renewal Date</span>
+                <span className="text-sm text-muted-foreground">
+                  {accountPlan.cancelAtPeriodEnd ? "Ends on" : "Renews on"}
+                </span>
                 <span className="font-medium" data-testid="text-renewal-date">{formatDate(accountPlan.membershipEndDate)}</span>
               </div>
             )}
