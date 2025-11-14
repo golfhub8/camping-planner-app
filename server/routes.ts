@@ -600,8 +600,17 @@ function requirePrintableAccess(req: any, res: any, next: any) {
       return res.status(401).json({ error: "User not found" });
     }
 
-    // Check for active Pro membership (including trial period)
-    if (user.proMembershipEndDate && user.proMembershipEndDate > new Date()) {
+    // Check for active Pro membership via subscription status (includes trialing)
+    const hasActiveSubscription = user.subscriptionStatus && 
+      ['active', 'trialing', 'past_due'].includes(user.subscriptionStatus);
+    
+    // Check for active Pro membership via end date (legacy/lifetime access)
+    const hasFutureMembership = user.proMembershipEndDate && 
+      new Date(user.proMembershipEndDate) > new Date();
+    
+    const isPro = hasActiveSubscription || hasFutureMembership;
+
+    if (isPro) {
       return next();
     }
 
