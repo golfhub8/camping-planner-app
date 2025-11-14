@@ -1095,6 +1095,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Excluded WordPress recipe IDs (snack-related posts that should not appear in the app)
+  // To add/remove exclusions, update this Set with WordPress post IDs
+  const EXCLUDED_WORDPRESS_POST_IDS = new Set([
+    1140, // "Snack Ideas for Hiking For Fueling Your Outdoor Adventures"
+    358,  // "Best Camping Snacks To Make Ahead Or Buy For Your Camping Trip"
+  ]);
+  
+  // Helper function to check if a WordPress recipe should be excluded
+  const isExcludedExternalRecipe = (wpPostId: number | string): boolean => {
+    const numericId = typeof wpPostId === 'string' ? parseInt(wpPostId, 10) : wpPostId;
+    return EXCLUDED_WORDPRESS_POST_IDS.has(numericId);
+  };
+  
   // GET /api/external-recipes
   // Fetches latest recipes from WordPress "camping-food" category (ID: 4)
   // Returns: { recipes: Array<{ id, title, slug, url, excerpt, date }> }
@@ -1113,16 +1126,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const posts = await wpRes.json();
       
-      // Map to the shape our frontend expects
-      const recipes = posts.map((p: any) => ({
-        id: `wp-${p.id}`,
-        title: p.title?.rendered || "Untitled Recipe",
-        slug: p.slug,
-        url: p.link,
-        excerpt: p.excerpt?.rendered || "",
-        date: p.date,
-        source: "external" as const,
-      }));
+      // Map to the shape our frontend expects and filter out excluded recipes
+      const recipes = posts
+        .filter((p: any) => !isExcludedExternalRecipe(p.id))
+        .map((p: any) => ({
+          id: `wp-${p.id}`,
+          title: p.title?.rendered || "Untitled Recipe",
+          slug: p.slug,
+          url: p.link,
+          excerpt: p.excerpt?.rendered || "",
+          date: p.date,
+          source: "external" as const,
+        }));
       
       res.json({ recipes });
     } catch (err) {
@@ -1177,24 +1192,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (postsResponse.ok) {
             const posts = await postsResponse.json();
             
-            // Transform WordPress posts into our external recipe format
-            const externalRecipes = posts.map((post: any) => ({
-              // Use WordPress post ID as string to avoid conflicts with internal recipe IDs
-              id: `wp-${post.id}`,
-              
-              // WordPress returns title as { rendered: "..." }
-              title: post.title?.rendered || "Untitled Recipe",
-              
-              // Mark as external source so frontend knows this is from WordPress
-              source: "external" as const,
-              
-              // Link to the full recipe on TheCampingPlanner.com
-              url: post.link,
-              
-              // For now, we can't extract ingredients from WordPress
-              // This could be enhanced later with web scraping if needed
-              ingredients: undefined,
-            }));
+            // Transform WordPress posts into our external recipe format and filter out excluded recipes
+            const externalRecipes = posts
+              .filter((post: any) => !isExcludedExternalRecipe(post.id))
+              .map((post: any) => ({
+                // Use WordPress post ID as string to avoid conflicts with internal recipe IDs
+                id: `wp-${post.id}`,
+                
+                // WordPress returns title as { rendered: "..." }
+                title: post.title?.rendered || "Untitled Recipe",
+                
+                // Mark as external source so frontend knows this is from WordPress
+                source: "external" as const,
+                
+                // Link to the full recipe on TheCampingPlanner.com
+                url: post.link,
+                
+                // For now, we can't extract ingredients from WordPress
+                // This could be enhanced later with web scraping if needed
+                ingredients: undefined,
+              }));
             
             return res.json(externalRecipes);
           }
@@ -1231,6 +1248,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wpPostId = externalId.substring(3); // Remove "wp-" prefix
       } else {
         wpPostId = externalId;
+      }
+      
+      // Check if this recipe is excluded (snack-related posts)
+      if (isExcludedExternalRecipe(wpPostId)) {
+        return res.status(404).json({ error: "Recipe not available" });
       }
       
       // WordPress site base URL
@@ -1292,6 +1314,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wpPostId = externalId.substring(3);
       } else {
         wpPostId = externalId;
+      }
+      
+      // Check if this recipe is excluded (snack-related posts)
+      if (isExcludedExternalRecipe(wpPostId)) {
+        return res.status(404).json({ error: "Recipe not available" });
       }
       
       // WordPress site base URL (same as above - you can change this if needed)
