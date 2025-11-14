@@ -1,0 +1,58 @@
+Act as a senior React + TypeScript developer working on my Camping Planner app.
+
+I need you to fix and redesign how “Add Meal” works from the Trip page, based on the following behavior and screenshots:
+
+Current behavior (problem):
+	•	On the Trip details page, under “Meals for this Trip”, when I click “Add Meal” it opens a modal (“Add a Meal”) with tabs: My Recipes / Suggested / Custom Meal.
+	•	From that modal I can see my recipes (e.g., “Hamburgers”), but when I try to add a meal to the trip it doesn’t work reliably and the UX is confusing.
+	•	The Recipes page already exists and shows:
+	•	“My Recipes” at the top (with cards like “Hamburgers” and an “Add to Grocery” button).
+	•	A “From TheCampingPlanner.com” section with suggested/external recipes that can be saved.
+
+What I want instead (new UX and logic):
+	1.	Change the Trip page “Add Meal” button behavior
+
+	•	Remove the existing “Add a Meal” modal entirely.
+	•	When the user clicks “Add Meal” from the Trip details page, immediately navigate them to the Recipes page instead.
+	•	Pass the current trip ID (and trip name) through the router (e.g., via query params or state) so the Recipes page knows which trip the user came from.
+	•	At the top of the Recipes page, if a fromTripId is present, show a “Back to Trip” button (e.g., “← Back to {Trip Name}”) that navigates the user back to that trip’s details page.
+
+	2.	Add “Add to Trip” functionality on the Recipes page
+
+	•	For each recipe card under “My Recipes” AND each recipe card under “From TheCampingPlanner.com” (once they are saved), add an “Add to Trip” button.
+	•	When the user clicks “Add to Trip”:
+	•	If we have a fromTripId in route state/query, directly attach that recipe as a meal to that trip.
+	•	If we do NOT have a fromTripId (user just came to Recipes page normally), open a small modal or dropdown that lets them select which existing trip to add this meal to.
+	•	After successfully adding the recipe to a trip:
+	•	Show a small confirmation toast like “Added [Recipe Name] to [Trip Name]”.
+	•	Do NOT remove them from the page; they should be able to add multiple recipes in a row.
+
+	3.	Trip details page: reflect added meals
+
+	•	On the Trip details page, under “Meals for this Trip”, make sure any recipes added via “Add to Trip” show up immediately in the list (using the same data model you already use for meals).
+	•	Each meal item should show at least the recipe name and allow expansion or clicking to view details (use the existing UI style you’ve already implemented).
+	•	Verify that this works for:
+	•	A custom user-created recipe (e.g., “Hamburgers”).
+	•	A saved recipe imported from TheCampingPlanner.com.
+
+	4.	Routing and types
+
+	•	Use the existing router (React Router or whatever is already in the project).
+	•	Define a clean TypeScript type for the route state/query that carries fromTripId and fromTripName so it’s type-safe.
+	•	Make sure navigation works whether the user:
+	•	Clicks “Back to Trip” from the Recipes page.
+	•	Uses the browser back button.
+	•	Avoid introducing any React hook order issues (no conditional hooks).
+
+	5.	Acceptance criteria
+
+	•	From a Trip details page, clicking “Add Meal” takes me to the Recipes page (no broken modal).
+	•	The Recipes page shows a clear “Back to Trip” button at the top whenever I came from a trip.
+	•	Every recipe card has an “Add to Trip” button that successfully links the recipe to a specific trip.
+	•	Returning to the Trip details page shows all meals that were added.
+	•	No console errors, no TypeScript errors, and the UX feels smooth.
+
+Please:
+	•	Locate the existing Trip details page component, Recipes page component, and any meal/trip models.
+	•	Implement the routing changes and new buttons as described.
+	•	Show me the key updated components (Trip page, Recipes page, any new hooks or services) in a single, continuous code response so it’s easy to copy into my project.

@@ -168,18 +168,11 @@ export default function TripDetail() {
   
   // State for dialogs
   const [editTripDialogOpen, setEditTripDialogOpen] = useState(false);
-  const [addMealDialogOpen, setAddMealDialogOpen] = useState(false);
   const [groceryDialogOpen, setGroceryDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
-  
-  // State for Add Meal tabs
-  const [addMealTab, setAddMealTab] = useState("saved");
-  const [customMealTitle, setCustomMealTitle] = useState("");
-  const [customMealIngredients, setCustomMealIngredients] = useState("");
-  const [customMealInstructions, setCustomMealInstructions] = useState("");
   
   // State for expanded meals and selected ingredients
   const [expandedMeals, setExpandedMeals] = useState<Set<number>>(new Set());
@@ -261,84 +254,8 @@ export default function TripDetail() {
     },
   });
 
-  // Query for external suggested recipes
-  const { data: externalRecipes, isLoading: externalRecipesLoading } = useQuery<{recipes: Array<{id: string, title: string, slug: string, url: string, excerpt: string, date: string}>}>({
-    queryKey: ["/api/external-recipes"],
-    enabled: addMealDialogOpen && addMealTab === "suggested",
-  });
-
-  // Mutation to add meal to trip
-  const addMealMutation = useMutation({
-    mutationFn: async (recipeId: number) => {
-      const response = await apiRequest("POST", `/api/trips/${tripId}/meals`, { recipeId });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
-      setAddMealDialogOpen(false);
-      toast({
-        title: "Meal added!",
-        description: "Recipe has been added to your trip.",
-      });
-    },
-  });
-
-  // Mutation to create custom recipe and add to trip
-  const createCustomMealMutation = useMutation({
-    mutationFn: async () => {
-      // First create the recipe
-      const createResponse = await apiRequest("POST", "/api/recipes", {
-        title: customMealTitle,
-        ingredients: customMealIngredients.split("\n").filter(i => i.trim()),
-        steps: customMealInstructions.split("\n").filter(s => s.trim()),
-      });
-      
-      if (!createResponse.ok) {
-        const errorData = await createResponse.json().catch(() => ({ error: "Failed to create recipe" }));
-        throw new Error(errorData.error || "Failed to create recipe");
-      }
-      
-      const recipe = await createResponse.json();
-      
-      if (!recipe.id) {
-        throw new Error("Recipe created but ID is missing");
-      }
-      
-      // Then add it to the trip
-      const addResponse = await apiRequest("POST", `/api/trips/${tripId}/meals`, { recipeId: recipe.id });
-      
-      if (!addResponse.ok) {
-        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add recipe to trip" }));
-        throw new Error(errorData.error || "Failed to add recipe to trip");
-      }
-      
-      return addResponse.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
-      setAddMealDialogOpen(false);
-      setCustomMealTitle("");
-      setCustomMealIngredients("");
-      setCustomMealInstructions("");
-      toast({
-        title: "Custom meal added!",
-        description: "Your custom recipe has been created and added to your trip.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to create custom meal",
-        description: error.message || "Please check your inputs and try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Mutation to save external recipe and add to trip
-  const saveExternalMealMutation = useMutation({
+  // Mutation to remove meal from trip
+  const removeMealMutation = useMutation({
     mutationFn: async (url: string) => {
       // First parse and save the recipe
       const parseResponse = await apiRequest("POST", "/api/recipes/parse", { url });
