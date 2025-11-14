@@ -3845,7 +3845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/account/plan
   // Get comprehensive account plan information
-  // Returns plan, limits, and portal URL
+  // Returns plan, limits, and renewal date from Stripe (source of truth)
   // Protected route - requires authentication
   app.get("/api/account/plan", isAuthenticated, async (req: any, res) => {
     try {
@@ -3869,6 +3869,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tripLimit = plan === 'pro' ? null : 5;
       const groceryLimit = plan === 'pro' ? null : 5;
 
+      // Fetch real-time subscription data from Stripe for Pro users
+      let currentPeriodEnd: string | null = null;
+      let cancelAtPeriodEnd: boolean | null = null;
+
+      if (stripe && user.stripeSubscriptionId && plan === 'pro') {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          
+          // Use Stripe's current_period_end as the source of truth (type guard for Stripe types)
+          if ('current_period_end' in subscription && typeof subscription.current_period_end === 'number') {
+            currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+          }
+          
+          // Check if subscription is set to cancel at period end
+          if ('cancel_at_period_end' in subscription) {
+            cancelAtPeriodEnd = subscription.cancel_at_period_end;
+          }
+          
+        } catch (error) {
+          console.error("Error fetching subscription from Stripe:", error);
+          // Fallback to database value if Stripe fetch fails
+          currentPeriodEnd = user.proMembershipEndDate?.toISOString() || null;
+          cancelAtPeriodEnd = null;
+        }
+      } else if (plan === 'pro') {
+        // Fallback to database value if no Stripe integration
+        currentPeriodEnd = user.proMembershipEndDate?.toISOString() || null;
+      }
+
       // Note: Portal URL is generated on-demand when user clicks "Manage Subscription"
       // to avoid creating unnecessary one-time-use sessions on every page load
 
@@ -3878,7 +3907,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         groceryLimit,
         hasStripeCustomer: !!user.stripeCustomerId,
         subscriptionStatus: status || null,
-        membershipEndDate: user.proMembershipEndDate?.toISOString() || null,
+        membershipEndDate: currentPeriodEnd,
+        cancelAtPeriodEnd,
       });
     } catch (error: any) {
       console.error("Error fetching account plan:", error);
