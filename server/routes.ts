@@ -2871,12 +2871,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date();
       const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
 
-      // If not Pro, check trip limit using counter field
-      if (!isPro && user.tripsCount >= FREE_TRIP_LIMIT) {
-        return res.status(402).json({ 
-          code: "PAYWALL",
-          message: "You've reached the free limit of 5 trips. Start a free trial to create unlimited trips."
-        });
+      // If not Pro, count ACTUAL trips to enforce limit (authoritative source of truth)
+      // This prevents counter drift from manual DB inserts, tests, or race conditions
+      if (!isPro) {
+        const actualTripCount = await storage.countUserTrips(userId);
+        if (actualTripCount >= FREE_TRIP_LIMIT) {
+          return res.status(402).json({ 
+            code: "PAYWALL",
+            message: "You've reached the free limit of 5 trips. Start a free trial to create unlimited trips."
+          });
+        }
       }
       
       // Validate the request body against our schema
@@ -2898,7 +2902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create the trip in storage (with userId)
       const trip = await storage.createTrip(validatedData, userId);
       
-      // Increment the trip counter for the user
+      // Increment the trip counter for analytics (not used for enforcement)
       await storage.incrementTripsCount(userId);
       
       // Return the created trip with 201 status

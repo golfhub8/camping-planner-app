@@ -59,6 +59,9 @@ export interface IStorage {
   // Get a single trip by its ID (with ownership check)
   getTripById(id: number, userId: string): Promise<Trip | undefined>;
   
+  // Count total trips for a user (authoritative source for free-tier limit enforcement)
+  countUserTrips(userId: string): Promise<number>;
+  
   // Create a new trip for a user
   createTrip(trip: InsertTrip, userId: string): Promise<Trip>;
   
@@ -337,6 +340,13 @@ export class MemStorage implements IStorage {
       return trip;
     }
     return undefined;
+  }
+
+  async countUserTrips(userId: string): Promise<number> {
+    // Count total trips for this user (authoritative source for free-tier enforcement)
+    return Array.from(this.trips.values())
+      .filter(trip => trip.userId === userId)
+      .length;
   }
 
   async createTrip(insertTrip: InsertTrip, userId: string): Promise<Trip> {
@@ -1007,6 +1017,15 @@ export class DatabaseStorage implements IStorage {
       .from(trips)
       .where(sql`${trips.id} = ${id} AND ${trips.userId} = ${userId}`);
     return trip || undefined;
+  }
+
+  async countUserTrips(userId: string): Promise<number> {
+    // Count total trips for this user (authoritative source for free-tier enforcement)
+    const result = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(trips)
+      .where(eq(trips.userId, userId));
+    return result[0]?.count || 0;
   }
 
   async createTrip(insertTrip: InsertTrip, userId: string): Promise<Trip> {
