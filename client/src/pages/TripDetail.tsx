@@ -22,6 +22,7 @@ import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, Arro
 import SubscribeButton from "@/components/SubscribeButton";
 import { CurrentWeather, WeatherForecast } from "@/components/WeatherCard";
 import { useWeatherCard } from "@/hooks/useWeatherCard";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import NearbyHikes from "@/components/NearbyHikes";
 import { format } from "date-fns";
@@ -160,6 +161,7 @@ function MealIngredients({
 
 export default function TripDetail() {
   const { toast} = useToast();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
   const [match, params] = useRoute("/trips/:id");
   const tripId = params?.id ? parseInt(params.id) : null;
@@ -1335,7 +1337,7 @@ export default function TripDetail() {
           </CardContent>
         </Card>
 
-        {/* What to Pack Teaser */}
+        {/* What to Pack */}
         <Card data-testid="card-what-to-pack">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -1345,44 +1347,154 @@ export default function TripDetail() {
                   What to Pack
                 </CardTitle>
                 <CardDescription>
-                  Essential camping gear for your trip
+                  {user?.isPro ? "Comprehensive camping gear checklist" : "Essential camping gear for your trip"}
                 </CardDescription>
               </div>
-              <SubscribeButton label="Unlock Full List" />
+              {!user?.isPro && <SubscribeButton label="Unlock Full List" />}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Teaser items (5-6 items) */}
-            <div className="space-y-2">
-              {[
-                "Tent and stakes",
-                "Sleeping bags",
-                "First aid kit",
-                "Flashlight or headlamp",
-                "Water bottles",
-                "Camp stove and fuel"
-              ].map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 text-sm"
-                  data-testid={`pack-item-${idx}`}
-                >
-                  <span className="text-primary">•</span>
-                  <span>{item}</span>
+            {user?.isPro ? (
+              // Full packing list for Pro members
+              <div className="space-y-6">
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Shelter & Sleep</h4>
+                  <div className="space-y-1">
+                    {[
+                      "Tent with rainfly",
+                      "Tent stakes and guylines",
+                      "Sleeping bags (rated for expected temps)",
+                      "Sleeping pads or air mattresses",
+                      "Camping pillows",
+                      "Ground tarp or footprint"
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`pack-item-shelter-${idx}`}>
+                        <span className="text-primary">•</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-            
-            <div className="pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-3">
-                Get access to the complete camping packing checklist with Pro Membership ($29.99/year with 7-day free trial)
-              </p>
-              <ul className="text-xs text-muted-foreground space-y-1 ml-4">
-                <li>• Comprehensive packing lists for all seasons</li>
-                <li>• Printable camping planners and activity sheets</li>
-                <li>• Meal planning templates</li>
-              </ul>
-            </div>
+
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Cooking & Food</h4>
+                  <div className="space-y-1">
+                    {[
+                      "Camp stove and fuel",
+                      "Cookware (pots, pans, griddle)",
+                      "Cooking utensils and tongs",
+                      "Plates, bowls, and cups",
+                      "Cutlery and can opener",
+                      "Cooler with ice",
+                      "Water containers and purification",
+                      "Dish soap and scrubber",
+                      "Trash bags"
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`pack-item-cooking-${idx}`}>
+                        <span className="text-primary">•</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Clothing & Personal</h4>
+                  <div className="space-y-1">
+                    {[
+                      "Weather-appropriate clothing layers",
+                      "Rain jacket and pants",
+                      "Hiking boots or shoes",
+                      "Extra socks and underwear",
+                      "Hat and sunglasses",
+                      "Toiletries and towels",
+                      "Sunscreen and bug spray",
+                      "Personal medications"
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`pack-item-clothing-${idx}`}>
+                        <span className="text-primary">•</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Tools & Safety</h4>
+                  <div className="space-y-1">
+                    {[
+                      "First aid kit",
+                      "Flashlights and headlamps",
+                      "Extra batteries",
+                      "Multi-tool or knife",
+                      "Matches or lighter",
+                      "Map and compass/GPS",
+                      "Whistle",
+                      "Emergency contact info"
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`pack-item-tools-${idx}`}>
+                        <span className="text-primary">•</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-sm mb-2">Recreation & Comfort</h4>
+                  <div className="space-y-1">
+                    {[
+                      "Camp chairs",
+                      "Folding table",
+                      "Firewood and fire starter",
+                      "Lantern",
+                      "Books, games, or cards",
+                      "Camera or binoculars",
+                      "Hammock"
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`pack-item-recreation-${idx}`}>
+                        <span className="text-primary">•</span>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Teaser for free users
+              <>
+                <div className="space-y-2">
+                  {[
+                    "Tent and stakes",
+                    "Sleeping bags",
+                    "First aid kit",
+                    "Flashlight or headlamp",
+                    "Water bottles",
+                    "Camp stove and fuel"
+                  ].map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 text-sm"
+                      data-testid={`pack-item-${idx}`}
+                    >
+                      <span className="text-primary">•</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Get access to the complete camping packing checklist with Pro Membership ($29.99/year with 7-day free trial)
+                  </p>
+                  <ul className="text-xs text-muted-foreground space-y-1 ml-4">
+                    <li>• Comprehensive packing lists for all seasons</li>
+                    <li>• Printable camping planners and activity sheets</li>
+                    <li>• Meal planning templates</li>
+                  </ul>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

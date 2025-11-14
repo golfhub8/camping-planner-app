@@ -20,7 +20,6 @@ const categoryConfig: Record<GroceryCategory, { Icon: LucideIcon; color: string 
   "Dairy": { Icon: Milk, color: "text-blue-600 dark:text-blue-400" },
   "Meat": { Icon: Beef, color: "text-red-600 dark:text-red-400" },
   "Pantry": { Icon: Package, color: "text-yellow-600 dark:text-yellow-400" },
-  "Camping Gear": { Icon: Tent, color: "text-purple-600 dark:text-purple-400" },
 };
 
 // Page for displaying the generated grocery list
@@ -286,7 +285,6 @@ export default function GroceryList() {
     "Dairy": [],
     "Meat": [],
     "Pantry": [],
-    "Camping Gear": [],
   };
 
   groceryItems.forEach(item => {

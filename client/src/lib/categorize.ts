@@ -20,11 +20,6 @@ export function categorizeIngredient(ingredient: string): GroceryCategory {
     return "Meat";
   }
   
-  // Camping Gear keywords
-  if (/(foil|paper|plate|cup|napkin|utensil|fork|knife|spoon|lighter|match|firewood|charcoal|grill)/i.test(lower)) {
-    return "Camping Gear";
-  }
-  
-  // Default to Pantry for everything else (spices, canned goods, oils, etc.)
+  // Default to Pantry for everything else (spices, canned goods, oils, camping supplies, etc.)
   return "Pantry";
 }

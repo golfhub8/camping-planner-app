@@ -119,7 +119,7 @@ export type AuthUser = User & {
 
 // Grocery List schemas
 // Categories for grouping grocery items
-export const groceryCategories = ["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"] as const;
+export const groceryCategories = ["Produce", "Dairy", "Meat", "Pantry"] as const;
 export type GroceryCategory = typeof groceryCategories[number];
 
 // Individual grocery item
@@ -499,9 +499,9 @@ export const CAMPING_BASICS = [
   { id: "meat", name: "Protein (hot dogs, burgers, sausage)", category: "Meat" as const },
   { id: "smores", name: "S'mores kit (graham, chocolate, marshmallows)", category: "Pantry" as const },
   { id: "spices", name: "Salt, pepper, basic spices", category: "Pantry" as const },
-  { id: "ice", name: "Ice / ice packs", category: "Camping Gear" as const },
-  { id: "foil", name: "Aluminum foil / zip bags", category: "Camping Gear" as const },
-  { id: "paper", name: "Paper towel / napkins", category: "Camping Gear" as const },
+  { id: "ice", name: "Ice / ice packs", category: "Pantry" as const },
+  { id: "foil", name: "Aluminum foil / zip bags", category: "Pantry" as const },
+  { id: "paper", name: "Paper towel / napkins", category: "Pantry" as const },
 ] as const;
 
 // Extract valid camping basic IDs for validation

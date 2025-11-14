@@ -10,7 +10,7 @@ import { AlertCircle, ShoppingCart } from "lucide-react";
 import type { GroceryItem, GroceryCategory, SharedGroceryList } from "@shared/schema";
 
 // Grocery categories for grouping
-const groceryCategories: GroceryCategory[] = ["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"];
+const groceryCategories: GroceryCategory[] = ["Produce", "Dairy", "Meat", "Pantry"];
 
 export default function SharedGroceryView() {
   const [, params] = useRoute("/shared/:token");
@@ -83,7 +83,6 @@ export default function SharedGroceryView() {
     "Dairy": [],
     "Meat": [],
     "Pantry": [],
-    "Camping Gear": [],
   };
 
   items.forEach(item => {

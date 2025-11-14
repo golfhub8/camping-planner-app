@@ -82,7 +82,7 @@ export default function NearbyHikes({ tripId, location }: NearbyHikesProps) {
           <CardTitle className="flex items-center gap-2 text-lg">
             <MountainIcon className="h-5 w-5 text-primary" />
             Nearby Hikes
-            <Badge variant="secondary" className="text-xs">Powered by National Park Service</Badge>
+            <Badge variant="secondary" className="text-xs">Powered by OpenStreetMap</Badge>
           </CardTitle>
           <Button
             variant="ghost"
@@ -115,7 +115,7 @@ export default function NearbyHikes({ tripId, location }: NearbyHikesProps) {
           </Alert>
         )}
 
-        {/* Warnings from NPS API */}
+        {/* Warnings from OpenStreetMap Overpass API */}
         {!isLoading && warnings.length > 0 && (
           <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950" data-testid="alert-trails-warning">
             <AlertCircleIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
