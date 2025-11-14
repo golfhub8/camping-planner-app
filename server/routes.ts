@@ -2242,9 +2242,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return "Meat";
     }
     
-    // Camping Gear keywords
+    // Camping/kitchen supplies moved to Pantry
     if (/(foil|paper|plate|cup|napkin|utensil|fork|knife|spoon|lighter|match|firewood|charcoal|grill)/i.test(lower)) {
-      return "Camping Gear";
+      return "Pantry";
     }
     
     // Default to Pantry for everything else (spices, canned goods, oils, etc.)
@@ -2302,7 +2302,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Dairy": [],
         "Meat": [],
         "Pantry": [],
-        "Camping Gear": [],
       };
       
       groceryItems.forEach(item => {
@@ -2976,7 +2975,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "Dairy": [],
           "Meat": [],
           "Pantry": [],
-          "Camping Gear": [],
         }});
       }
 
@@ -2989,7 +2987,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "Dairy": [],
           "Meat": [],
           "Pantry": [],
-          "Camping Gear": [],
         }});
       }
 
@@ -3007,7 +3004,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "Dairy": [],
           "Meat": [],
           "Pantry": [],
-          "Camping Gear": [],
         }});
       }
       
@@ -3038,7 +3034,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Dairy": [],
         "Meat": [],
         "Pantry": [],
-        "Camping Gear": [],
       };
       
       groceryItems.forEach(item => {
