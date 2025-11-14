@@ -68,45 +68,43 @@ export const PRINTABLES_MANIFEST: PrintableManifestEntry[] = [
     icon: 'activities',
   },
   
-  // ========== COMING SOON (Upload PDFs to assets/printables/pro/) ==========
-  // Uncomment these after uploading the actual PDF files:
-  
-  // {
-  //   slug: 'camping-planner-us',
-  //   title: 'The Camping Planner (US Letter)',
-  //   description: 'The original planner to organize every camping trip.',
-  //   filename: 'THE CAMPING PLANNER US LETTER.pdf',
-  //   tier: 'pro',
-  //   paperSize: 'US Letter',
-  //   icon: 'planner',
-  // },
-  // {
-  //   slug: 'camping-planner-a4',
-  //   title: 'The Camping Planner (A4)',
-  //   description: 'A4 version of the core planner.',
-  //   filename: 'THE CAMPING PLANNER A4 SIZE.pdf',
-  //   tier: 'pro',
-  //   paperSize: 'A4',
-  //   icon: 'planner',
-  // },
-  // {
-  //   slug: 'ultimate-planner',
-  //   title: 'The ULTIMATE Camping Planner',
-  //   description: 'All-in-one planner bundle for serious campers.',
-  //   filename: 'THE ULTIMATE CAMPING PLANNER US LETTER.pdf',
-  //   tier: 'pro',
-  //   paperSize: 'US Letter',
-  //   icon: 'planner',
-  // },
-  // {
-  //   slug: 'games-bundle',
-  //   title: 'Camping Games Bundle (US Letter)',
-  //   description: 'Complete collection of camping games.',
-  //   filename: 'CAMPING GAMES BUNDLE US LETTER.pdf',
-  //   tier: 'pro',
-  //   paperSize: 'US Letter',
-  //   icon: 'games',
-  // },
+  // ========== ADDITIONAL PRO PRINTABLES ==========
+  {
+    slug: 'camping-planner-us-letter',
+    title: 'The Camping Planner (US Letter)',
+    description: 'The original planner to organize every camping trip.',
+    filename: 'camping-planner-us-letter.pdf',
+    tier: 'pro',
+    paperSize: 'US Letter',
+    icon: 'planner',
+  },
+  {
+    slug: 'camping-planner-a4',
+    title: 'The Camping Planner (A4)',
+    description: 'A4 version of the core planner.',
+    filename: 'camping-planner-a4.pdf',
+    tier: 'pro',
+    paperSize: 'A4',
+    icon: 'planner',
+  },
+  {
+    slug: 'ultimate-planner-us-letter',
+    title: 'The ULTIMATE Camping Planner (US Letter)',
+    description: 'All-in-one planner bundle for serious campers.',
+    filename: 'ultimate-planner-us-letter.pdf',
+    tier: 'pro',
+    paperSize: 'US Letter',
+    icon: 'planner',
+  },
+  {
+    slug: 'games-bundle-us-letter',
+    title: 'Camping Games Bundle (US Letter)',
+    description: 'Complete collection of camping games.',
+    filename: 'games-bundle-us-letter.pdf',
+    tier: 'pro',
+    paperSize: 'US Letter',
+    icon: 'games',
+  },
 ];
 
 /**
