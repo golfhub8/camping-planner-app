@@ -16,6 +16,7 @@ import * as fs from "fs";
 import crypto from "crypto";
 import { initializeEmailService, sendWelcomeToProEmail, sendProPaymentReceiptEmail } from "./emailService";
 import { normalizeRecipePayload } from "./recipeNormalizer";
+import { PRINTABLES_MANIFEST, getPrintableBySlug } from '../assets/printables/manifest';
 
 /**
  * Converts IPv6 address to bytes for proper IPv4-mapped detection
@@ -843,57 +844,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Printables] Anonymous user request`);
     }
 
-    const printables = [
-      {
-        id: "free-food-packing",
-        title: "Free Food Packing List (US Letter)",
-        file: "/printables/THE CAMPING PLANNER - Free Food Packing List US LETTER.pdf",
-        description: "Plan meals easily with this free food packing checklist.",
-        free: true,
-      },
-      {
-        id: "free-charades",
-        title: "Free Camping Charades (US Letter)",
-        file: "/printables/FREE CAMPING CHARADES US LETTER.pdf",
-        description: "A fun, family-friendly game for the campfire.",
-        free: true,
-      },
-      {
-        id: "camping-planner-us",
-        title: "The Camping Planner (US Letter)",
-        file: "/printables/THE CAMPING PLANNER US LETTER.pdf",
-        description: "The original planner to organize every camping trip.",
-        requiresPro: true,
-      },
-      {
-        id: "camping-planner-a4",
-        title: "The Camping Planner (A4)",
-        file: "/printables/THE CAMPING PLANNER A4 SIZE.pdf",
-        description: "A4 version of the core planner.",
-        requiresPro: true,
-      },
-      {
-        id: "ultimate-planner",
-        title: "The ULTIMATE Camping Planner",
-        file: "/printables/THE ULTIMATE CAMPING PLANNER US LETTER.pdf",
-        description: "All-in-one planner bundle for serious campers.",
-        requiresPro: true,
-      },
-      {
-        id: "games-bundle",
-        title: "Camping Games Bundle",
-        file: "/printables/CAMPING GAMES BUNDLE  US LETTER.pdf",
-        description: "A collection of printable games for every age.",
-        requiresPro: true,
-      },
-      {
-        id: "mega-activity-book",
-        title: "Mega Camping Activity Book (A4)",
-        file: "/printables/MEGA CAMPING ACTIVITY BOOK A4.pdf",
-        description: "Over 70 pages of fun activities for kids and families.",
-        requiresPro: true,
-      },
-    ];
+    // Load printables from manifest and validate files exist in synced destinations
+    const printables = PRINTABLES_MANIFEST
+      .filter((entry) => {
+        // Check if file exists in the synced destination (not source assets/)
+        // Free PDFs are served from public/printables/, Pro PDFs from server/private/printables/
+        const checkPath = entry.tier === 'free' 
+          ? path.resolve(import.meta.dirname, '../public/printables', entry.filename)
+          : path.resolve(import.meta.dirname, 'private/printables', entry.filename);
+        
+        const exists = fs.existsSync(checkPath);
+        if (!exists) {
+          console.warn(`[Printables] Skipping ${entry.slug} - file not synced to destination: ${entry.filename}`);
+          console.warn(`  Expected path: ${checkPath}`);
+          console.warn(`  Run: node scripts/sync-printables.mjs --clean --verify`);
+        }
+        return exists;
+      })
+      .map((entry) => ({
+        id: entry.slug,
+        title: entry.title,
+        description: entry.description,
+        file: entry.tier === 'free' ? `/printables/${entry.filename}` : `/printables/${entry.filename}`,
+        free: entry.tier === 'free',
+        requiresPro: entry.tier === 'pro',
+      }));
 
     // Filter: if not Pro, hide file path for paid ones
     const visible = printables.map((p) => {
@@ -912,26 +887,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/printables/download/:id', isAuthenticated, requirePrintableAccess, async (req: any, res) => {
     const { id } = req.params;
     
-    // Whitelist mapping of file IDs to actual PDF filenames
-    // This prevents path traversal attacks and ensures only approved files are served
-    const fileMap: Record<string, string> = {
-      'camping-planner-us': 'THE CAMPING PLANNER US LETTER.pdf',
-      'camping-planner-a4': 'THE CAMPING PLANNER A4 SIZE.pdf',
-      'ultimate-planner': 'THE ULTIMATE CAMPING PLANNER US LETTER.pdf',
-      'games-bundle': 'CAMPING GAMES BUNDLE  US LETTER.pdf',
-      'mega-activity-book': 'MEGA CAMPING ACTIVITY BOOK A4.pdf',
-    };
+    // Look up printable in manifest using slug
+    const printable = getPrintableBySlug(id);
     
-    const filename = fileMap[id];
-    
-    if (!filename) {
-      console.log(`[Printables] Invalid file ID requested: ${id}`);
+    if (!printable) {
+      console.log(`[Printables] Invalid printable slug requested: ${id}`);
       return res.status(404).json({ error: 'Printable not found' });
     }
     
+    // Only Pro printables should be served via this endpoint
+    if (printable.tier !== 'pro') {
+      console.warn(`[Printables] Attempted to download free printable via Pro endpoint: ${id}`);
+      return res.status(400).json({ error: 'Invalid endpoint for this printable' });
+    }
+    
+    const filename = printable.filename;
     const filePath = path.resolve(import.meta.dirname, 'private/printables', filename);
     
-    // Check if file exists
+    // Check if file exists (runtime safeguard)
     if (!fs.existsSync(filePath)) {
       console.error(`[Printables] File not found on disk: ${filePath}`);
       return res.status(404).json({ error: 'File not found' });
