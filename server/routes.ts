@@ -3409,8 +3409,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const subscriptions = await stripe.subscriptions.list({
             customer: user.stripeCustomerId,
             status: 'all',
-            limit: 100, // Increased limit to catch older active subscriptions
+            limit: 100, // Extremely high limit - typical users have <5 subscriptions
           });
+          
+          // Log warning if we hit the limit (indicates potential pagination needed)
+          if (subscriptions.has_more) {
+            console.warn(`[Checkout] Customer ${user.stripeCustomerId} has 100+ subscriptions - pagination not implemented. This is extremely rare and may miss older active subscriptions.`);
+            // TODO: Implement pagination if this warning appears frequently in production
+          }
           
           // Check for any active/trialing/past_due subscriptions
           // Block ALL active subscriptions, including those with cancel_at_period_end
