@@ -25,9 +25,11 @@ interface RecipeCardProps {
   url?: string; // For external recipes - link to full recipe
   content?: string; // For external recipes - recipe instructions/content
   onViewExternal?: () => void; // Handler for viewing external recipes in modal
+  fromTripId?: number; // Trip context for direct add
+  fromTripName?: string; // Trip name for messaging
 }
 
-export default function RecipeCard({ id, title, ingredients, createdAt, source = "internal", url, content, onViewExternal }: RecipeCardProps) {
+export default function RecipeCard({ id, title, ingredients, createdAt, source = "internal", url, content, onViewExternal, fromTripId, fromTripName }: RecipeCardProps) {
   const { toast } = useToast();
   
   // State for the share dialog
@@ -111,8 +113,43 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
     }
   };
 
-  // Add recipe to trip mutation (for external recipes)
-  const addToTripMutation = useMutation({
+  // Add internal recipe to trip mutation
+  const addInternalToTripMutation = useMutation({
+    mutationFn: async (tripId: number) => {
+      // Ensure id is a number for internal recipes
+      if (typeof id !== 'number') {
+        throw new Error("Invalid recipe ID for internal recipe");
+      }
+      const response = await apiRequest("POST", `/api/trips/${tripId}/meals`, {
+        recipeId: id,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add recipe to trip");
+      }
+      return response.json();
+    },
+    onSuccess: (_, tripId) => {
+      const tripName = fromTripName || "trip";
+      toast({
+        title: "Meal Added!",
+        description: `"${title}" has been added to ${tripName}.`,
+      });
+      // Invalidate trip queries
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add recipe to trip",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add external recipe to trip mutation
+  const addExternalToTripMutation = useMutation({
     mutationFn: async (tripId: number) => {
       const response = await apiRequest("POST", `/api/trips/${tripId}/meals`, {
         isExternal: true,
@@ -126,14 +163,16 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, tripId) => {
+      const tripName = fromTripName || "trip";
       toast({
         title: "Recipe Added!",
-        description: `"${title}" has been added to your trip.`,
+        description: `"${title}" has been added to ${tripName}.`,
       });
       setTripSelectorOpen(false);
-      // Invalidate trip meals queries
-      queryClient.invalidateQueries({ queryKey: ["/api/trips"] });
+      // Invalidate trip queries
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
     },
     onError: (error: Error) => {
       toast({
@@ -145,7 +184,30 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   });
 
   const handleSelectTrip = (tripId: number) => {
-    addToTripMutation.mutate(tripId);
+    if (source === "external") {
+      addExternalToTripMutation.mutate(tripId);
+    } else {
+      addInternalToTripMutation.mutate(tripId);
+    }
+  };
+
+  // Combined loading state for any add-to-trip operation
+  const isAddingToTrip = addInternalToTripMutation.isPending || addExternalToTripMutation.isPending;
+
+  const handleAddToTrip = () => {
+    if (isAddingToTrip) return; // Prevent double-click
+    
+    if (fromTripId) {
+      // Direct add to the trip from context
+      if (source === "external") {
+        addExternalToTripMutation.mutate(fromTripId);
+      } else {
+        addInternalToTripMutation.mutate(fromTripId);
+      }
+    } else {
+      // Show trip selector
+      setTripSelectorOpen(true);
+    }
   };
 
   return (
@@ -229,17 +291,18 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               </Button>
             )}
             
-            {/* Add to Trip button - only for external recipes */}
-            {source === "external" && (
+            {/* Add to Trip button - show when trip context exists OR for external recipes */}
+            {(fromTripId || source === "external") && (
               <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => setTripSelectorOpen(true)}
+                onClick={handleAddToTrip}
+                disabled={isAddingToTrip}
                 data-testid={`button-add-to-trip-${id}`}
               >
                 <Plus className="h-4 w-4" />
-                Add to Trip
+                {fromTripId ? `Add to ${fromTripName}` : "Add to Trip"}
               </Button>
             )}
             
@@ -364,12 +427,12 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
         </DialogContent>
       </Dialog>
 
-      {/* Trip Selector Dialog - for adding external recipes to trips */}
+      {/* Trip Selector Dialog - for adding recipes to trips */}
       <TripSelector
         open={tripSelectorOpen}
         onOpenChange={setTripSelectorOpen}
         onSelectTrip={handleSelectTrip}
-        isLoading={addToTripMutation.isPending}
+        isLoading={isAddingToTrip}
       />
       
       {/* Ingredient Picker Modal - for adding ingredients to grocery list */}

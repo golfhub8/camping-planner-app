@@ -28,6 +28,14 @@ export default function Home() {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   
+  // Parse trip context from query params
+  const tripContext = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tripId = params.get('fromTripId');
+    const tripName = params.get('fromTripName');
+    return tripId && tripName ? { tripId: parseInt(tripId), tripName } : null;
+  }, [location]);
+  
   // State for search query - filters recipes by title and ingredients
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -203,6 +211,26 @@ export default function Home() {
       
       
       <main className="container mx-auto pt-24 px-6 md:px-10 py-12 space-y-10">
+        {/* Trip Context Banner */}
+        {tripContext && (
+          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Adding meals to</p>
+              <h3 className="font-semibold text-lg">{tripContext.tripName}</h3>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Clear query params by navigating without them
+                navigate(`/trips/${tripContext.tripId}`, { replace: true });
+              }}
+              data-testid="button-back-to-trip"
+            >
+              Back to Trip
+            </Button>
+          </div>
+        )}
+        
         <div className="text-center space-y-3">
           <h1 className="text-5xl font-bold text-foreground" data-testid="text-page-title">
             Camp Recipes
@@ -261,6 +289,8 @@ export default function Home() {
                   ingredients={recipe.ingredients}
                   createdAt={new Date(recipe.createdAt)}
                   source="internal"
+                  fromTripId={tripContext?.tripId}
+                  fromTripName={tripContext?.tripName}
                 />
               ))}
             </div>
@@ -296,6 +326,8 @@ export default function Home() {
                   url={recipe.url}
                   content={recipe.content}
                   onViewExternal={() => setViewingExternalRecipeId(recipe.id)}
+                  fromTripId={tripContext?.tripId}
+                  fromTripName={tripContext?.tripName}
                 />
               ))}
             </div>
