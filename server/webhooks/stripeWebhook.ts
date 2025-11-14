@@ -1,4 +1,3 @@
-import { Express } from "express";
 import express from "express";
 import Stripe from "stripe";
 import { IStorage } from "../storage";
@@ -503,71 +502,113 @@ async function handleSubscriptionDeleted(
   }
 }
 
-// Main webhook handler registration
-export function registerStripeWebhook(app: Express, storage: IStorage): void {
-  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+// Export storage instance for use by the router
+let storageInstance: IStorage;
+
+export function setWebhookStorage(storage: IStorage) {
+  storageInstance = storage;
+}
+
+// Stripe webhook router following Stripe best practices
+export const stripeWebhookRouter = express.Router();
+
+// IMPORTANT: Use express.raw for webhook endpoint ONLY
+// This preserves the raw body needed for signature verification
+stripeWebhookRouter.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    // Fast failure paths first
     if (!stripe) {
+      console.error("[Webhook] ❌ Stripe not configured");
       return res.status(503).send("Stripe not configured");
     }
 
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
+    const sig = req.headers["stripe-signature"];
     if (!sig) {
+      console.error("[Webhook] ❌ No signature header");
       return res.status(400).send("No signature");
     }
 
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
-      console.error("STRIPE_WEBHOOK_SECRET not configured");
+      console.error("[Webhook] ❌ STRIPE_WEBHOOK_SECRET not configured");
       return res.status(500).send("Webhook secret not configured");
     }
 
+    // Verify webhook signature
     let event: Stripe.Event;
-
     try {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        webhookSecret
+      );
     } catch (err: any) {
-      console.error("Webhook signature verification failed:", err.message);
+      console.error(`[Webhook] ❌ Webhook signature error: ${err.message}`);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    // Check idempotency
+    // Check idempotency - prevent duplicate processing
     if (processedWebhookEvents.has(event.id)) {
       console.log(`[Webhook] Event ${event.id} already processed, skipping duplicate`);
-      return res.status(200).send("Duplicate event - already processed");
+      return res.status(200).json({ received: true, note: "Duplicate event" });
     }
 
+    // Process webhook event
     try {
-      console.log(`[Webhook] Received event: ${event.type} (${event.id})`);
+      console.log(`[Webhook] ✅ Webhook received: ${event.type} (${event.id})`);
       
       // Route events to handlers
       switch (event.type) {
-        case 'checkout.session.completed':
-          await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session, storage);
+        case "checkout.session.completed":
+          await handleCheckoutCompleted(
+            event.data.object as Stripe.Checkout.Session,
+            storageInstance
+          );
           break;
 
-        case 'invoice.payment_succeeded':
-          await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice, storage);
+        case "invoice.payment_succeeded":
+          await handleInvoicePaymentSucceeded(
+            event.data.object as Stripe.Invoice,
+            storageInstance
+          );
           break;
 
-        case 'invoice.payment_failed':
-          await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice, storage);
+        case "invoice.payment_failed":
+          await handleInvoicePaymentFailed(
+            event.data.object as Stripe.Invoice,
+            storageInstance
+          );
           break;
 
-        case 'invoice.upcoming':
-          await handleInvoiceUpcoming(event.data.object as Stripe.Invoice, storage);
+        case "invoice.upcoming":
+          await handleInvoiceUpcoming(
+            event.data.object as Stripe.Invoice,
+            storageInstance
+          );
           break;
 
-        case 'customer.subscription.trial_will_end':
-          await handleTrialWillEnd(event.data.object as Stripe.Subscription, storage);
+        case "customer.subscription.trial_will_end":
+          await handleTrialWillEnd(
+            event.data.object as Stripe.Subscription,
+            storageInstance
+          );
           break;
 
-        case 'customer.subscription.updated':
-          await handleSubscriptionUpdated(event.data.object as Stripe.Subscription, storage);
+        case "customer.subscription.updated":
+        case "customer.subscription.created":
+          await handleSubscriptionUpdated(
+            event.data.object as Stripe.Subscription,
+            storageInstance
+          );
           break;
 
-        case 'customer.subscription.deleted':
-          await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, storage);
+        case "customer.subscription.deleted":
+          await handleSubscriptionDeleted(
+            event.data.object as Stripe.Subscription,
+            storageInstance
+          );
           break;
 
         default:
@@ -577,10 +618,12 @@ export function registerStripeWebhook(app: Express, storage: IStorage): void {
       // Mark event as successfully processed
       processedWebhookEvents.set(event.id, Date.now());
       
-      res.json({ received: true });
+      console.log(`[Webhook] ✅ Successfully processed: ${event.type}`);
+      res.status(200).json({ received: true });
     } catch (error) {
-      console.error("[Webhook] Error processing webhook:", error);
+      console.error(`[Webhook] ❌ Error processing webhook:`, error);
+      // Return 500 so Stripe retries
       res.status(500).send("Webhook processing failed");
     }
-  });
-}
+  }
+);

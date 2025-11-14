@@ -1,14 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { registerStripeWebhook } from "./webhooks/stripeWebhook";
+import { stripeWebhookRouter, setWebhookStorage } from "./webhooks/stripeWebhook";
 import { storage } from "./storage";
 
 const app = express();
 
-// IMPORTANT: Register Stripe webhook BEFORE global JSON middleware
+// IMPORTANT: Mount Stripe webhook router BEFORE global JSON middleware
 // The webhook needs raw body for signature verification
-registerStripeWebhook(app, storage);
+setWebhookStorage(storage);
+app.use("/api/stripe", stripeWebhookRouter);
 
 declare module 'http' {
   interface IncomingMessage {
