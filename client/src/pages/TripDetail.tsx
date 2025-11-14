@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { CalendarIcon, MapPinIcon, UsersIcon, DollarSignIcon, UtensilsIcon, ArrowLeftIcon, PlusIcon, XIcon, ShoppingCartIcon, CopyIcon, CheckIcon, Share2Icon, CloudSunIcon, Loader2, PencilIcon, PackageIcon, ChevronDownIcon, ChevronRightIcon, CloudRain } from "lucide-react";
 import SubscribeButton from "@/components/SubscribeButton";
 import { CurrentWeather, WeatherForecast } from "@/components/WeatherCard";
@@ -171,6 +173,12 @@ export default function TripDetail() {
   const [shareCopied, setShareCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   
+  // State for Add Meal tabs
+  const [addMealTab, setAddMealTab] = useState("saved");
+  const [customMealTitle, setCustomMealTitle] = useState("");
+  const [customMealIngredients, setCustomMealIngredients] = useState("");
+  const [customMealInstructions, setCustomMealInstructions] = useState("");
+  
   // State for expanded meals and selected ingredients
   const [expandedMeals, setExpandedMeals] = useState<Set<number>>(new Set());
   const [selectedIngredients, setSelectedIngredients] = useState<Map<number, Set<string>>>(new Map());
@@ -251,6 +259,12 @@ export default function TripDetail() {
     },
   });
 
+  // Query for external suggested recipes
+  const { data: externalRecipes, isLoading: externalRecipesLoading } = useQuery<{recipes: Array<{id: string, title: string, slug: string, url: string, excerpt: string, date: string}>}>({
+    queryKey: ["/api/external-recipes"],
+    enabled: addMealDialogOpen && addMealTab === "suggested",
+  });
+
   // Mutation to add meal to trip
   const addMealMutation = useMutation({
     mutationFn: async (recipeId: number) => {
@@ -264,6 +278,125 @@ export default function TripDetail() {
       toast({
         title: "Meal added!",
         description: "Recipe has been added to your trip.",
+      });
+    },
+  });
+
+  // Mutation to create custom recipe and add to trip
+  const createCustomMealMutation = useMutation({
+    mutationFn: async () => {
+      // First create the recipe
+      const createResponse = await apiRequest("POST", "/api/recipes", {
+        title: customMealTitle,
+        ingredients: customMealIngredients.split("\n").filter(i => i.trim()),
+        steps: customMealInstructions.split("\n").filter(s => s.trim()),
+      });
+      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json().catch(() => ({ error: "Failed to create recipe" }));
+        throw new Error(errorData.error || "Failed to create recipe");
+      }
+      
+      const recipe = await createResponse.json();
+      
+      if (!recipe.id) {
+        throw new Error("Recipe created but ID is missing");
+      }
+      
+      // Then add it to the trip
+      const addResponse = await apiRequest("POST", `/api/trips/${tripId}/meals`, { recipeId: recipe.id });
+      
+      if (!addResponse.ok) {
+        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add recipe to trip" }));
+        throw new Error(errorData.error || "Failed to add recipe to trip");
+      }
+      
+      return addResponse.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
+      setAddMealDialogOpen(false);
+      setCustomMealTitle("");
+      setCustomMealIngredients("");
+      setCustomMealInstructions("");
+      toast({
+        title: "Custom meal added!",
+        description: "Your custom recipe has been created and added to your trip.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to create custom meal",
+        description: error.message || "Please check your inputs and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation to save external recipe and add to trip
+  const saveExternalMealMutation = useMutation({
+    mutationFn: async (url: string) => {
+      // First parse and save the recipe
+      const parseResponse = await apiRequest("POST", "/api/recipes/parse", { url });
+      
+      if (!parseResponse.ok) {
+        const errorData = await parseResponse.json().catch(() => ({ error: "Failed to parse recipe" }));
+        throw new Error(errorData.error || "Could not auto-import this recipe");
+      }
+      
+      const parsedData = await parseResponse.json();
+      
+      if (!parsedData.title || !parsedData.ingredients || parsedData.ingredients.length === 0) {
+        throw new Error("Recipe parsing incomplete - missing title or ingredients");
+      }
+      
+      // Create the recipe
+      const createResponse = await apiRequest("POST", "/api/recipes", {
+        title: parsedData.title,
+        ingredients: parsedData.ingredients,
+        steps: parsedData.steps,
+        imageUrl: parsedData.imageUrl,
+        sourceUrl: parsedData.sourceUrl,
+      });
+      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json().catch(() => ({ error: "Failed to create recipe" }));
+        throw new Error(errorData.error || "Failed to save recipe");
+      }
+      
+      const recipe = await createResponse.json();
+      
+      if (!recipe.id) {
+        throw new Error("Recipe created but ID is missing");
+      }
+      
+      // Then add it to the trip
+      const addResponse = await apiRequest("POST", `/api/trips/${tripId}/meals`, { recipeId: recipe.id });
+      
+      if (!addResponse.ok) {
+        const errorData = await addResponse.json().catch(() => ({ error: "Failed to add recipe to trip" }));
+        throw new Error(errorData.error || "Failed to add recipe to trip");
+      }
+      
+      return addResponse.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId, "meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId] });
+      setAddMealDialogOpen(false);
+      toast({
+        title: "Recipe saved and added!",
+        description: "The external recipe has been saved to your collection and added to your trip.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to save recipe",
+        description: error.message || "Could not auto-import this recipe. Try creating a custom meal instead.",
+        variant: "destructive",
       });
     },
   });
@@ -861,7 +994,15 @@ export default function TripDetail() {
                 </Dialog>
 
                 {/* Add Meal Dialog */}
-                <Dialog open={addMealDialogOpen} onOpenChange={setAddMealDialogOpen}>
+                <Dialog open={addMealDialogOpen} onOpenChange={(open) => {
+                  setAddMealDialogOpen(open);
+                  if (!open) {
+                    setAddMealTab("saved");
+                    setCustomMealTitle("");
+                    setCustomMealIngredients("");
+                    setCustomMealInstructions("");
+                  }
+                }}>
                   <DialogTrigger asChild>
                     <Button
                       size="sm"
@@ -871,52 +1012,153 @@ export default function TripDetail() {
                       Add Meal
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
                     <DialogHeader>
                       <DialogTitle>Add a Meal</DialogTitle>
                       <DialogDescription>
-                        {availableRecipes.length === 0 
-                          ? "Create some recipes first to add meals to your trip"
-                          : "Select a recipe to add to your trip"
-                        }
+                        Choose from your saved recipes, browse suggested recipes, or create a custom meal
                       </DialogDescription>
                     </DialogHeader>
                     
-                    {availableRecipes.length === 0 ? (
-                      <div className="text-center py-8 space-y-4">
-                        <p className="text-muted-foreground">
-                          You haven't created any recipes yet, or all your recipes are already added to this trip.
-                        </p>
-                        <Button
-                          onClick={() => {
-                            setAddMealDialogOpen(false);
-                            navigate(`/recipes?createNew=true&addToTrip=${params.id}`);
-                          }}
-                          data-testid="button-create-recipe"
-                        >
-                          Create a Recipe
-                        </Button>
-                      </div>
-                    ) : (
-                      <Command>
-                        <CommandInput placeholder="Search recipes..." data-testid="input-search-recipes" />
-                        <CommandList>
-                          <CommandEmpty>No recipes found.</CommandEmpty>
-                          <CommandGroup>
-                            {availableRecipes.map((recipe) => (
-                              <CommandItem
+                    <Tabs value={addMealTab} onValueChange={setAddMealTab}>
+                      <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="saved" data-testid="tab-saved-recipes">My Recipes</TabsTrigger>
+                        <TabsTrigger value="suggested" data-testid="tab-suggested-recipes">Suggested</TabsTrigger>
+                        <TabsTrigger value="custom" data-testid="tab-custom-meal">Custom Meal</TabsTrigger>
+                      </TabsList>
+                      
+                      <TabsContent value="saved" className="mt-4">
+                        {availableRecipes.length === 0 ? (
+                          <div className="text-center py-8 space-y-4">
+                            <p className="text-muted-foreground">
+                              You haven't created any recipes yet, or all your recipes are already added to this trip.
+                            </p>
+                            <Button
+                              onClick={() => {
+                                setAddMealDialogOpen(false);
+                                navigate(`/recipes?createNew=true&addToTrip=${params.id}`);
+                              }}
+                              data-testid="button-create-recipe"
+                            >
+                              Create a Recipe
+                            </Button>
+                          </div>
+                        ) : (
+                          <Command>
+                            <CommandInput placeholder="Search recipes..." data-testid="input-search-recipes" />
+                            <CommandList>
+                              <CommandEmpty>No recipes found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableRecipes.map((recipe) => (
+                                  <CommandItem
+                                    key={recipe.id}
+                                    onSelect={() => addMealMutation.mutate(recipe.id)}
+                                    data-testid={`recipe-option-${recipe.id}`}
+                                  >
+                                    <UtensilsIcon className="w-4 h-4 mr-2" />
+                                    {recipe.title}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        )}
+                      </TabsContent>
+                      
+                      <TabsContent value="suggested" className="mt-4">
+                        {externalRecipesLoading ? (
+                          <div className="text-center py-8">
+                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Loading suggested recipes...</p>
+                          </div>
+                        ) : externalRecipes?.recipes && externalRecipes.recipes.length > 0 ? (
+                          <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {externalRecipes.recipes.slice(0, 10).map((recipe) => (
+                              <div
                                 key={recipe.id}
-                                onSelect={() => addMealMutation.mutate(recipe.id)}
-                                data-testid={`recipe-option-${recipe.id}`}
+                                className="flex items-start justify-between p-3 border rounded-md hover-elevate"
+                                data-testid={`external-recipe-${recipe.id}`}
                               >
-                                <UtensilsIcon className="w-4 h-4 mr-2" />
-                                {recipe.title}
-                              </CommandItem>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-sm">{recipe.title}</h4>
+                                  <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                    {recipe.excerpt.replace(/<[^>]*>/g, '')}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => saveExternalMealMutation.mutate(recipe.url)}
+                                  disabled={saveExternalMealMutation.isPending}
+                                  data-testid={`button-save-external-${recipe.id}`}
+                                >
+                                  {saveExternalMealMutation.isPending ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    "Add to Trip"
+                                  )}
+                                </Button>
+                              </div>
                             ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground">No suggested recipes available at this time.</p>
+                          </div>
+                        )}
+                      </TabsContent>
+                      
+                      <TabsContent value="custom" className="mt-4">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-sm font-medium">Meal Name</label>
+                            <Input
+                              value={customMealTitle}
+                              onChange={(e) => setCustomMealTitle(e.target.value)}
+                              placeholder="e.g., Campfire Breakfast Burritos"
+                              data-testid="input-custom-meal-title"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Ingredients (one per line)</label>
+                            <Textarea
+                              value={customMealIngredients}
+                              onChange={(e) => setCustomMealIngredients(e.target.value)}
+                              placeholder="Tortillas&#10;Eggs&#10;Cheese&#10;Bell peppers&#10;Onions"
+                              rows={6}
+                              data-testid="input-custom-meal-ingredients"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Instructions (optional, one per line)</label>
+                            <Textarea
+                              value={customMealInstructions}
+                              onChange={(e) => setCustomMealInstructions(e.target.value)}
+                              placeholder="Dice vegetables&#10;Scramble eggs&#10;Warm tortillas&#10;Assemble burritos"
+                              rows={6}
+                              data-testid="input-custom-meal-instructions"
+                            />
+                          </div>
+                          <Button
+                            onClick={() => createCustomMealMutation.mutate()}
+                            disabled={!customMealTitle.trim() || !customMealIngredients.trim() || createCustomMealMutation.isPending}
+                            className="w-full"
+                            data-testid="button-create-custom-meal"
+                          >
+                            {createCustomMealMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Creating...
+                              </>
+                            ) : (
+                              <>
+                                <PlusIcon className="w-4 h-4 mr-2" />
+                                Create and Add to Trip
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </DialogContent>
                 </Dialog>
               </div>

@@ -3991,156 +3991,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper function to fetch hiking trails from National Park Service API
-  // Returns structured result with trails and optional warning message
-  async function fetchNPSTrails(
+  // Helper function to fetch hiking trails from OpenStreetMap Overpass API
+  // Works internationally - returns structured result with trails and optional warning message
+  async function fetchOverpassTrails(
     query: string, 
     limit: number = 5, 
     coordinates?: { lat: number; lon: number }
   ): Promise<{ trails: any[], warning?: string }> {
-    const NPS_API_KEY = process.env.NPS_API_KEY;
-    
-    if (!NPS_API_KEY) {
-      console.warn("[NPS API] API key not configured, returning empty trails");
+    if (!coordinates) {
+      console.warn("[Overpass API] No coordinates provided, cannot search for trails");
       return { 
         trails: [], 
-        warning: "Trail suggestions temporarily unavailable - API key not configured" 
+        warning: "Trail suggestions require a specific location. Please set your trip location." 
       };
     }
     
     try {
-      let parkCodes: string[] = [];
+      const { lat, lon } = coordinates;
+      const radiusMeters = 50000; // 50km radius
       
-      // If coordinates are provided, find nearby parks first
-      if (coordinates) {
-        try {
-          console.log(`[NPS API] Finding parks near coordinates: ${coordinates.lat}, ${coordinates.lon}`);
-          const parksUrl = `https://developer.nps.gov/api/v1/parks?latLong=${coordinates.lat},${coordinates.lon}&radius=100&limit=10&api_key=${NPS_API_KEY}`;
-          const parksResponse = await fetch(parksUrl);
-          
-          if (parksResponse.ok) {
-            const parksData = await parksResponse.json();
-            parkCodes = (parksData.data || [])
-              .filter((park: any) => park.parkCode)
-              .map((park: any) => park.parkCode);
-            
-            console.log(`[NPS API] Found ${parkCodes.length} parks near location:`, parkCodes.join(', '));
-          } else {
-            console.warn(`[NPS API] Park search failed with status ${parksResponse.status}, falling back to keyword search`);
-          }
-        } catch (parkError) {
-          console.error("[NPS API] Error finding nearby parks, falling back to keyword search:", parkError);
-        }
-      }
+      console.log(`[Overpass API] Searching for trails near coordinates: ${lat}, ${lon} (${radiusMeters/1000}km radius)`);
       
-      // Build Things To Do API URL with optional parkCode filter
-      let url = `https://developer.nps.gov/api/v1/thingstodo?q=${encodeURIComponent(query)}&limit=${limit}`;
+      // Overpass QL query for hiking routes and paths
+      // Searches for: hiking routes (relations), footways, paths within radius
+      const overpassQuery = `
+        [out:json][timeout:25];
+        (
+          way(around:${radiusMeters},${lat},${lon})["highway"="path"]["name"];
+          way(around:${radiusMeters},${lat},${lon})["highway"="footway"]["name"];
+          way(around:${radiusMeters},${lat},${lon})["highway"="track"]["name"]["sac_scale"];
+          relation(around:${radiusMeters},${lat},${lon})["route"="hiking"]["name"];
+        );
+        out body;
+        >;
+        out skel qt;
+      `;
       
-      // Add parkCode filter if we found nearby parks
-      if (parkCodes.length > 0) {
-        url += `&parkCode=${parkCodes.join(',')}`;
-        console.log(`[NPS API] Searching trails in parks: ${parkCodes.join(', ')}`);
-      } else {
-        console.log(`[NPS API] No nearby parks found, using keyword-only search`);
-      }
-      
-      url += `&api_key=${NPS_API_KEY}`;
-      const response = await fetch(url);
+      const overpassUrl = 'https://overpass-api.de/api/interpreter';
+      const response = await fetch(overpassUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: overpassQuery
+      });
       
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unable to read error body');
-        console.error(`[NPS API] Request failed with status ${response.status}: ${errorText}`);
+        console.error(`[Overpass API] Request failed with status ${response.status}: ${errorText}`);
         
         if (response.status === 429) {
-          console.error("[NPS API] Rate limit exceeded");
+          console.error("[Overpass API] Rate limit exceeded");
           return { 
             trails: [], 
-            warning: "Trail suggestions temporarily unavailable - rate limit exceeded. Please try again later." 
+            warning: "Trail suggestions temporarily unavailable - too many requests. Please try again in a moment." 
           };
         } else if (response.status >= 500) {
-          console.error("[NPS API] Server error, service may be temporarily unavailable");
+          console.error("[Overpass API] Server error");
           return { 
             trails: [], 
-            warning: "Trail suggestions temporarily unavailable - National Park Service API is experiencing issues." 
+            warning: "Trail suggestions temporarily unavailable - service error." 
           };
         }
         
         return { 
           trails: [], 
-          warning: "Trail suggestions temporarily unavailable - external API error." 
+          warning: "Trail suggestions temporarily unavailable." 
         };
       }
       
       const data = await response.json();
-      const activities = data.data || [];
+      const elements = data.elements || [];
       
-      if (activities.length === 0) {
-        console.log(`[NPS API] No results found for query: "${query}"`);
-        return { trails: [] };
-      }
+      // Extract unique trails (ways and relations with names)
+      const trailMap = new Map<string, any>();
       
-      // Map NPS activities to trail suggestions
-      const trails = activities
-        .filter((activity: any) => {
-          if (!activity || !activity.title) return false;
-          
-          const title = activity.title.toLowerCase();
-          const shortDesc = (activity.shortDescription || "").toLowerCase();
-          return title.includes("trail") || title.includes("hike") || 
-                 shortDesc.includes("trail") || shortDesc.includes("hike");
-        })
-        .map((activity: any) => {
-          const desc = (activity.shortDescription || "").toLowerCase();
-          
-          // Extract difficulty from description or tags
-          let difficulty: "easy" | "moderate" | "hard" = "moderate";
-          if (desc.includes("easy") || desc.includes("beginner") || desc.includes("family")) {
+      elements.forEach((element: any) => {
+        if (!element.tags || !element.tags.name) return;
+        
+        const name = element.tags.name;
+        if (trailMap.has(name)) return; // Skip duplicates
+        
+        const tags = element.tags;
+        
+        // Determine difficulty from sac_scale or other tags
+        let difficulty: "easy" | "moderate" | "hard" = "moderate";
+        if (tags.sac_scale) {
+          if (tags.sac_scale === "hiking" || tags.sac_scale === "T1") {
             difficulty = "easy";
-          } else if (desc.includes("difficult") || desc.includes("strenuous") || desc.includes("challenging") || desc.includes("advanced")) {
+          } else if (tags.sac_scale.includes("mountain") || tags.sac_scale === "T3" || tags.sac_scale === "T4") {
             difficulty = "hard";
           }
-          
-          // Parse distance from description (only include if explicitly mentioned)
-          const distanceMatch = desc.match(/(\d+\.?\d*)\s*(mile|km)/i);
-          
-          // Parse elevation from description (only include if explicitly mentioned)
-          const elevationMatch = desc.match(/(\d+)\s*(feet|ft|meters|m)\s*(elevation|gain)/i);
-          
-          // Build highlights array from description
-          const highlights = activity.shortDescription 
-            ? [activity.shortDescription]
-            : [];
-          
-          const trail: any = {
-            id: activity.id,
-            name: activity.title,
-            location: activity.relatedParks?.map((p: any) => p.fullName).join(", ") || "National Park",
-            difficulty,
-            highlights,
-            estimatedTime: difficulty === "easy" ? "1-2 hours" : difficulty === "moderate" ? "2-4 hours" : "4-6 hours",
-            parkName: activity.relatedParks?.[0]?.fullName,
-            url: activity.url,
-          };
-          
-          // Only include distance if found in description
-          if (distanceMatch) {
-            trail.distance = parseFloat(distanceMatch[1]);
-          }
-          
-          // Only include elevation gain if found in description
-          if (elevationMatch) {
-            trail.elevationGain = parseInt(elevationMatch[1]);
-          }
-          
-          return trail;
-        })
-        .filter((trail: any) => trail.highlights.length > 0)
-        .slice(0, limit);
+        } else if (tags.trail_visibility === "excellent" || tags.trail_visibility === "good") {
+          difficulty = "easy";
+        } else if (tags.trail_visibility === "bad" || tags.trail_visibility === "horrible") {
+          difficulty = "hard";
+        }
+        
+        // Build highlights from available tags
+        const highlights: string[] = [];
+        if (tags.description) highlights.push(tags.description);
+        if (tags.surface) highlights.push(`Surface: ${tags.surface}`);
+        if (tags.operator) highlights.push(`Managed by: ${tags.operator}`);
+        
+        // Extract distance if available (in meters, convert to km)
+        let distance: number | undefined;
+        if (tags.distance) {
+          distance = parseFloat(tags.distance) / 1000; // Convert to km
+        }
+        
+        const trail: any = {
+          id: `osm-${element.type}-${element.id}`,
+          name: name,
+          location: tags.operator || tags.network || "OpenStreetMap",
+          difficulty,
+          highlights: highlights.length > 0 ? highlights : ["Hiking trail"],
+          estimatedTime: difficulty === "easy" ? "1-2 hours" : difficulty === "moderate" ? "2-4 hours" : "4-6 hours",
+        };
+        
+        if (distance) {
+          trail.distance = Math.round(distance * 10) / 10; // Round to 1 decimal
+        }
+        
+        // Add URL to OpenStreetMap for more details
+        trail.url = `https://www.openstreetmap.org/${element.type}/${element.id}`;
+        
+        trailMap.set(name, trail);
+      });
       
-      console.log(`[NPS API] Successfully fetched ${trails.length} trail(s) for query: "${query}"`);
+      const trails = Array.from(trailMap.values()).slice(0, limit);
+      
+      if (trails.length === 0) {
+        console.log(`[Overpass API] No trails found within ${radiusMeters/1000}km of ${lat}, ${lon}`);
+        return { 
+          trails: [],
+          warning: "No nearby hiking trails found in OpenStreetMap. Try searching a different location or check back later as trail data is continuously being added by the community."
+        };
+      }
+      
+      console.log(`[Overpass API] Successfully fetched ${trails.length} trail(s) near ${lat}, ${lon}`);
       return { trails };
     } catch (error) {
-      console.error("[NPS API] Error fetching trails:", error);
+      console.error("[Overpass API] Error fetching trails:", error);
       return { 
         trails: [], 
         warning: "Trail suggestions temporarily unavailable - network error." 
@@ -4149,7 +4139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // POST /api/trip-assistant
-  // Get AI-powered trip planning suggestions with real hiking trails from NPS API
+  // Get AI-powered trip planning suggestions with real hiking trails from OpenStreetMap
   // Body: { tripId?: number, prompt: string, season?: string, groupSize?: number }
   // Protected route - requires authentication
   app.post("/api/trip-assistant", isAuthenticated, async (req: any, res) => {
@@ -4176,14 +4166,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[Trip Assistant] Parsed coordinates: lat=${tripLat}, lon=${tripLon}, location="${tripLocation}"`);
         }
       }
-      
-      // Detect if location is outside the US (National Park Service is US-only)
-      const isOutsideUS = tripLat !== null && tripLon !== null && (
-        tripLon < -168 || tripLon > -65 || // Outside continental US longitude range
-        tripLat < 24 || tripLat > 72 // Outside US latitude range (including Alaska, Hawaii)
-      );
-      
-      console.log(`[Trip Assistant] Geographic check: isOutsideUS=${isOutsideUS}, lat=${tripLat}, lon=${tripLon}`);
       
       // Extract keywords from prompt for basic keyword matching
       const promptLower = data.prompt.toLowerCase();
@@ -4314,31 +4296,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Pack out what you pack in - bring trash bags for Leave No Trace camping",
       ];
       
-      // Fetch real hiking trails from National Park Service API
-      // Note: NPS API only covers United States locations
-      let trailResult: { trails: any[], warning?: string };
+      // Fetch real hiking trails from OpenStreetMap Overpass API
+      // Works internationally - no geographic restrictions
+      const trailQuery = hasMountain ? "mountain hiking" : 
+                        hasBeach ? "coastal hiking" :
+                        hasFamily && hasEasy ? "easy family hiking" :
+                        "hiking trail";
       
-      if (isOutsideUS) {
-        // Location is outside the US - NPS doesn't cover international locations
-        console.log(`[NPS API] Skipping trail search - location outside US: ${tripLocation || 'unknown'} (${tripLat}, ${tripLon})`);
-        trailResult = {
-          trails: [],
-          warning: `Hiking trail suggestions are currently limited to United States locations. Your trip location (${tripLocation || 'international'}) is outside our coverage area. We're working on adding international trail data soon!`
-        };
-      } else {
-        // Fetch trails for US locations using trip coordinates
-        const trailQuery = hasMountain ? "mountain hiking" : 
-                          hasBeach ? "coastal hiking" :
-                          hasFamily && hasEasy ? "easy family hiking" :
-                          "hiking trail";
-        
-        // Pass coordinates if available for location-aware search
-        const coords = (tripLat !== null && tripLon !== null) 
-          ? { lat: tripLat, lon: tripLon }
-          : undefined;
-        
-        trailResult = await fetchNPSTrails(trailQuery, 5, coords);
-      }
+      // Pass coordinates if available for location-aware search
+      const coords = (tripLat !== null && tripLon !== null) 
+        ? { lat: tripLat, lon: tripLon }
+        : undefined;
+      
+      const trailResult = await fetchOverpassTrails(trailQuery, 5, coords);
       
       // Collect warnings from integrations
       const warnings: string[] = [];

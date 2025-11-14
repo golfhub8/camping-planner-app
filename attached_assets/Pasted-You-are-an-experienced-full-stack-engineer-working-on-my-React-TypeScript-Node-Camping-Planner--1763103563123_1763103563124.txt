@@ -1,0 +1,119 @@
+You are an experienced full-stack engineer working on my React + TypeScript + Node “Camping Planner” web app (Trips, Recipes, Grocery, Printables). I need you to fix and improve several specific issues. Please read everything carefully and then make the required code changes.
+
+Context:
+– Auth + subscriptions via Stripe (I’m on a Pro plan).
+– Trips have a location (city, region, country), dates, meals, collaborators, grocery list, and a “What to Pack” section.
+– Recipes can be “saved” from TheCampingPlanner.com external articles and then used in trips and grocery lists.
+– Grocery lists group ingredients into categories like Dairy, Meat, Pantry, etc.
+
+TASK 1 – Fix “Nearby Hikes” and switch away from AllTrails
+Screenshot SS1 shows I’m camping near Edmonton, Alberta, Canada but the “Nearby Hikes” panel is returning hikes in Maine (Jordan Pond, Acadia National Park). We are obviously pulling US-only data or hard-coded demo data.
+
+Requirements:
+
+Remove AllTrails integration completely (their API request was declined).
+
+Replace it with an integration using OpenStreetMap + OpenHiking (or similar open hiking/POI source).
+
+Use the trip’s actual coordinates (lat/lng from the trip location) to query nearby hiking trails.
+
+The “Nearby Hikes” card should show only trails within a reasonable radius of the trip location (for example 50 km). It must work correctly for Canada and other countries, not just the US.
+
+Keep the existing UI layout: list of hikes with name, park/area, distance, estimated time, difficulty badge, and link out to more details.
+
+When the user changes the trip location or manually refreshes hikes, re-fetch based on the updated coordinates.
+
+Make sure we never silently fall back to the old demo data; if no hikes are returned for an area, show a clear “No nearby hikes found” message instead.
+
+TASK 2 – Improve “Add Meal” flow on the trip page
+Screenshot SS2 shows that when I click “Add Meal” on a trip, I only see recipes that I have already saved. I want more flexibility here.
+
+Requirements:
+
+In the “Add a Meal” modal on the trip page, allow three options:
+a) Choose from my saved recipes (current behavior).
+b) Browse suggested recipes from TheCampingPlanner.com (the same external recipe cards that appear in the Recipes section).
+c) Create a brand-new custom meal from scratch.
+
+For the “Create a custom meal” option:
+– Show a simple form where the user can enter a meal name, ingredients (one per line), and optional instructions.
+– When they save, create a new recipe in their personal collection and immediately attach it to the trip as a planned meal.
+
+For the suggested recipes section:
+– Re-use or fetch the same data we display on the “From TheCampingPlanner.com” grid.
+– Allow the user to pick a suggested recipe and either:
+• Save it to their collection and add to the trip, or
+• Add directly to the trip while still saving a copy behind the scenes so that the grocery list can pull ingredients.
+
+After adding a meal, the “Meals for this Trip” section on the trip page should clearly show the new meal and it should be available when building a grocery list.
+
+TASK 3 – Unlock “What to Pack” for Pro members
+Screenshot SS3 shows that I am a Pro member, but the “What to Pack” section still has an “Unlock Full List” button and appears greyed out (limited access).
+
+Requirements:
+
+Ensure the user’s subscription status is correctly read from our backend / Stripe webhook data. We already show “Pro Member” and unlock printables, so reuse the same logic here.
+
+If user is on a Pro (paid) plan:
+– Fully unlock the “What to Pack” packing list.
+– Remove or hide the “Unlock Full List” button.
+– Show the complete packing checklist with all items clickable/checkable.
+
+If user is on a Free or Trial plan, keep the current gated behavior as designed.
+
+Make sure this logic is consistent: the same condition that unlocks Pro printables should unlock the packing list.
+
+TASK 4 – Fix “Save Recipe” auto-import failures
+Screenshot SS4 shows several external recipes from TheCampingPlanner.com that cannot be saved; clicking “Save Recipe” shows the “Retry auto import” error (ingredients and instructions don’t parse).
+
+However, screenshot SS1 from a previous set shows a recipe that did parse correctly with all ingredients and instructions filled in, which is exactly what we want every time.
+
+Requirements:
+
+Inspect the HTML structure of TheCampingPlanner.com recipe pages (for example the Campfire Truffle Mac with Bacon article and the other circled posts) and update the scraping/parse logic so that:
+– Ingredients are read as one line per ingredient.
+– Instructions are parsed as separate steps.
+– HTML entities (&, etc.) are decoded correctly.
+
+Make the parser robust enough that all of the circled recipes in the screenshot can be successfully auto-imported.
+
+Only fall back to the “We couldn’t auto-import this recipe” error when the page truly does not contain any recognizable ingredient/instruction blocks.
+
+After a successful parse, saving the recipe should persist it to the database. It must then appear:
+– In “My Recipes”
+– In the “Add Meal” modal for trips
+– In the “Build Grocery List” flow as a selectable recipe
+
+Please also confirm that manually pasted ingredients/instructions are saved correctly even if auto-import fails.
+
+TASK 5 – Fix grocery list categories: move macaroni/bread crumbs to Pantry
+Screenshot SS5 shows the grocery list grouped by category (Dairy, Meat, Pantry, Camping Gear, etc). Macaroni and bread crumbs are currently under “Camping Gear,” which is wrong.
+
+Requirements:
+
+Update ingredient categorization so that:
+– “Elbow macaroni”, “macaroni”, “pasta”, etc. are categorized as “Pantry”.
+– “Bread crumbs”, “panko”, etc. are also categorized as “Pantry”.
+
+Remove the “Camping Gear” category from grocery lists entirely. Grocery items should only be food-related categories like Pantry, Dairy, Meat, Produce, Drinks, etc. (Gear belongs in packing lists, not grocery lists.)
+
+Ensure that when a grocery list is generated from recipes, macaroni and bread crumbs appear under the Pantry heading.
+
+Confirm that nothing else is accidentally categorized as Camping Gear. If there is a mapping table or function that maps ingredients to categories, clean it up accordingly.
+
+General implementation notes:
+– Keep the existing design and UI components; only change behavior/data and text where required.
+– Write clean, typed code (TypeScript) and keep hooks/components small and focused.
+– After implementing, manually test the following flows end-to-end:
+
+Create a trip in Canada, verify that Nearby Hikes are truly nearby and not in the US.
+
+On that trip, use “Add Meal” to: create a custom meal, choose a saved recipe, and add a suggested external recipe.
+
+Generate a grocery list for the trip and confirm ingredients appear under correct categories (macaroni + bread crumbs in Pantry, Camping Gear removed).
+
+From the Recipes page, “Save Recipe” for several previously failing TheCampingPlanner.com articles and verify successful auto-import and usage in trips/grocery.
+
+Log in as a Pro account and verify that both Printables and the “What to Pack” section are fully unlocked.
+
+Please make all of these changes now and keep the codebase consistent with the existing style and patterns. When you’re done, ensure the app builds and runs without TypeScript or runtime errors.
