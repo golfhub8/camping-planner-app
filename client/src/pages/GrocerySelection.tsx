@@ -504,7 +504,7 @@ export default function GrocerySelection() {
             <p className="text-muted-foreground mb-6">
               Create some recipes first, then come back to build your grocery list!
             </p>
-            <Button onClick={() => setLocation("/new")} data-testid="button-create-recipe">
+            <Button onClick={() => setLocation("/recipes")} data-testid="button-create-recipe">
               Create Your First Recipe
             </Button>
           </div>
