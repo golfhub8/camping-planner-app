@@ -91,12 +91,12 @@ export default function Navbar() {
           </form>
 
           <div className="flex items-center gap-3">
-            {/* Show "Go Pro" button for free users, "Pro Member" badge for Pro users */}
+            {/* Show "Go Pro" button for free users, "Pro Trial"/"Pro Member" badge for Pro users */}
             {user?.isPro ? (
               <Link href="/account">
                 <Badge variant="default" className="gap-1.5 px-3 py-1.5 hover-elevate cursor-pointer" data-testid="badge-pro-member">
                   <Crown className="w-3.5 h-3.5" />
-                  Pro Member
+                  {user.subscriptionStatus === 'trialing' ? 'Pro Trial' : 'Pro Member'}
                 </Badge>
               </Link>
             ) : (
