@@ -28,6 +28,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { scrapeRecipe, type ScrapedRecipe } from "@/lib/recipeScraper";
+import { normalizeRecipeInputs, normalizeSteps } from "@/lib/recipeNormalizer";
 
 const saveRecipeSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -62,7 +63,7 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
       title: externalRecipe.title,
       sourceUrl: externalRecipe.sourceUrl || "",
       ingredientsText: externalRecipe.ingredients?.join("\n") || "",
-      stepsText: "",
+      stepsText: externalRecipe.content || "",
       imageUrl: "",
     },
   });
@@ -121,9 +122,12 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
       // Clear any stale scraped data
       setScrapedData(null);
       
-      // Fall back to provided data
+      // Fall back to provided data - seed textareas for manual editing
       if (externalRecipe.ingredients) {
         form.setValue("ingredientsText", externalRecipe.ingredients.join("\n"));
+      }
+      if (externalRecipe.content) {
+        form.setValue("stepsText", externalRecipe.content);
       }
     } finally {
       setIsParsing(false);
@@ -132,25 +136,16 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
 
   const saveRecipeMutation = useMutation({
     mutationFn: async (data: SaveRecipeForm) => {
-      // Parse ingredients from textarea (one per line)
-      const ingredients = data.ingredientsText
-        .split("\n")
-        .map(line => line.trim())
-        .filter(line => line.length > 0);
-
-      // Parse steps from textarea (split by double newlines or single newlines)
-      const steps = data.stepsText
-        .split(/\n\n+/)
-        .map(step => step.trim().replace(/\n/g, " "))
-        .filter(step => step.length > 0);
-
-      const response = await apiRequest("POST", "/api/recipes", {
+      // Use shared normalization utility to ensure consistent format
+      const normalized = normalizeRecipeInputs({
         title: data.title,
-        ingredients,
-        steps,
-        imageUrl: data.imageUrl || undefined,
-        sourceUrl: data.sourceUrl || undefined,
+        ingredientsText: data.ingredientsText,
+        stepsText: data.stepsText,
+        imageUrl: data.imageUrl,
+        sourceUrl: data.sourceUrl,
       });
+
+      const response = await apiRequest("POST", "/api/recipes", normalized);
 
       return response.json();
     },
@@ -216,7 +211,8 @@ export function SaveRecipeModal({ open, onOpenChange, externalRecipe }: SaveReci
   }
 
   const ingredientCount = form.watch("ingredientsText").split("\n").filter(Boolean).length;
-  const stepCount = form.watch("stepsText").split(/\n\n+/).filter(Boolean).length;
+  // Use same normalization logic as save to ensure accurate count
+  const stepCount = normalizeSteps(form.watch("stepsText")).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

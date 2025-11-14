@@ -1,8 +1,10 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe, recipes } from "@shared/schema";
 import { z } from "zod";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAuthenticatedOptional } from "./replitAuth";
 import Stripe from "stripe";
 import { load as cheerioLoad } from "cheerio";
@@ -13,6 +15,7 @@ import * as path from "path";
 import * as fs from "fs";
 import crypto from "crypto";
 import { initializeEmailService, sendWelcomeToProEmail, sendProPaymentReceiptEmail } from "./emailService";
+import { normalizeRecipePayload } from "./recipeNormalizer";
 
 /**
  * Converts IPv6 address to bytes for proper IPv4-mapped detection
@@ -2060,8 +2063,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate the request body against our schema
       const validatedData = insertRecipeSchema.parse(req.body);
       
+      // Normalize the recipe data to ensure consistent formatting
+      const normalizedData = normalizeRecipePayload(validatedData);
+      
       // Create the recipe in storage (with userId)
-      const recipe = await storage.createRecipe(validatedData, userId);
+      const recipe = await storage.createRecipe(normalizedData, userId);
       
       // Return the created recipe with 201 status
       res.status(201).json(recipe);
@@ -2101,17 +2107,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate or regenerate share token with collision protection
-      let shareToken = recipe.shareToken;
+      let shareToken: string = recipe.shareToken || '';
       if (!shareToken || regenerate) {
         // Generate a unique token with collision check
         let attempts = 0;
         const maxAttempts = 5;
+        let newToken = '';
         
         while (attempts < maxAttempts) {
-          shareToken = crypto.randomBytes(16).toString('hex');
+          newToken = crypto.randomBytes(16).toString('hex');
           
           // Check if token already exists
-          const existing = await storage.getRecipeByShareToken(shareToken);
+          const existing = await storage.getRecipeByShareToken(newToken);
           if (!existing || existing.id === id) {
             // Token is unique or belongs to this recipe
             break;
@@ -2123,6 +2130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error("Failed to generate unique share token");
         }
         
+        shareToken = newToken;
         await storage.updateRecipeShareToken(id, shareToken);
       }
 
@@ -2188,14 +2196,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "You already own this recipe" });
       }
 
-      // Create a copy in user's collection (without share token or source URL from shared recipe)
-      const newRecipe = await storage.createRecipe({
+      // Normalize the recipe data before saving to ensure consistent formatting
+      const normalizedData = normalizeRecipePayload({
         title: sharedRecipe.title,
         ingredients: sharedRecipe.ingredients,
         steps: sharedRecipe.steps,
         imageUrl: sharedRecipe.imageUrl,
         sourceUrl: sharedRecipe.sourceUrl,
-      }, userId);
+      });
+
+      // Create a copy in user's collection (without share token or source URL from shared recipe)
+      const newRecipe = await storage.createRecipe(normalizedData, userId);
 
       res.status(201).json(newRecipe);
     } catch (error) {
@@ -3290,6 +3301,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error in debug endpoint:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/admin/normalize-recipes
+  // One-time backfill to normalize all existing recipes
+  // Applies normalization logic to ensure consistent formatting
+  // Protected route - requires authentication
+  app.post("/api/admin/normalize-recipes", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Get all recipes for this user
+      const allRecipes = await storage.getAllRecipes(userId);
+      
+      let updatedCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+      
+      // Normalize and update each recipe
+      for (const recipe of allRecipes) {
+        try {
+          // Apply normalization
+          const normalized = normalizeRecipePayload({
+            title: recipe.title,
+            ingredients: recipe.ingredients,
+            steps: recipe.steps,
+            imageUrl: recipe.imageUrl,
+            sourceUrl: recipe.sourceUrl,
+          });
+          
+          // Check if anything changed
+          const hasChanges = (
+            JSON.stringify(normalized.ingredients) !== JSON.stringify(recipe.ingredients) ||
+            JSON.stringify(normalized.steps) !== JSON.stringify(recipe.steps) ||
+            normalized.title !== recipe.title
+          );
+          
+          if (hasChanges) {
+            // Update via direct database call since storage doesn't have updateRecipe method
+            await db.update(recipes)
+              .set({
+                title: normalized.title,
+                ingredients: normalized.ingredients,
+                steps: normalized.steps,
+                imageUrl: normalized.imageUrl,
+                sourceUrl: normalized.sourceUrl,
+              })
+              .where(eq(recipes.id, recipe.id));
+            
+            updatedCount++;
+          }
+        } catch (error: any) {
+          errorCount++;
+          errors.push(`Recipe ${recipe.id}: ${error.message}`);
+        }
+      }
+      
+      return res.json({
+        success: true,
+        totalRecipes: allRecipes.length,
+        updatedCount,
+        errorCount,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error: any) {
+      console.error("Error normalizing recipes:", error);
       return res.status(500).json({ error: error.message });
     }
   });

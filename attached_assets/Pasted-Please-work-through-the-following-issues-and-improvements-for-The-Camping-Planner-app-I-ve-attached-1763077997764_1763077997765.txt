@@ -1,0 +1,89 @@
+Please work through the following issues and improvements for The Camping Planner app. I’ve attached screenshots SS1–SS9 in the conversation for reference.
+	1.	Saved recipes – use the working version (SS1 / SS7) everywhere
+Right now, some recipes save perfectly (SS1/SS7: “Campfire Truffle Mac with Bacon”) with:
+
+	•	a normal editable textarea for ingredients (one per line)
+	•	a normal editable textarea for instructions (steps separated by blank lines)
+	•	correct item/step counters at the top
+
+Other recipes still show the old “we couldn’t auto-import” state and/or greyed-out fields, and those recipes never become available to the Grocery builder.
+
+Please:
+	•	Make the “successful parse” UI from SS1/SS7 the single canonical Save Recipe modal.
+	•	Even if auto-import fails, still show editable textareas for ingredients and instructions (no grey overlay, no disabled fields). Show the red error banner but let the user type or paste.
+	•	Ensure that for any recipe I save (whether auto-parsed or manually entered), the recipe is stored and shows up in:
+	•	My Recipes
+	•	Add Meal → recipe picker
+	•	Grocery → “Select Recipes” and “Meals from your trips”
+
+	2.	Grocery list – recipes and ingredients not appearing
+Current problems:
+
+	•	After selecting recipes or meals and clicking “Continue to Review”, I’m sometimes taken back to the “No Recipes Selected” / “No Recipes Yet” screen (SS8) and no grocery list is created.
+	•	On the Grocery landing page, the “Create Your First Recipe” button leads to a 404 page (SS9).
+
+Please:
+	•	Fix the full flow so that:
+	•	I can choose recipes and/or a trip in the Grocery builder,
+	•	click “Continue to Review”,
+	•	see a combined grocery list with all ingredients grouped and summed,
+	•	save that grocery list record,
+	•	and see it under “Grocery Lists Generated” and in a “Past Lists” section.
+	•	Wire “Create Your First Recipe” on the Grocery page to the correct route (the same page/modal I use when saving an external recipe from the Recipes page). No more 404.
+
+	3.	Subscription state and labeling
+SS2/SS3 show that Stripe is successfully creating subscriptions, but the app UI is inconsistent:
+
+	•	My account page currently shows “Pro Trial” in the badge, even though Stripe shows an active paid subscription.
+	•	I also have multiple subscriptions created in Stripe for the same user (test mode), which suggests duplicate subscription creation.
+	•	The “Go Pro” button still appears in the top navbar even after I’m a Pro member.
+
+Please:
+	•	Treat Stripe as the source of truth. For a given user (by email), if they have an active paid subscription (not just a trial), show:
+	•	Badge: “Pro Member” (not “Pro Trial”)
+	•	Plan Benefits: “Unlimited trips”, “Unlimited grocery lists”, “All printables & games”, etc.
+	•	Hide or replace the “Go Pro” button in the navbar with a small “Pro” indicator or a “My Account” shortcut.
+	•	Make sure we only ever create one active subscription per customer. If a subscription already exists for that Stripe customer and is active, don’t create another.
+	•	When a user clicks “Manage Subscription”, send them to the Stripe customer portal where they can cancel or update payment. After cancellation, Stripe webhook should downgrade them back to the Free plan in our database and the UI should update accordingly.
+
+	4.	Weather and nearby hikes behavior
+
+	•	The current weather card with the °F / °C toggle is working. Keep that.
+	•	However, the hikes in “Nearby Hikes” (SS4) appear to be the same across different locations.
+
+Please:
+	•	Confirm that the hikes list is driven by the current trip’s location (lat/lng or city/state).
+	•	Update the hikes query so it uses the selected trip’s coordinates rather than a hard-coded or test location.
+	•	If the upstream service is a placeholder for now, at least architect it so that:
+	•	Each trip passes its coordinates into the hook/API,
+	•	The hikes list is clearly tied to that location,
+	•	We can later swap in the AllTrails API or another provider without changing the UI.
+
+	5.	“Pro Trial” vs “Pro Member” states
+
+	•	Keep a separate notion of “Pro Trial” vs “Pro Member”:
+	•	If the Stripe subscription is in a free trial period, label the badge “Pro Trial”.
+	•	Once the first payment is successful (trial ends, or no trial), change badge to “Pro Member” and keep it that way as long as the subscription is active.
+	•	Make sure this state persists across logins (read from our DB based on Stripe events, not from the front-end only).
+
+	6.	Routes and error handling
+
+	•	When creating or editing a trip with invalid dates (e.g., end date before start date), we currently don’t show a validation error.
+	•	Add client-side validation to the trip form so that:
+	•	If end date < start date, show a clear error under the date fields and prevent submission.
+	•	Dates must be in the correct format (MM/DD/YYYY) with a helpful message if not.
+	•	Make sure all “Create recipe” / “Add recipe” / “Add meal” buttons navigate to valid routes or open the correct modal—no more 404 pages.
+
+	7.	Consistency for all recipes
+The ultimate goal for every saved recipe (whether imported from TheCampingPlanner.com, from another site, or manually entered) is:
+
+	•	Title, URL
+	•	Ingredients: one per line, editable
+	•	Instructions: full set of steps, editable
+	•	Stored in the same format the Grocery and Trips pages expect
+
+Please:
+	•	Normalize the parsing + saving pipeline so that all recipes end up in the same internal shape.
+	•	If an auto-import fails, we still save whatever the user typed when they click “Save Recipe”, and the recipe behaves exactly like a successfully parsed one.
+
+That’s everything for this round. Please implement, test each flow end-to-end (new user, upgrade to Pro, save multiple recipes, create trips, build grocery lists), and keep the UX as close as possible to what’s working in SS1, SS4, and SS7.

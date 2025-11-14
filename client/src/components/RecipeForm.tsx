@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { PlusCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { normalizeIngredients, normalizeSteps } from "@/lib/recipeNormalizer";
 
 interface RecipeFormProps {
   onSubmit?: (recipe: { title: string; ingredients: string[]; steps: string[] }) => void;
@@ -34,15 +35,9 @@ export default function RecipeForm({ onSubmit }: RecipeFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const ingredientsArray = ingredients
-      .split('\n')
-      .map(i => i.trim())
-      .filter(i => i.length > 0);
-
-    const stepsArray = steps
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    // Use shared normalization utility for consistent formatting
+    const ingredientsArray = normalizeIngredients(ingredients);
+    const stepsArray = normalizeSteps(steps);
 
     if (onSubmit) {
       onSubmit({ title, ingredients: ingredientsArray, steps: stepsArray });
