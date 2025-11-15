@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ShoppingCart, Loader2, ExternalLink, ArrowLeft, AlertCircle, Check, ChevronsUpDown, X } from "lucide-react";
+import { ShoppingCart, Loader2, ExternalLink, ArrowLeft, AlertCircle, Check, ChevronsUpDown, X, Plus } from "lucide-react";
 import type { Recipe, Trip, GroceryItem } from "@shared/schema";
 import { mergeIngredients, normalizeIngredientKey, type MergedIngredient } from "@/lib/ingredients";
 import { categorizeIngredient } from "@/lib/categorize";
@@ -44,8 +45,9 @@ export default function GrocerySelection() {
   // Recipe picker state
   const [recipePickerOpen, setRecipePickerOpen] = useState(false);
   const [recipeSearchQuery, setRecipeSearchQuery] = useState("");
-  // Store recipes that aren't in the /api/recipes list (e.g., ingredient picker payloads)
-  const [externalSelectedRecipes, setExternalSelectedRecipes] = useState<Recipe[]>([]);
+  // Custom grocery items (free-form entries)
+  const [customItems, setCustomItems] = useState<string[]>([]);
+  const [customItemInput, setCustomItemInput] = useState("");
   
   // Confirmation step state
   const [confirmedIngredients, setConfirmedIngredients] = useState<ConfirmedIngredient[]>([]);
@@ -63,10 +65,8 @@ export default function GrocerySelection() {
     refetchOnMount: true,
   });
   
-  // Hybrid approach: merge internal recipes (from /api/recipes) with external recipes (from ingredient picker)
-  // This ensures the summary list shows ALL selected recipes regardless of source
-  const internalSelectedRecipes = recipes?.filter(r => selectedRecipeIds.has(r.id)) || [];
-  const manualSelectedRecipes = [...internalSelectedRecipes, ...externalSelectedRecipes];
+  // Derive selected recipes from selectedRecipeIds and recipes data
+  const manualSelectedRecipes = recipes?.filter(r => selectedRecipeIds.has(r.id)) || [];
 
   const { data: trips = [] } = useQuery<Trip[]>({
     queryKey: ["/api/trips"],
@@ -188,32 +188,9 @@ export default function GrocerySelection() {
             ingredients: data.ingredients
           });
           
-          // Auto-select the recipe (recipeId can be 0 for external recipes)
-          if (!selectedRecipeIds.has(data.recipeId)) {
+          // Auto-select the recipe
+          if (data.recipeId > 0 && !selectedRecipeIds.has(data.recipeId)) {
             setSelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
-          }
-          
-          // For external recipes (ID 0), add to externalSelectedRecipes for display
-          if (data.recipeId === 0 && data.recipeTitle) {
-            const externalRecipe: Recipe = {
-              id: 0,
-              userId: "",
-              title: data.recipeTitle,
-              ingredients: data.ingredients,
-              steps: [],
-              imageUrl: null,
-              sourceUrl: null,
-              createdAt: new Date(),
-              shareToken: null,
-              archived: false,
-            };
-            setExternalSelectedRecipes(prev => {
-              // Avoid duplicates
-              if (!prev.find(r => r.title === data.recipeTitle)) {
-                return [...prev, externalRecipe];
-              }
-              return prev;
-            });
           }
         }
         // DON'T clear pending data here - it will be cleared when user proceeds to confirmation
@@ -378,14 +355,27 @@ export default function GrocerySelection() {
   }
   
   // Remove recipe from manual selections
-  function removeManualRecipe(recipeId: number, recipeTitle?: string) {
-    // Remove from external selections if it's an external recipe (ID 0)
-    if (recipeId === 0 && recipeTitle) {
-      setExternalSelectedRecipes(prev => prev.filter(r => r.title !== recipeTitle));
-    }
-    
-    // manualSelectedRecipes will automatically update when we call toggleRecipe
+  function removeManualRecipe(recipeId: number) {
     toggleRecipe(recipeId); // Reuse existing toggle logic to handle deselection
+  }
+  
+  // Add custom grocery item
+  function addCustomItem() {
+    const trimmed = customItemInput.trim();
+    if (!trimmed) return;
+    
+    setCustomItems(prev => [...prev, trimmed]);
+    setCustomItemInput("");
+    
+    toast({
+      title: "Item added",
+      description: `"${trimmed}" will be added to your grocery list`,
+    });
+  }
+  
+  // Remove custom item
+  function removeCustomItem(index: number) {
+    setCustomItems(prev => prev.filter((_, i) => i !== index));
   }
   
   // Mutation to add recipe to a trip
@@ -422,7 +412,7 @@ export default function GrocerySelection() {
   // 3. External trip meals (WordPress recipes - prefetched via React Query)
   // 4. RecipeDetail/TripDetail payloads (from ingredient picker modal)
   function proceedToConfirmation() {
-    if (selectedRecipeIds.size === 0 && externalMealsTitles.length === 0) return;
+    if (selectedRecipeIds.size === 0 && externalMealsTitles.length === 0 && customItems.length === 0) return;
     
     // Block navigation if external ingredients are still loading
     if (externalIngredientsLoading) {
@@ -547,7 +537,16 @@ export default function GrocerySelection() {
       };
     });
     
-    setConfirmedIngredients(confirmed);
+    // Add custom items as confirmed ingredients
+    const customItemsAsIngredients: ConfirmedIngredient[] = customItems.map(item => ({
+      name: item,
+      amounts: [],
+      recipes: [],
+      combinedAmount: undefined,
+      isNeeded: true, // Custom items are always needed by default
+    }));
+    
+    setConfirmedIngredients([...confirmed, ...customItemsAsIngredients]);
     setCurrentStep(Step.CONFIRMATION);
     
     // Clear pending grocery items from sessionStorage now that we've processed them
@@ -649,6 +648,9 @@ export default function GrocerySelection() {
       category: "Pantry",
       checked: false,
     }));
+    
+    // Note: Custom items are already included in confirmedIngredients
+    // They were added in proceedToConfirmation(), so no need to add them separately here
     
     const allItems = [...neededItems, ...pantryItems, ...externalItems];
     
@@ -1042,7 +1044,7 @@ export default function GrocerySelection() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => removeManualRecipe(recipe.id, recipe.title)}
+                      onClick={() => removeManualRecipe(recipe.id)}
                       data-testid={`button-remove-recipe-${recipe.id}`}
                     >
                       <X className="h-4 w-4" />
@@ -1051,6 +1053,62 @@ export default function GrocerySelection() {
                 ))}
               </div>
             )}
+            
+            <div className="space-y-3 pt-4 border-t">
+              <Label htmlFor="custom-item-input" className="text-sm font-medium">
+                Add custom items
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="custom-item-input"
+                  type="text"
+                  placeholder="Enter item (e.g., marshmallows, firewood)..."
+                  value={customItemInput}
+                  onChange={(e) => setCustomItemInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomItem();
+                    }
+                  }}
+                  data-testid="input-custom-item"
+                />
+                <Button
+                  type="button"
+                  onClick={addCustomItem}
+                  disabled={!customItemInput.trim()}
+                  data-testid="button-add-custom-item"
+                  size="icon"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {customItems.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  {customItems.map((item, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 rounded-md border"
+                      data-testid={`custom-item-${index}`}
+                    >
+                      <div className="flex-1">
+                        <span className="font-medium">{item}</span>
+                        <Badge variant="secondary" className="text-xs ml-2">Custom</Badge>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeCustomItem(index)}
+                        data-testid={`button-remove-custom-item-${index}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -1086,7 +1144,7 @@ export default function GrocerySelection() {
           <Button
             onClick={proceedToConfirmation}
             disabled={
-              (selectedRecipeIds.size === 0 && externalMealsTitles.length === 0) ||
+              (selectedRecipeIds.size === 0 && externalMealsTitles.length === 0 && customItems.length === 0) ||
               externalIngredientsLoading
             }
             className="gap-2"
@@ -1101,8 +1159,8 @@ export default function GrocerySelection() {
               <>
                 <ShoppingCart className="h-4 w-4" />
                 Continue to Review
-                {(selectedRecipeIds.size > 0 || externalMealsTitles.length > 0) &&
-                  ` (${selectedRecipeIds.size + externalMealsTitles.length})`}
+                {(selectedRecipeIds.size > 0 || externalMealsTitles.length > 0 || customItems.length > 0) &&
+                  ` (${selectedRecipeIds.size + externalMealsTitles.length + customItems.length} items)`}
               </>
             )}
           </Button>
