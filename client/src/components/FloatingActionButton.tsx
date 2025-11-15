@@ -19,11 +19,10 @@ export default function FloatingActionButton({
     <Button
       onClick={onClick}
       className={cn(
-        "md:hidden fixed bottom-24 right-4 z-40 rounded-full shadow-lg hover:shadow-xl transition-shadow scale-125",
+        "md:hidden fixed bottom-24 right-4 z-40 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow",
         "bg-primary hover:bg-primary/90 text-primary-foreground",
         className
       )}
-      size="icon"
       data-testid={testId}
       aria-label={label}
     >

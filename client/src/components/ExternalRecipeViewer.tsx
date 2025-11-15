@@ -433,6 +433,8 @@ export default function ExternalRecipeViewer({ recipeId, onClose }: ExternalReci
                   id="share-email"
                   type="email"
                   placeholder="friend@example.com"
+                  inputMode="email"
+                  autoComplete="email"
                   value={shareEmail}
                   onChange={(e) => setShareEmail(e.target.value)}
                   data-testid="input-share-external-email"

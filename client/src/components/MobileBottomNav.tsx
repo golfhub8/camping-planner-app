@@ -32,7 +32,7 @@ export default function MobileBottomNav() {
             <Link key={path} href={path}>
               <a
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-3 py-2 min-w-[64px] transition-colors",
+                  "flex flex-col items-center justify-center gap-1 px-3 min-h-11 min-w-[64px] transition-colors",
                   active 
                     ? "text-primary" 
                     : "text-muted-foreground hover:text-foreground"

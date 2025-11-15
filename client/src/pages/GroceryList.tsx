@@ -418,6 +418,8 @@ export default function GroceryList() {
                     id="email-input"
                     type="email"
                     placeholder="friend@example.com"
+                    inputMode="email"
+                    autoComplete="email"
                     value={emailAddress}
                     onChange={(e) => setEmailAddress(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && sendViaEmail()}
