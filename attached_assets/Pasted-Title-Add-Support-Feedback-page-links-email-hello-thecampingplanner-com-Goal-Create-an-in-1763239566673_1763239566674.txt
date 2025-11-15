@@ -1,0 +1,143 @@
+Title: Add “Support & Feedback” page + links (email: hello@thecampingplanner.com)
+
+Goal
+Create an in-app Support & Feedback page and add entry points so users can quickly report bugs or contact us. Must be mobile-first, accessible, and live in the Account area with an always-visible footer link.
+
+Scope (deliver all)
+	1.	New route/page: /support
+	2.	Link to /support from:
+a) Account (“My Account”) page under a new “Support & Feedback” section
+b) Global footer (small text link on every page)
+	3.	On /support, include two primary actions:
+• “Report a Bug” → opens mail client with a prefilled email to hello@thecampingplanner.com
+• “Contact Us” → opens mail client with a simpler prefilled email to hello@thecampingplanner.com
+	4.	Auto-include helpful context in the email body (device, browser, app version, current URL, logged-in email if available).
+	5.	Track clicks with our existing analytics (use window.gtag if present; otherwise no-op).
+	6.	Fully responsive (≤360px width), keyboard accessible, and light/dark friendly.
+
+Tech notes
+• Stack: React + TypeScript + React Router + Tailwind (match existing conventions).
+• Put the page component at client/src/pages/SupportPage.tsx
+• Add the route in client/src/App.tsx (or wherever routes are defined).
+• Add a small helper util at client/src/utils/supportEmail.ts to build the mailto string safely (URL-encode).
+• Use process.env.VITE_APP_VERSION (fallback “unknown”) for app version. If not set, add it to .env.
+
+Exact UI copy (use this verbatim)
+Page header: Support & Feedback
+Intro text: Found a bug? Have a suggestion? Need help? We’d love to hear from you.
+
+Buttons (primary, secondary):
+• Report a Bug
+• Contact Us
+
+Small note below buttons:
+We’ll include basic device details to help us fix things faster. No screenshots are sent automatically.
+
+Secondary section (FAQ style):
+Title: What happens after I send an email?
+Body: You’ll get an automatic confirmation. We typically reply within 1–2 business days.
+
+Email builder (utility behavior)
+Function buildMailto(kind: “bug” | “contact”): string
+• To: hello@thecampingplanner.com
+• Subject:
+– bug → “Bug Report – The Camping Planner App”
+– contact → “Support – The Camping Planner App”
+• Body template (bug):
+Hi! I found a bug in the app.
+
+• What happened?
+• What were you trying to do?
+• Which screen were you on?
+• Steps to reproduce (if you know them):
+1)
+2)
+3)
+
+Context:
+App version: {appVersion}
+URL: {location.href}
+Device/Browser: {navigator.userAgent}
+Logged-in email: {userEmailOrBlank}
+
+• Body template (contact):
+Hi! I need help with…
+
+Context:
+App version: {appVersion}
+URL: {location.href}
+Device/Browser: {navigator.userAgent}
+Logged-in email: {userEmailOrBlank}
+
+Implementation details (place exactly as noted)
+
+A) Utility: client/src/utils/supportEmail.ts
+	•	Export buildMailto(kind, userEmail?).
+	•	URL-encode subject/body.
+	•	Get appVersion from import.meta.env.VITE_APP_VERSION ?? “unknown”.
+	•	Use window.location.href and navigator.userAgent.
+	•	Return a full mailto string like:
+mailto:hello@thecampingplanner.com?subject=…&body=…
+
+B) Page: client/src/pages/SupportPage.tsx
+	•	Import buildMailto.
+	•	Pull current user’s email from our auth/user context if available; pass to buildMailto.
+	•	Two buttons:
+onClick → window.location.href = buildMailto(“bug”, userEmail)
+onClick → window.location.href = buildMailto(“contact”, userEmail)
+	•	Fire analytics (if available):
+window.gtag?.(“event”, “support_click”, { action: “bug” | “contact” })
+	•	Layout:
+Container with max-w-screen-sm, mx-auto, p-4 (sm:p-6), gap-4.
+Buttons: full-width on mobile, inline on ≥sm.
+Use existing button components/styles if we have them; otherwise Tailwind:
+Primary: className=“w-full sm:w-auto inline-flex items-center justify-center rounded-md px-4 py-2 font-medium bg-teal-600 text-white hover:bg-teal-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600”
+Secondary: className=“w-full sm:w-auto inline-flex items-center justify-center rounded-md px-4 py-2 font-medium bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400”
+	•	Add a simple back link above H1: “← Back to Account” using our Link component to /account.
+
+C) Routing: client/src/App.tsx (or routes file)
+	•	Add route: <Route path=”/support” element={} />
+
+D) Account page: client/src/pages/AccountPage.tsx
+	•	Add a new card/section titled “Support & Feedback”
+Text: “Questions, bugs, or ideas? We’re here to help.”
+Button: “Open Support” → Link to /support
+	•	For mobile, ensure this card appears near the top half of the page.
+
+E) Footer: client/src/components/Footer.tsx (or wherever footer lives)
+	•	Add a small text link: Need help? Spot a bug? Email us at hello@thecampingplanner.com
+The “Email us” portion should be a mailto link to hello@thecampingplanner.com (no prefill here; just simple).
+	•	Ensure good contrast and tap target ≥44px height on mobile.
+
+Accessibility
+	•	Page H1 must be “Support & Feedback”.
+	•	Buttons must be  with aria-labels:
+– Report a Bug button → aria-label=“Report a bug via email”
+– Contact Us button → aria-label=“Contact support via email”
+	•	Focus visible styles must be present (Tailwind outline utilities above satisfy this).
+
+Mobile QA checklist (ship only if all pass)
+	1.	iPhone SE width: page fits, no horizontal scroll, buttons are full-width.
+	2.	Android small device: mailto opens the email client with prefilled subject/body.
+	3.	Dark mode: text and buttons meet contrast (≥4.5:1 for body text).
+	4.	Keyboard only: Back to Account, both buttons, and footer link are reachable and clearly focused.
+
+Desktop QA checklist
+	1.	Buttons show hover and focus states.
+	2.	Analytics events fire (verify in console: window.dataLayer or gtag debug).
+	3.	Mailto body includes app version, URL, user agent, and user email if logged in.
+
+Config
+	•	Add VITE_APP_VERSION to .env (e.g., VITE_APP_VERSION=1.0.0). Use our deploy step to inject a build number.
+
+Out of scope (do not implement now)
+	•	In-app form with file uploads.
+	•	Ticketing system integration.
+	•	Spam protection.
+
+Definition of Done
+• /support route is live and styled like the rest of the app.
+• Account page shows a “Support & Feedback” section linking to /support.
+• Footer includes a persistent “Need help?” line with mailto link.
+• Bug/Contact buttons open the user’s email client with correct prefilled content (including context).
+• Works on mobile and desktop; passes accessibility and QA checklists above.
