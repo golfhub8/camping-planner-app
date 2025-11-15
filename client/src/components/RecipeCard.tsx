@@ -296,15 +296,8 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           )}
         </CardContent>
 
-        <CardFooter className="flex items-center justify-between gap-4 flex-wrap">
-          {createdAt && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-created-${id}`}>
-              <Calendar className="h-3.5 w-3.5" />
-              {formatDistanceToNow(createdAt, { addSuffix: true })}
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2 ml-auto">
+        <CardFooter className="flex flex-col items-center justify-center gap-4">
+          <div className="flex items-center gap-2 flex-wrap justify-center">
             {/* Add to Grocery button - only if ingredients available */}
             {ingredients.length > 0 && (
               <Button
@@ -398,6 +391,13 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               </Link>
             )}
           </div>
+          
+          {createdAt && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-created-${id}`}>
+              <Calendar className="h-3.5 w-3.5" />
+              {formatDistanceToNow(createdAt, { addSuffix: true })}
+            </div>
+          )}
         </CardFooter>
       </Card>
 
