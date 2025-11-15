@@ -216,11 +216,11 @@ export default function Account() {
   const trialDaysRemaining = getTrialDaysRemaining();
 
   return (
-    <div className="container mx-auto px-6 md:px-10 py-8 max-w-4xl">
-      <div className="space-y-6">
+    <div className="container mx-auto px-4 md:px-10 py-6 md:py-8 max-w-4xl">
+      <div className="space-y-4 md:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-account-title">My Account</h1>
-          <p className="text-muted-foreground mt-1">Manage your account and subscription</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight" data-testid="text-account-title">My Account</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your account and subscription</p>
         </div>
 
         <Card data-testid="card-plan-info">

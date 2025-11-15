@@ -8,8 +8,10 @@ import EditTripDialog from "@/components/EditTripDialog";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import SubscribeButton from "@/components/SubscribeButton";
 import TripLimitUpsellModal from "@/components/TripLimitUpsellModal";
+import FloatingActionButton from "@/components/FloatingActionButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +35,7 @@ export default function Trips() {
   const [, navigate] = useLocation();
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [showUpsellModal, setShowUpsellModal] = useState(false);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [aiDescription, setAiDescription] = useState("");
   const { toast } = useToast();
   
@@ -151,6 +154,7 @@ export default function Trips() {
       queryClient.invalidateQueries({ queryKey: ["/api/trips"] });
       queryClient.invalidateQueries({ queryKey: ["/api/entitlements"] });
       form.reset();
+      setShowCreateSheet(false); // Close the sheet on mobile
       toast({
         title: "Trip created!",
         description: "Your camping trip has been successfully planned.",
@@ -199,9 +203,9 @@ export default function Trips() {
     <div className="min-h-screen bg-background">
       
       
-      <main className="container mx-auto pt-24 px-6 md:px-10 py-12 space-y-10">
-        {/* Hero Section */}
-        <div className="text-center space-y-4 max-w-4xl mx-auto pb-8" data-testid="hero-welcome">
+      <main className="container mx-auto pt-20 md:pt-24 px-4 md:px-10 py-6 md:py-12 space-y-6 md:space-y-10">
+        {/* Hero Section - Desktop Only */}
+        <div className="hidden md:block text-center space-y-4 max-w-4xl mx-auto pb-8" data-testid="hero-welcome">
           <h1 className="text-5xl font-bold text-foreground">
             Welcome to The Camping Planner
           </h1>
@@ -210,18 +214,18 @@ export default function Trips() {
           </p>
         </div>
 
-        {/* Page Header */}
-        <div className="text-center space-y-3">
-          <h2 className="text-3xl font-semibold text-foreground" data-testid="text-page-title">
-            Your Camping Trips
+        {/* Page Header - Mobile Simplified */}
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl md:text-3xl font-semibold text-foreground" data-testid="text-page-title">
+            Your Trips
           </h2>
-          <p className="text-muted-foreground" data-testid="text-trip-count">
+          <p className="text-sm md:text-base text-muted-foreground" data-testid="text-trip-count">
             {trips.length} trip{trips.length !== 1 ? 's' : ''} planned
           </p>
         </div>
 
-        {/* Create Trip Form */}
-        <Card className="max-w-4xl mx-auto">
+        {/* Create Trip Form - Desktop Only */}
+        <Card className="max-w-4xl mx-auto hidden md:block">
           <CardHeader>
             <CardTitle>Plan a New Trip</CardTitle>
             <CardDescription>
@@ -338,8 +342,8 @@ export default function Trips() {
           </CardContent>
         </Card>
 
-        {/* AI Trip Planner - Coming Soon */}
-        <Card className="max-w-4xl mx-auto opacity-75">
+        {/* AI Trip Planner - Coming Soon - Desktop Only */}
+        <Card className="max-w-4xl mx-auto opacity-75 hidden md:block">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <SparklesIcon className="h-5 w-5 text-primary" />
@@ -372,19 +376,19 @@ export default function Trips() {
         </Card>
 
         {/* Trips List */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-foreground">Your Trips</h2>
-          
+        <div className="space-y-4 md:space-y-6">
           {trips.length === 0 ? (
             <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">
-                  No trips yet. Plan your first camping adventure above!
+              <CardContent className="py-8 md:py-12 text-center">
+                <p className="text-sm md:text-base text-muted-foreground">
+                  {/* Mobile: show FAB hint, Desktop: show form hint */}
+                  <span className="md:hidden">Tap the + button to plan your first trip!</span>
+                  <span className="hidden md:inline">No trips yet. Plan your first camping adventure above!</span>
                 </p>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {trips.map((trip) => {
                 // Calculate number of people for cost splitting
                 const peopleCount = (trip.collaborators?.length || 0) + 1;
@@ -398,13 +402,13 @@ export default function Trips() {
                     className="hover-elevate active-elevate-2 transition-all"
                     data-testid={`card-trip-${trip.id}`}
                   >
-                    <CardHeader>
+                    <CardHeader className="pb-3 md:pb-6">
                       <div className="flex items-start justify-between gap-2">
                         <div 
                           className="flex-1 cursor-pointer"
                           onClick={() => navigate(`/trips/${trip.id}`)}
                         >
-                          <CardTitle data-testid={`text-trip-name-${trip.id}`}>
+                          <CardTitle className="text-lg md:text-xl" data-testid={`text-trip-name-${trip.id}`}>
                             {trip.name}
                           </CardTitle>
                         </div>
@@ -416,19 +420,20 @@ export default function Trips() {
                             setEditingTrip(trip);
                           }}
                           data-testid={`button-edit-trip-${trip.id}`}
+                          className="h-8 w-8"
                         >
                           <PencilIcon className="w-4 h-4" />
                         </Button>
                       </div>
                       {trip.location && (
-                        <CardDescription className="flex items-center gap-1">
-                          <MapPinIcon className="w-4 h-4" />
+                        <CardDescription className="flex items-center gap-1 text-xs md:text-sm">
+                          <MapPinIcon className="w-3 h-3 md:w-4 md:h-4" />
                           {trip.location}
                         </CardDescription>
                       )}
                     </CardHeader>
                     <CardContent 
-                      className="space-y-3 cursor-pointer"
+                      className="space-y-2 md:space-y-3 cursor-pointer pt-0"
                       onClick={() => navigate(`/trips/${trip.id}`)}
                     >
                       {/* Dates */}
@@ -513,6 +518,123 @@ export default function Trips() {
         open={showUpsellModal} 
         onOpenChange={setShowUpsellModal} 
       />
+
+      {/* Floating Action Button - Mobile Only */}
+      <FloatingActionButton 
+        onClick={() => setShowCreateSheet(true)} 
+        label="Create New Trip"
+        testId="fab-new-trip"
+      />
+
+      {/* Mobile Create Trip Sheet */}
+      <Sheet open={showCreateSheet} onOpenChange={setShowCreateSheet}>
+        <SheetContent side="bottom" className="h-[90vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Plan a New Trip</SheetTitle>
+            <SheetDescription>
+              Set up a camping trip with dates and location
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleCreateTrip)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Trip Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="e.g., Goldstream Weekend" 
+                          data-testid="input-trip-name-mobile"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <LocationAutocomplete
+                          value={field.value}
+                          onChange={(location, lat, lng) => {
+                            field.onChange(location);
+                            form.setValue('lat', lat);
+                            form.setValue('lng', lng);
+                          }}
+                          label="Location"
+                          placeholder="e.g., Goldstream Provincial Park"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date"
+                          data-testid="input-trip-start-date-mobile"
+                          value={field.value instanceof Date && isValid(field.value) ? format(field.value, 'yyyy-MM-dd') : ''}
+                          onChange={(e) => {
+                            const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined;
+                            field.onChange(date);
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date"
+                          data-testid="input-trip-end-date-mobile"
+                          value={field.value instanceof Date && isValid(field.value) ? format(field.value, 'yyyy-MM-dd') : ''}
+                          onChange={(e) => {
+                            const date = e.target.value ? new Date(e.target.value + 'T00:00:00') : undefined;
+                            field.onChange(date);
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button 
+                  type="submit" 
+                  className="w-full"
+                  disabled={createTripMutation.isPending}
+                  data-testid="button-create-trip-mobile"
+                >
+                  {createTripMutation.isPending ? "Creating..." : "Create Trip"}
+                </Button>
+              </form>
+            </Form>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

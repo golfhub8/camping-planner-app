@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import Navbar from "@/components/Navbar";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
 // Landing page for logged out users
@@ -112,11 +113,11 @@ function Router() {
             return <Landing />;
           }
 
-          // Show authenticated app routes with Navbar
+          // Show authenticated app routes with Navbar and mobile bottom nav
           return (
             <div className="min-h-screen bg-background flex flex-col">
               <Navbar />
-              <main className="flex-1">
+              <main className="flex-1 pb-20 md:pb-0">
                 <Switch>
                   <Route path="/" component={Trips} />
                   <Route path="/recipes" component={Home} />
@@ -137,6 +138,7 @@ function Router() {
                   <Route component={NotFound} />
                 </Switch>
               </main>
+              <MobileBottomNav />
             </div>
           );
         }}

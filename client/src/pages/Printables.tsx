@@ -164,7 +164,7 @@ export default function Printables() {
     <div className="min-h-screen bg-background">
       
       
-      <main className="container mx-auto pt-24 px-6 md:px-10 py-12 max-w-6xl">
+      <main className="container mx-auto pt-20 md:pt-24 px-4 md:px-10 py-6 md:py-12 max-w-6xl">
         {/* Configuration Warning Banner */}
         {!isStripeConfigured && (
           <Alert className="mb-6" data-testid="alert-stripe-not-configured">
@@ -175,11 +175,11 @@ export default function Printables() {
         )}
 
         {/* Page Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold mb-4" data-testid="text-page-title">
+        <div className="text-center mb-8 md:mb-12">
+          <h1 className="text-3xl md:text-5xl font-bold mb-3 md:mb-4" data-testid="text-page-title">
             Printables & Games
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-base md:text-xl text-muted-foreground max-w-2xl mx-auto">
             Download free and Pro-exclusive printable resources for your next camping trip
           </p>
           
@@ -192,7 +192,7 @@ export default function Printables() {
         </div>
 
         {/* Printables Grid */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-12">
+        <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-8 md:mb-12">
           {printables.map((p, index) => {
             const icons: Record<string, any> = {
               'free-food-packing': FileTextIcon,
