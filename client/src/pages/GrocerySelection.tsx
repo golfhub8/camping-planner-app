@@ -972,6 +972,7 @@ export default function GrocerySelection() {
                     <CommandGroup>
                       {recipes
                         ?.filter(recipe => !selectedRecipeIds.has(recipe.id))
+                        .slice(0, 20)
                         .map((recipe) => (
                           <CommandItem
                             key={recipe.id}
