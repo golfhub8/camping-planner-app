@@ -43,6 +43,9 @@ export interface IStorage {
   // Create a new recipe for a user
   createRecipe(recipe: InsertRecipe, userId: string): Promise<Recipe>;
   
+  // Update an existing recipe (with ownership check)
+  updateRecipe(recipeId: number, recipe: Partial<InsertRecipe>, userId: string): Promise<Recipe | undefined>;
+  
   // Search recipes by title (case-insensitive) for a user
   searchRecipes(query: string, userId: string): Promise<Recipe[]>;
   
@@ -319,6 +322,30 @@ export class MemStorage implements IStorage {
     };
     this.recipes.set(recipe.id, recipe);
     return recipe;
+  }
+
+  async updateRecipe(recipeId: number, updates: Partial<InsertRecipe>, userId: string): Promise<Recipe | undefined> {
+    const recipe = this.recipes.get(recipeId);
+    
+    // Verify ownership and recipe exists
+    if (!recipe || recipe.userId !== userId) {
+      return undefined;
+    }
+
+    // Update recipe fields (merge with existing)
+    const updatedRecipe: Recipe = {
+      ...recipe,
+      ...updates,
+      // Preserve fields that shouldn't be updated
+      id: recipe.id,
+      userId: recipe.userId,
+      shareToken: recipe.shareToken,
+      archived: recipe.archived,
+      createdAt: recipe.createdAt,
+    };
+
+    this.recipes.set(recipeId, updatedRecipe);
+    return updatedRecipe;
   }
 
   async searchRecipes(query: string, userId: string): Promise<Recipe[]> {
@@ -1017,6 +1044,17 @@ export class DatabaseStorage implements IStorage {
       .values({ ...insertRecipe, userId })
       .returning();
     return recipe;
+  }
+
+  async updateRecipe(recipeId: number, updates: Partial<InsertRecipe>, userId: string): Promise<Recipe | undefined> {
+    // Update recipe only if user owns it
+    const [updatedRecipe] = await db
+      .update(recipes)
+      .set(updates)
+      .where(sql`${recipes.id} = ${recipeId} AND ${recipes.userId} = ${userId}`)
+      .returning();
+    
+    return updatedRecipe || undefined;
   }
 
   async searchRecipes(query: string, userId: string): Promise<Recipe[]> {

@@ -2285,6 +2285,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/recipes/:id
+  // Update an existing recipe
+  // Body: { title?, ingredients?, steps?, imageUrl?, sourceUrl? }
+  // Protected route - requires authentication and ownership
+  app.patch("/api/recipes/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid recipe ID" });
+      }
+
+      // Verify user owns this recipe
+      const existingRecipe = await storage.getRecipeById(id, userId);
+      if (!existingRecipe) {
+        return res.status(404).json({ error: "Recipe not found or you don't have permission to edit it" });
+      }
+
+      // Validate the request body (partial update allowed)
+      const updateSchema = insertRecipeSchema.partial();
+      const validatedData = updateSchema.parse(req.body);
+      
+      // Normalize only the fields that are provided
+      const normalizedData: Partial<InsertRecipe> = {};
+      if (validatedData.title !== undefined) {
+        normalizedData.title = validatedData.title.trim();
+      }
+      if (validatedData.ingredients !== undefined) {
+        normalizedData.ingredients = validatedData.ingredients.map(ing => ing.trim()).filter(ing => ing.length > 0);
+      }
+      if (validatedData.steps !== undefined) {
+        normalizedData.steps = validatedData.steps.map(step => step.trim()).filter(step => step.length > 0);
+      }
+      if (validatedData.imageUrl !== undefined) {
+        normalizedData.imageUrl = validatedData.imageUrl;
+      }
+      if (validatedData.sourceUrl !== undefined) {
+        normalizedData.sourceUrl = validatedData.sourceUrl;
+      }
+      
+      // Update the recipe in storage
+      const updatedRecipe = await storage.updateRecipe(id, normalizedData, userId);
+      
+      if (!updatedRecipe) {
+        return res.status(404).json({ error: "Recipe not found" });
+      }
+
+      // Return the updated recipe
+      res.json(updatedRecipe);
+    } catch (error) {
+      // Handle validation errors from Zod
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid recipe data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error updating recipe:", error);
+      res.status(500).json({ error: "Failed to update recipe" });
+    }
+  });
+
   // DELETE /api/recipes/:id
   // Delete a recipe from user's collection
   // Protected route - requires authentication and ownership
