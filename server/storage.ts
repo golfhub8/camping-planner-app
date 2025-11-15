@@ -1,4 +1,4 @@
-import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type UpdateTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, type TripMeal, type AddMeal, users, recipes, trips, tripMeals, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
+import { type User, type UpsertUser, type Recipe, type InsertRecipe, type Trip, type InsertTrip, type UpdateTrip, type SharedGroceryList, type CreateSharedGroceryList, type Campground, type TripMeal, type AddMeal, type TripPackingItem, type AddPackingItem, type UpdatePackingItem, users, recipes, trips, tripMeals, sharedGroceryLists, CAMPING_BASICS } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -84,6 +84,19 @@ export interface IStorage {
   
   // Remove a meal from a trip by meal ID (with ownership check)
   removeMealFromTrip(tripId: number, mealId: number, userId: string): Promise<boolean>;
+  
+  // Trip Packing Item methods
+  // Get all packing items for a trip (with ownership check)
+  getTripPackingItems(tripId: number, userId: string): Promise<import("@shared/schema").TripPackingItem[]>;
+  
+  // Add a packing item to a trip (with ownership check)
+  addPackingItem(tripId: number, item: import("@shared/schema").AddPackingItem, userId: string): Promise<import("@shared/schema").TripPackingItem | undefined>;
+  
+  // Update a packing item (with ownership check)
+  updatePackingItem(tripId: number, itemId: number, updates: import("@shared/schema").UpdatePackingItem, userId: string): Promise<import("@shared/schema").TripPackingItem | undefined>;
+  
+  // Delete a packing item from a trip (with ownership check)
+  deletePackingItem(tripId: number, itemId: number, userId: string): Promise<boolean>;
   
   // Shared Grocery List methods
   // Create a shareable grocery list with a unique token
@@ -518,6 +531,23 @@ export class MemStorage implements IStorage {
 
     this.tripMealsStore.delete(mealId);
     return true;
+  }
+
+  // Trip Packing Item methods (stub - in-memory not used in production)
+  async getTripPackingItems(tripId: number, userId: string): Promise<TripPackingItem[]> {
+    return [];
+  }
+
+  async addPackingItem(tripId: number, item: AddPackingItem, userId: string): Promise<TripPackingItem | undefined> {
+    return undefined;
+  }
+
+  async updatePackingItem(tripId: number, itemId: number, updates: UpdatePackingItem, userId: string): Promise<TripPackingItem | undefined> {
+    return undefined;
+  }
+
+  async deletePackingItem(tripId: number, itemId: number, userId: string): Promise<boolean> {
+    return false;
   }
 
   // Shared Grocery List methods
@@ -1253,6 +1283,101 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(tripMeals)
       .where(sql`${tripMeals.id} = ${mealId} AND ${tripMeals.tripId} = ${tripId}`)
+      .returning();
+    
+    return result.length > 0;
+  }
+
+  // Trip Packing Item methods
+  async getTripPackingItems(tripId: number, userId: string): Promise<TripPackingItem[]> {
+    const { tripPackingItems } = await import("@shared/schema");
+    
+    // Verify trip ownership first
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
+    if (!trip) {
+      return [];
+    }
+
+    // Get all packing items for this trip
+    const items = await db
+      .select()
+      .from(tripPackingItems)
+      .where(eq(tripPackingItems.tripId, tripId))
+      .orderBy(tripPackingItems.createdAt);
+    
+    return items;
+  }
+
+  async addPackingItem(tripId: number, item: AddPackingItem, userId: string): Promise<TripPackingItem | undefined> {
+    const { tripPackingItems } = await import("@shared/schema");
+    
+    // Verify trip ownership first
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
+    if (!trip) {
+      return undefined;
+    }
+
+    // Add the packing item
+    const [newItem] = await db
+      .insert(tripPackingItems)
+      .values({
+        tripId,
+        name: item.name,
+        category: item.category || null,
+      })
+      .returning();
+    
+    return newItem;
+  }
+
+  async updatePackingItem(tripId: number, itemId: number, updates: UpdatePackingItem, userId: string): Promise<TripPackingItem | undefined> {
+    const { tripPackingItems } = await import("@shared/schema");
+    
+    // Verify trip ownership first
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
+    if (!trip) {
+      return undefined;
+    }
+
+    // Update the packing item
+    const [updatedItem] = await db
+      .update(tripPackingItems)
+      .set(updates)
+      .where(sql`${tripPackingItems.id} = ${itemId} AND ${tripPackingItems.tripId} = ${tripId}`)
+      .returning();
+    
+    return updatedItem;
+  }
+
+  async deletePackingItem(tripId: number, itemId: number, userId: string): Promise<boolean> {
+    const { tripPackingItems } = await import("@shared/schema");
+    
+    // Verify trip ownership first
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(sql`${trips.id} = ${tripId} AND ${trips.userId} = ${userId}`);
+    
+    if (!trip) {
+      return false;
+    }
+
+    // Delete the packing item
+    const result = await db
+      .delete(tripPackingItems)
+      .where(sql`${tripPackingItems.id} = ${itemId} AND ${tripPackingItems.tripId} = ${tripId}`)
       .returning();
     
     return result.length > 0;

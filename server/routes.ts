@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, type GroceryItem, type GroceryCategory, type Recipe, recipes } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, addPackingItemSchema, updatePackingItemSchema, type GroceryItem, type GroceryCategory, type Recipe, recipes } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
@@ -3164,6 +3164,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error removing meal from trip:", error);
       res.status(500).json({ error: "Failed to remove meal from trip" });
+    }
+  });
+
+  // GET /api/trips/:id/packing
+  // Get all packing items for a trip
+  // Protected route - requires authentication
+  app.get("/api/trips/:id/packing", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      const items = await storage.getTripPackingItems(tripId, userId);
+      res.json(items);
+    } catch (error: any) {
+      console.error("Error fetching packing items:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch packing items" });
+    }
+  });
+
+  // POST /api/trips/:id/packing
+  // Add a packing item to a trip
+  // Body: { name: string, category?: string }
+  // Protected route - requires authentication
+  app.post("/api/trips/:id/packing", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+
+      const itemData = addPackingItemSchema.parse(req.body);
+      const newItem = await storage.addPackingItem(tripId, itemData, userId);
+      
+      if (!newItem) {
+        return res.status(404).json({ error: "Trip not found" });
+      }
+
+      res.status(201).json(newItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid item data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error adding packing item:", error);
+      res.status(500).json({ error: "Failed to add packing item" });
+    }
+  });
+
+  // PATCH /api/trips/:id/packing/:itemId
+  // Update a packing item (toggle packed status or edit name/category)
+  // Body: { name?: string, packed?: boolean, category?: string }
+  // Protected route - requires authentication
+  app.patch("/api/trips/:id/packing/:itemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const itemId = parseInt(req.params.itemId);
+      const userId = req.user.claims.sub;
+      
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+      if (isNaN(itemId)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+
+      const updateData = updatePackingItemSchema.parse(req.body);
+      const updatedItem = await storage.updatePackingItem(tripId, itemId, updateData, userId);
+      
+      if (!updatedItem) {
+        return res.status(404).json({ error: "Item not found or trip not found" });
+      }
+
+      res.json(updatedItem);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid update data", 
+          details: error.errors 
+        });
+      }
+      
+      console.error("Error updating packing item:", error);
+      res.status(500).json({ error: "Failed to update packing item" });
+    }
+  });
+
+  // DELETE /api/trips/:id/packing/:itemId
+  // Delete a packing item from a trip
+  // Protected route - requires authentication
+  app.delete("/api/trips/:id/packing/:itemId", isAuthenticated, async (req: any, res) => {
+    try {
+      const tripId = parseInt(req.params.id);
+      const itemId = parseInt(req.params.itemId);
+      const userId = req.user.claims.sub;
+      
+      if (isNaN(tripId)) {
+        return res.status(400).json({ error: "Invalid trip ID" });
+      }
+      if (isNaN(itemId)) {
+        return res.status(400).json({ error: "Invalid item ID" });
+      }
+
+      const success = await storage.deletePackingItem(tripId, itemId, userId);
+      
+      if (!success) {
+        return res.status(404).json({ error: "Item not found or trip not found" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting packing item:", error);
+      res.status(500).json({ error: "Failed to delete packing item" });
     }
   });
 

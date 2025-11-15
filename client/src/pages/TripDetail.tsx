@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { addCollaboratorSchema, addTripCostSchema, addMealSchema, type Trip, type Recipe, type GroceryItem, type GroceryCategory } from "@shared/schema";
 import EditTripDialog from "@/components/EditTripDialog";
+import TripPackingList from "@/components/TripPackingList";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -1181,6 +1182,9 @@ export default function TripDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Trip Packing List */}
+        <TripPackingList tripId={trip.id} />
 
         {/* Share Grocery List Dialog */}
         <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>

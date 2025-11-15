@@ -383,6 +383,41 @@ export const addMealSchema = z.object({
   }
 );
 
+// Trip Packing Items table schema
+// Stores custom items users want to pack for their trips
+export const tripPackingItems = pgTable("trip_packing_items", {
+  // Auto-generated unique identifier
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  
+  // Associated trip ID (foreign key to trips table)
+  tripId: integer("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+  
+  // Item name (e.g., "Tent", "Sleeping bag", "First aid kit")
+  name: text("name").notNull(),
+  
+  // Whether the item is packed/checked off
+  packed: boolean("packed").notNull().default(false),
+  
+  // Optional category for grouping items
+  category: text("category"),
+  
+  // When this item was added
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Schema for adding a packing item to a trip
+export const addPackingItemSchema = z.object({
+  name: z.string().trim().min(1, "Item name is required"),
+  category: z.string().trim().optional(),
+});
+
+// Schema for updating a packing item (toggle packed status or edit name)
+export const updatePackingItemSchema = z.object({
+  name: z.string().trim().min(1, "Item name is required").optional(),
+  packed: z.boolean().optional(),
+  category: z.string().trim().optional(),
+});
+
 // TypeScript types for working with trips and trip meals
 export type InsertTrip = z.infer<typeof insertTripSchema>;
 export type UpdateTrip = z.infer<typeof updateTripSchema>;
@@ -391,6 +426,9 @@ export type AddCollaborator = z.infer<typeof addCollaboratorSchema>;
 export type AddTripCost = z.infer<typeof addTripCostSchema>;
 export type AddMeal = z.infer<typeof addMealSchema>;
 export type TripMeal = typeof tripMeals.$inferSelect;
+export type TripPackingItem = typeof tripPackingItems.$inferSelect;
+export type AddPackingItem = z.infer<typeof addPackingItemSchema>;
+export type UpdatePackingItem = z.infer<typeof updatePackingItemSchema>;
 
 // Shared Grocery Lists table schema
 // Stores shareable grocery lists with unique tokens for public access
