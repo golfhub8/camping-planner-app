@@ -209,6 +209,8 @@ export default function TripDetail() {
       return response.json();
     },
     enabled: tripId !== null,
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 
   // Fetch all recipes to map meal IDs to titles
@@ -421,7 +423,7 @@ export default function TripDetail() {
     // Generate plain text for copying
     let text = `${trip.name} - Shopping List\n\n`;
     
-    const categories: GroceryCategory[] = ["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"];
+    const categories: GroceryCategory[] = ["Produce", "Dairy", "Meat", "Pantry"];
     categories.forEach(category => {
       const items = groceryData.grouped[category];
       if (items && items.length > 0) {
@@ -680,71 +682,10 @@ export default function TripDetail() {
             </div>
           </div>
         )}
+          </TabsContent>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Collaborators Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UsersIcon className="w-5 h-5" />
-                Collaborators
-              </CardTitle>
-              <CardDescription>
-                {peopleCount} {peopleCount === 1 ? 'person' : 'people'} on this trip
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Existing Collaborators */}
-              {trip.collaborators && trip.collaborators.length > 0 ? (
-                <div className="flex flex-wrap gap-2" data-testid="list-collaborators">
-                  {trip.collaborators.map((collaborator, idx) => (
-                    <Badge key={idx} variant="secondary" data-testid={`badge-collaborator-${idx}`}>
-                      {collaborator}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No collaborators yet. Add one below!</p>
-              )}
-
-              <Separator />
-
-              {/* Add Collaborator Form */}
-              <Form {...collaboratorForm}>
-                <form 
-                  onSubmit={collaboratorForm.handleSubmit((data) => addCollaboratorMutation.mutate(data))}
-                  className="space-y-3"
-                >
-                  <FormField
-                    control={collaboratorForm.control}
-                    name="collaborator"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Add Collaborator</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Email or name"
-                            autoComplete="name"
-                            data-testid="input-add-collaborator"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button 
-                    type="submit"
-                    disabled={addCollaboratorMutation.isPending}
-                    data-testid="button-submit-collaborator"
-                  >
-                    {addCollaboratorMutation.isPending ? "Adding..." : "Add Collaborator"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-
+          {/* Costs Tab */}
+          <TabsContent value="costs" className="space-y-6" data-testid="tabcontent-costs">
           {/* Cost Section */}
           <Card>
             <CardHeader>
@@ -853,8 +794,10 @@ export default function TripDetail() {
               </Form>
             </CardContent>
           </Card>
-        </div>
+          </TabsContent>
 
+          {/* Meals Tab */}
+          <TabsContent value="meals" className="space-y-6" data-testid="tabcontent-meals">
         {/* Meals Section */}
         <Card>
           <CardHeader>
@@ -927,7 +870,7 @@ export default function TripDetail() {
 
                         {/* Grocery Items by Category */}
                         <div className="space-y-4">
-                          {(["Produce", "Dairy", "Meat", "Pantry", "Camping Gear"] as GroceryCategory[]).map(category => {
+                          {(["Produce", "Dairy", "Meat", "Pantry"] as GroceryCategory[]).map(category => {
                             const items = groceryData.grouped[category];
                             if (!items || items.length === 0) return null;
                             
@@ -1137,7 +1080,10 @@ export default function TripDetail() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
 
+          {/* Packing Tab */}
+          <TabsContent value="packing" className="space-y-6" data-testid="tabcontent-packing">
         {/* What to Pack */}
         <Card data-testid="card-what-to-pack">
           <CardHeader>
@@ -1298,7 +1244,6 @@ export default function TripDetail() {
             )}
           </CardContent>
         </Card>
-
           </TabsContent>
         </Tabs>
 

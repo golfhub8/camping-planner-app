@@ -28,7 +28,6 @@ export default function GroceryShare() {
     "Dairy": [],
     "Meat": [],
     "Pantry": [],
-    "Camping Gear": [],
   };
 
   groceryItems.forEach(item => {
