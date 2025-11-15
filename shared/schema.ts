@@ -34,6 +34,10 @@ export const recipes = pgTable("recipes", {
   // User who created this recipe (foreign key to users table)
   userId: varchar("user_id").notNull().references(() => users.id),
   
+  // Soft delete flag - when true, recipe is archived and hidden from main view
+  // Allows users to remove recipes without permanently deleting them
+  archived: boolean("archived").notNull().default(false),
+  
   // When the recipe was created
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

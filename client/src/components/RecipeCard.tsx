@@ -4,10 +4,11 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus, ShoppingCart, Save } from "lucide-react";
+import { Calendar, ChefHat, Eye, Share2, ExternalLink, Plus, ShoppingCart, Save, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -45,6 +46,9 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
   
   // State for save recipe modal (external recipes)
   const [saveRecipeModalOpen, setSaveRecipeModalOpen] = useState(false);
+  
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const displayIngredients = ingredients.slice(0, 3);
   const hasMore = ingredients.length > 3;
@@ -210,6 +214,44 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
     }
   };
 
+  // Delete recipe mutation - only for internal recipes
+  const deleteRecipeMutation = useMutation({
+    mutationFn: async () => {
+      if (typeof id !== 'number') {
+        throw new Error("Cannot delete external recipes");
+      }
+      const response = await apiRequest("DELETE", `/api/recipes/${id}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete recipe");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Recipe Removed",
+        description: `"${title}" has been removed from your collection.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/recipes"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete recipe",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteRecipeMutation.mutate();
+    setDeleteDialogOpen(false);
+  };
+
   return (
     <>
       <Card className="hover-elevate transition-all" data-testid={`card-recipe-${id}`}>
@@ -317,6 +359,21 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               >
                 <Share2 className="h-4 w-4" />
                 Share
+              </Button>
+            )}
+            
+            {/* Delete button - only for internal recipes */}
+            {source === "internal" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={handleDeleteClick}
+                disabled={deleteRecipeMutation.isPending}
+                data-testid={`button-delete-recipe-${id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove
               </Button>
             )}
             
@@ -459,6 +516,27 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           }}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-testid="dialog-delete-recipe">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Recipe?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{title}" will be moved to your archive. You can always restore it later if you change your mind. This won't affect any trips that already use this recipe.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Keep Recipe</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              data-testid="button-confirm-delete"
+            >
+              Remove from Collection
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

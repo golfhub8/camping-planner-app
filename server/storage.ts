@@ -52,6 +52,9 @@ export interface IStorage {
   // Get recipe by share token (public access)
   getRecipeByShareToken(shareToken: string): Promise<Recipe | undefined>;
   
+  // Delete a recipe (with ownership check)
+  deleteRecipe(recipeId: number, userId: string): Promise<boolean>;
+  
   // Trip methods
   // Get all trips for a user (returns newest first)
   getAllTrips(userId: string): Promise<Trip[]>;
@@ -287,28 +290,29 @@ export class MemStorage implements IStorage {
 
   // Recipe methods
   async getAllRecipes(userId: string): Promise<Recipe[]> {
-    // Return all recipes for this user, sorted by creation date (newest first)
+    // Return all non-archived recipes for this user, sorted by creation date (newest first)
     return Array.from(this.recipes.values())
-      .filter(recipe => recipe.userId === userId)
+      .filter(recipe => recipe.userId === userId && !recipe.archived)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async getRecipeById(id: number, userId: string): Promise<Recipe | undefined> {
     const recipe = this.recipes.get(id);
-    // Only return if user owns this recipe
-    if (recipe && recipe.userId === userId) {
+    // Only return if user owns this recipe and it's not archived
+    if (recipe && recipe.userId === userId && !recipe.archived) {
       return recipe;
     }
     return undefined;
   }
 
   async createRecipe(insertRecipe: InsertRecipe, userId: string): Promise<Recipe> {
-    // Create a new recipe with auto-generated ID, timestamp, and userId
+    // Create a new recipe with auto-generated ID, timestamp, userId, and not archived
     const recipe: Recipe = {
       ...insertRecipe,
       imageUrl: insertRecipe.imageUrl ?? null,
       sourceUrl: insertRecipe.sourceUrl ?? null,
       shareToken: null,
+      archived: false,
       id: this.nextRecipeId++,
       userId,
       createdAt: new Date(),
@@ -318,10 +322,10 @@ export class MemStorage implements IStorage {
   }
 
   async searchRecipes(query: string, userId: string): Promise<Recipe[]> {
-    // Search for recipes where title contains the query (case-insensitive) for this user
+    // Search for non-archived recipes where title contains the query (case-insensitive) for this user
     const lowerQuery = query.toLowerCase();
     return Array.from(this.recipes.values())
-      .filter((recipe) => recipe.userId === userId && recipe.title.toLowerCase().includes(lowerQuery))
+      .filter((recipe) => recipe.userId === userId && !recipe.archived && recipe.title.toLowerCase().includes(lowerQuery))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
@@ -336,6 +340,17 @@ export class MemStorage implements IStorage {
   async getRecipeByShareToken(shareToken: string): Promise<Recipe | undefined> {
     return Array.from(this.recipes.values())
       .find((recipe) => recipe.shareToken === shareToken);
+  }
+
+  async deleteRecipe(recipeId: number, userId: string): Promise<boolean> {
+    const recipe = this.recipes.get(recipeId);
+    if (!recipe || recipe.userId !== userId) {
+      return false;
+    }
+    // Soft delete: mark as archived instead of removing from storage
+    recipe.archived = true;
+    this.recipes.set(recipeId, recipe);
+    return true;
   }
 
   // Trip methods
@@ -978,20 +993,20 @@ export class DatabaseStorage implements IStorage {
 
   // Recipe methods
   async getAllRecipes(userId: string): Promise<Recipe[]> {
-    // Get all recipes for this user only
+    // Get all non-archived recipes for this user only
     return await db
       .select()
       .from(recipes)
-      .where(eq(recipes.userId, userId))
+      .where(sql`${recipes.userId} = ${userId} AND ${recipes.archived} = false`)
       .orderBy(desc(recipes.createdAt));
   }
 
   async getRecipeById(id: number, userId: string): Promise<Recipe | undefined> {
-    // Get recipe only if user owns it
+    // Get recipe only if user owns it and it's not archived
     const [recipe] = await db
       .select()
       .from(recipes)
-      .where(sql`${recipes.id} = ${id} AND ${recipes.userId} = ${userId}`);
+      .where(sql`${recipes.id} = ${id} AND ${recipes.userId} = ${userId} AND ${recipes.archived} = false`);
     return recipe || undefined;
   }
 
@@ -1005,11 +1020,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchRecipes(query: string, userId: string): Promise<Recipe[]> {
-    // Search for recipes where title contains the query (case-insensitive) for this user
+    // Search for non-archived recipes where title contains the query (case-insensitive) for this user
     return await db
       .select()
       .from(recipes)
-      .where(sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + query + '%'}) AND ${recipes.userId} = ${userId}`)
+      .where(sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + query + '%'}) AND ${recipes.userId} = ${userId} AND ${recipes.archived} = false`)
       .orderBy(desc(recipes.createdAt));
   }
 
@@ -1028,6 +1043,16 @@ export class DatabaseStorage implements IStorage {
       .from(recipes)
       .where(eq(recipes.shareToken, shareToken));
     return recipe || undefined;
+  }
+
+  async deleteRecipe(recipeId: number, userId: string): Promise<boolean> {
+    // Soft delete: mark recipe as archived instead of deleting
+    const result = await db
+      .update(recipes)
+      .set({ archived: true })
+      .where(sql`${recipes.id} = ${recipeId} AND ${recipes.userId} = ${userId}`)
+      .returning();
+    return result.length > 0;
   }
 
   // Trip methods

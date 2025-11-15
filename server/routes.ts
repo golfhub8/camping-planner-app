@@ -2285,6 +2285,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/recipes/:id
+  // Delete a recipe from user's collection
+  // Protected route - requires authentication and ownership
+  app.delete("/api/recipes/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid recipe ID" });
+      }
+
+      const success = await storage.deleteRecipe(id, userId);
+      
+      if (!success) {
+        return res.status(404).json({ error: "Recipe not found or you don't have permission to delete it" });
+      }
+
+      res.json({ success: true, message: "Recipe removed from your collection" });
+    } catch (error) {
+      console.error("Error deleting recipe:", error);
+      res.status(500).json({ error: "Failed to delete recipe" });
+    }
+  });
+
   // POST /api/recipes/:id/share
   // Generate a shareable link for a recipe
   // Query parameter: regenerate=true to create a new token (revokes old link)
