@@ -570,6 +570,7 @@ export default function TripDetail() {
                           <FormControl>
                             <Input 
                               placeholder="Email or name"
+                              autoComplete="name"
                               data-testid="input-add-collaborator"
                               {...field}
                             />
@@ -723,6 +724,7 @@ export default function TripDetail() {
                         <FormControl>
                           <Input 
                             placeholder="Email or name"
+                            autoComplete="name"
                             data-testid="input-add-collaborator"
                             {...field}
                           />
@@ -809,6 +811,8 @@ export default function TripDetail() {
                             step="0.01"
                             min="0"
                             placeholder="0.00"
+                            inputMode="decimal"
+                            autoComplete="transaction-amount"
                             data-testid="input-cost-total"
                             {...field}
                             value={field.value}
@@ -829,6 +833,7 @@ export default function TripDetail() {
                         <FormControl>
                           <Input 
                             placeholder="Email or name"
+                            autoComplete="name"
                             data-testid="input-cost-paid-by"
                             {...field}
                           />
