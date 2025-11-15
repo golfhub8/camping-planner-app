@@ -3784,6 +3784,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/health
+  // Health check endpoint for uptime monitoring
+  // Returns { "ok": true } when the server is running
+  app.get("/api/health", (req, res) => {
+    res.json({ ok: true });
+  });
+
   // POST /api/billing/create-checkout-session
   // Create a Stripe Checkout session for Pro Membership using Dashboard Price
   // Uses STRIPE_PRICE_ID environment variable (price_1SRnQBIEQH0jZmIb2XwrLR5v)
