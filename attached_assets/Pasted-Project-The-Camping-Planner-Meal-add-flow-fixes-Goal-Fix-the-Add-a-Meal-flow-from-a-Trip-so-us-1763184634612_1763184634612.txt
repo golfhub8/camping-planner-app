@@ -1,0 +1,75 @@
+Project: The Camping Planner – Meal add flow fixes
+
+Goal
+Fix the “Add a Meal” flow from a Trip so users can (a) jump to the Recipes page to choose or create a recipe, (b) add that recipe directly to the trip they came from, and (c) get back to the trip seamlessly.
+
+Scope
+	1.	Replace the in-trip “Add a Meal” modal with a redirect.
+	2.	On the Recipes page, add “Add to Trip” actions that know which trip is active.
+	3.	Provide a “Back to Trip” button on the Recipes page when a trip context exists.
+
+Details
+
+A) Redirect from Trip → Recipes
+• Entry point: Trips detail page (/trips/:tripId).
+• When user clicks “Add Meal”, instead of opening the current modal, push route to /recipes with a query param tripId=:tripId (and optionally tripName for display).
+Example: /recipes?tripId=abc123&from=trip
+• Remove or bypass the modal code path for this button only. Keep modal in other places if needed.
+
+B) Recipes page UI updates (trip-aware)
+• If tripId is present in the URL:
+– Show a compact banner at the top: “Adding meals to: {Trip Name}. Back to Trip”.
+– The “Back to Trip” button routes to /trips/:tripId.
+• For every recipe card (both “My Recipes” and “From TheCampingPlanner.com” suggested cards):
+– Keep existing buttons.
+– Add a primary “Add to Trip” button.
+– Disabled state while processing; success toast “Added ‘{Recipe Name}’ to {Trip Name}”.
+• For “Create New Recipe” flow: after saving, show the same “Add to Trip” button on the newly created recipe card without leaving the page.
+
+C) API/Store changes
+• Add/confirm an endpoint or client action: POST /api/trips/:tripId/meals with body { recipeId }.
+• If recipe is an “External Recipe” and not yet saved, first persist it to the user’s collection (normalize title, ingredients, steps) then attach that new recipeId to the trip in a single UX flow.
+• Prevent duplicates in the same trip by default (upsert: same recipeId increments “servings” field if that concept exists; otherwise allow multiples if current data model expects that).
+
+D) Routing and state
+• Recipes page should read tripId from location.search and store it (e.g., in React state or a lightweight context).
+• All “Add to Trip” buttons use that tripId; if no tripId present, clicking “Add to Trip” should open a small chooser (list of user’s trips) or show tooltip “Open from a trip to add directly”.
+
+E) Analytics & events (optional but preferred)
+• Track “trip_add_meal_redirect”, “recipe_add_to_trip_click”, “recipe_added_to_trip_success/fail” with tripId and recipeId.
+
+F) UX copy
+• Top banner copy: “You’re adding meals to: {Trip Name}” and a right-aligned “Back to Trip” button.
+• Success toast: “Added to {Trip Name}”.
+• Error toast: “Couldn’t add this recipe. Please try again.”
+
+Acceptance criteria
+	1.	From /trips/:tripId, clicking “Add Meal” takes me to /recipes?tripId=:tripId (no modal opens).
+	2.	A banner appears on Recipes page with “Back to Trip” and the trip name.
+	3.	Every recipe card shows an “Add to Trip” button; clicking it instantly adds that recipe to the trip (with loading state and success toast).
+	4.	Returning to /trips/:tripId shows the newly added meal under “Meals for this Trip” without a manual refresh.
+	5.	If I land on /recipes without tripId, “Add to Trip” either opens a trip selector or shows an explanatory tooltip.
+	6.	External/suggested recipes can be added in one click (the app auto-saves/normalizes them behind the scenes before attaching to the trip).
+	7.	No console errors, and network calls return 2xx.
+	8.	All existing buttons on recipe cards (Save Recipe, View Recipe, Add to Grocery) continue to work.
+
+QA checklist
+
+• Start from a trip with 0 meals → Add Meal → redirected to Recipes → Add to Trip on three different cards → Back to Trip → all three appear.
+• Add an “External Recipe” (one that previously showed “Retry auto-import”) → confirm it’s saved and attached in one action.
+• Create a new custom recipe → “Add to Trip” works immediately.
+• Turn off tripId (open /recipes directly) → “Add to Trip” handles gracefully (selector or tooltip).
+• Mobile view: banner and buttons are visible and tappable.
+• Refresh after adding; meals persist.
+
+Implementation notes (file names may differ; adjust to repo):
+• Trips page: components/TripMealsSection.tsx – change Add Meal button handler to navigate(/recipes?tripId=${trip.id}&from=trip).
+• Recipes page: pages/Recipes.tsx – read tripId via useSearchParams; conditionally render Banner and wire “Add to Trip”.
+• RecipeCard.tsx – add new Button that calls addToTrip(tripId, recipeId).
+• api/trips.ts – add addMealToTrip(tripId, recipeId).
+• If needed, create server route POST /api/trips/:tripId/meals.
+
+Please implement exactly as above and post a short note with what was changed and where, plus screenshots:
+• Recipes page with banner and buttons,
+• Trip page before and after adding,
+• Network tab showing POST /trips/:tripId/meals success.
