@@ -8,13 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShoppingCart, Loader2, ExternalLink, ArrowLeft, AlertCircle } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ShoppingCart, Loader2, ExternalLink, ArrowLeft, AlertCircle, Check, ChevronsUpDown, X } from "lucide-react";
 import type { Recipe, Trip, GroceryItem } from "@shared/schema";
 import { mergeIngredients, normalizeIngredientKey, type MergedIngredient } from "@/lib/ingredients";
 import { categorizeIngredient } from "@/lib/categorize";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 
 enum Step {
   SELECTION = "selection",
@@ -38,6 +41,12 @@ export default function GrocerySelection() {
   // Map trip meal IDs to their recipe IDs for syncing
   const [tripMealRecipeIds, setTripMealRecipeIds] = useState<Map<number, number>>(new Map());
   
+  // Recipe picker state
+  const [recipePickerOpen, setRecipePickerOpen] = useState(false);
+  const [recipeSearchQuery, setRecipeSearchQuery] = useState("");
+  // Store recipes that aren't in the /api/recipes list (e.g., ingredient picker payloads)
+  const [externalSelectedRecipes, setExternalSelectedRecipes] = useState<Recipe[]>([]);
+  
   // Confirmation step state
   const [confirmedIngredients, setConfirmedIngredients] = useState<ConfirmedIngredient[]>([]);
   const [moveUncheckedToPantry, setMoveUncheckedToPantry] = useState(false);
@@ -53,6 +62,11 @@ export default function GrocerySelection() {
     queryKey: ["/api/recipes"],
     refetchOnMount: true,
   });
+  
+  // Hybrid approach: merge internal recipes (from /api/recipes) with external recipes (from ingredient picker)
+  // This ensures the summary list shows ALL selected recipes regardless of source
+  const internalSelectedRecipes = recipes?.filter(r => selectedRecipeIds.has(r.id)) || [];
+  const manualSelectedRecipes = [...internalSelectedRecipes, ...externalSelectedRecipes];
 
   const { data: trips = [] } = useQuery<Trip[]>({
     queryKey: ["/api/trips"],
@@ -177,6 +191,29 @@ export default function GrocerySelection() {
           // Auto-select the recipe (recipeId can be 0 for external recipes)
           if (!selectedRecipeIds.has(data.recipeId)) {
             setSelectedRecipeIds(prev => new Set(prev).add(data.recipeId));
+          }
+          
+          // For external recipes (ID 0), add to externalSelectedRecipes for display
+          if (data.recipeId === 0 && data.recipeTitle) {
+            const externalRecipe: Recipe = {
+              id: 0,
+              userId: "",
+              title: data.recipeTitle,
+              ingredients: data.ingredients,
+              steps: [],
+              imageUrl: null,
+              sourceUrl: null,
+              createdAt: new Date(),
+              shareToken: null,
+              archived: false,
+            };
+            setExternalSelectedRecipes(prev => {
+              // Avoid duplicates
+              if (!prev.find(r => r.title === data.recipeTitle)) {
+                return [...prev, externalRecipe];
+              }
+              return prev;
+            });
           }
         }
         // DON'T clear pending data here - it will be cleared when user proceeds to confirmation
@@ -307,6 +344,75 @@ export default function GrocerySelection() {
       }
     });
   }
+
+  // Add recipe from dropdown (manual selection)
+  function addRecipeFromDropdown(recipe: Recipe) {
+    // Add to selectedRecipeIds (single source of truth)
+    // manualSelectedRecipes will automatically update as it's derived from selectedRecipeIds
+    setSelectedRecipeIds(prev => new Set(prev).add(recipe.id));
+    
+    // Also select matching trip meals (bidirectional sync)
+    if (tripMeals.length > 0) {
+      const matchingMeals = tripMeals.filter(meal => meal.recipeId === recipe.id);
+      
+      if (matchingMeals.length > 0) {
+        setSelectedTripMealIds(prevMealIds => {
+          const newMealIds = [...prevMealIds];
+          matchingMeals.forEach(meal => {
+            if (!newMealIds.includes(meal.id)) {
+              newMealIds.push(meal.id);
+            }
+          });
+          return newMealIds;
+        });
+        
+        setTripMealRecipeIds(prevMap => {
+          const newMap = new Map(prevMap);
+          matchingMeals.forEach(meal => {
+            newMap.set(meal.id, recipe.id);
+          });
+          return newMap;
+        });
+      }
+    }
+  }
+  
+  // Remove recipe from manual selections
+  function removeManualRecipe(recipeId: number, recipeTitle?: string) {
+    // Remove from external selections if it's an external recipe (ID 0)
+    if (recipeId === 0 && recipeTitle) {
+      setExternalSelectedRecipes(prev => prev.filter(r => r.title !== recipeTitle));
+    }
+    
+    // manualSelectedRecipes will automatically update when we call toggleRecipe
+    toggleRecipe(recipeId); // Reuse existing toggle logic to handle deselection
+  }
+  
+  // Mutation to add recipe to a trip
+  const addRecipeToTripMutation = useMutation({
+    mutationFn: async ({ tripId, recipeId }: { tripId: number; recipeId: number }) => {
+      const response = await apiRequest("POST", `/api/trips/${tripId}/meals`, { recipeId });
+      return await response.json();
+    },
+    onSuccess: (_, { tripId }) => {
+      // Invalidate trip meals to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["/api/trips", tripId.toString(), "meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/trips"] });
+      
+      toast({
+        title: "Recipe added to trip",
+        description: "The recipe has been added to your trip meals",
+      });
+    },
+    onError: (error: any) => {
+      console.error("[GrocerySelection] Error adding recipe to trip:", error);
+      toast({
+        title: "Failed to add recipe",
+        description: "Could not add the recipe to your trip. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Move to confirmation step
   // MULTI-MEAL INGREDIENT AGGREGATION:
@@ -832,48 +938,119 @@ export default function GrocerySelection() {
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Select Recipes</CardTitle>
+            <CardTitle>Build Your Own List</CardTitle>
             <CardDescription>
-              Choose one or more recipes to include in your grocery list
+              Select recipes and optionally assign them to a trip
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {recipes.map((recipe) => {
-              // Single source of truth: check if recipe is in selectedRecipeIds
-              const isSelected = selectedRecipeIds.has(recipe.id);
-              const isInTripMeals = Array.from(tripMealRecipeIds.values()).includes(recipe.id);
-              
-              return (
-                <div
-                  key={recipe.id}
-                  className="flex items-start gap-3 p-3 rounded-md hover-elevate"
-                  data-testid={`recipe-item-${recipe.id}`}
+          <CardContent className="space-y-4">
+            <Popover open={recipePickerOpen} onOpenChange={setRecipePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={recipePickerOpen}
+                  className="w-full justify-between"
+                  data-testid="button-select-recipe"
                 >
-                  <Checkbox
-                    id={`recipe-${recipe.id}`}
-                    checked={isSelected}
-                    onCheckedChange={() => toggleRecipe(recipe.id)}
-                    data-testid={`checkbox-recipe-${recipe.id}`}
+                  Select recipes...
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" data-testid="popover-recipe-picker">
+                <Command>
+                  <CommandInput 
+                    placeholder="Search recipes..." 
+                    value={recipeSearchQuery}
+                    onValueChange={setRecipeSearchQuery}
+                    data-testid="input-recipe-search"
                   />
-                  <label
-                    htmlFor={`recipe-${recipe.id}`}
-                    className="flex-1 cursor-pointer"
+                  <CommandList>
+                    <CommandEmpty>No recipes found.</CommandEmpty>
+                    <CommandGroup>
+                      {recipes
+                        ?.filter(recipe => !selectedRecipeIds.has(recipe.id))
+                        .map((recipe) => (
+                          <CommandItem
+                            key={recipe.id}
+                            value={recipe.title}
+                            onSelect={() => {
+                              addRecipeFromDropdown(recipe);
+                            }}
+                            data-testid={`command-item-recipe-${recipe.id}`}
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium">{recipe.title}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {recipe.ingredients.length} ingredients
+                              </div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            
+            {manualSelectedRecipes.length > 0 && (
+              <div className="space-y-2 pt-2 border-t">
+                {manualSelectedRecipes.map((recipe) => (
+                  <div
+                    key={recipe.id}
+                    className="flex items-center gap-3 p-3 rounded-md border"
+                    data-testid={`manual-recipe-${recipe.id}`}
                   >
-                    <div className="font-semibold mb-1">{recipe.title}</div>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary" className="text-xs">
-                        {recipe.ingredients.length} ingredients
-                      </Badge>
-                      {isInTripMeals && (
-                        <Badge variant="outline" className="text-xs">
-                          In trip meals
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{recipe.title}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="secondary" className="text-xs">
+                          {recipe.ingredients.length} ingredients
                         </Badge>
-                      )}
+                        {Array.from(tripMealRecipeIds.values()).includes(recipe.id) && (
+                          <Badge variant="outline" className="text-xs">
+                            In trip meals
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </label>
-                </div>
-              );
-            })}
+                    
+                    <Select
+                      onValueChange={(value) => {
+                        if (value && value !== "none") {
+                          addRecipeToTripMutation.mutate({
+                            tripId: parseInt(value),
+                            recipeId: recipe.id,
+                          });
+                        }
+                      }}
+                      defaultValue="none"
+                    >
+                      <SelectTrigger className="w-[140px]" data-testid={`select-trip-assignment-${recipe.id}`}>
+                        <SelectValue placeholder="Add to trip..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No trip</SelectItem>
+                        {trips.map((trip) => (
+                          <SelectItem key={trip.id} value={trip.id.toString()}>
+                            {trip.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeManualRecipe(recipe.id, recipe.title)}
+                      data-testid={`button-remove-recipe-${recipe.id}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
