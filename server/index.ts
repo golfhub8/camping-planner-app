@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { stripeWebhookRouter, setWebhookStorage } from "./webhooks/stripeWebhook";
@@ -22,6 +23,49 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+
+// Configure CORS to allow only specific origins
+const allowedOrigins = [
+  'https://app.thecampingplanner.app',
+  'http://localhost:5173'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Check exact matches
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Check wildcard pattern for Vercel deployments: https://*.vercel.app
+    // Use proper URL parsing to prevent spoofing (e.g., https://foo.vercel.app.evil.com)
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      
+      // Verify hostname ends with .vercel.app and has exactly 3 parts (subdomain.vercel.app)
+      if (hostname.endsWith('.vercel.app')) {
+        const parts = hostname.split('.');
+        // Should be exactly 3 parts: [subdomain, 'vercel', 'app']
+        if (parts.length === 3 && parts[1] === 'vercel' && parts[2] === 'app') {
+          return callback(null, true);
+        }
+      }
+    } catch (error) {
+      // Invalid URL, reject
+      return callback(new Error('Not allowed by CORS'));
+    }
+
+    // Origin not allowed
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
