@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, addPackingItemSchema, updatePackingItemSchema, type GroceryItem, type GroceryCategory, type Recipe, recipes } from "@shared/schema";
+import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, addPackingItemSchema, updatePackingItemSchema, type GroceryItem, type GroceryCategory, type Recipe, type InsertRecipe, recipes } from "@shared/schema";
 import { z } from "zod";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
@@ -207,6 +207,26 @@ const FREE_GROCERY_LIMIT = (() => {
   const parsed = parseInt(process.env.FREE_GROCERY_LIMIT || '5', 10);
   return Number.isNaN(parsed) ? 5 : parsed;
 })();
+
+// Helper: Consistent Pro status check across all endpoints
+// Checks BOTH subscription status AND membership end date for reliability
+// This ensures users with active trials are correctly identified as Pro
+function isUserPro(user: { subscriptionStatus: string | null, proMembershipEndDate: Date | null }): boolean {
+  // Check active subscription status (handles trials, active, and grace period)
+  const status = user.subscriptionStatus;
+  const hasActiveSubscription = status === 'trialing' || status === 'active' || status === 'past_due';
+  
+  // Check membership end date as fallback/supplement
+  let hasFutureMembership = false;
+  if (user.proMembershipEndDate) {
+    const now = new Date();
+    const endDate = new Date(user.proMembershipEndDate);
+    hasFutureMembership = endDate > now;
+  }
+  
+  // User is Pro if they have active subscription OR future membership date
+  return hasActiveSubscription || hasFutureMembership;
+}
 
 // Initialize Stripe client
 // Reference: blueprint:javascript_stripe
@@ -643,9 +663,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Derive isPro from proMembershipEndDate
-      const now = new Date();
-      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+      // Derive isPro using consistent Pro status check (checks both subscription status and membership date)
+      const isPro = isUserPro(user);
       
       // Return user with isPro flag
       res.json({ ...user, isPro });
@@ -671,9 +690,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trips = await storage.getAllTrips(userId);
       const tripsCount = trips.length;
 
-      // Derive isPro from proMembershipEndDate
-      const now = new Date();
-      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+      // Derive isPro using consistent Pro status check (checks both subscription status and membership date)
+      const isPro = isUserPro(user);
       
       // Derive isTrialing from stored subscription status (no Stripe API call needed)
       // Subscription status is updated by webhooks, avoiding per-request Stripe fetches
@@ -750,9 +768,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trips = await storage.getAllTrips(userId);
       const tripsCount = trips.length;
 
-      // Derive isPro from proMembershipEndDate
-      const now = new Date();
-      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+      // Derive isPro using consistent Pro status check (checks both subscription status and membership date)
+      const isPro = isUserPro(user);
 
       // Pro users have unlimited trips, free users are limited to FREE_TRIP_LIMIT
       const canCreateTrip = isPro || tripsCount < FREE_TRIP_LIMIT;
@@ -787,12 +804,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ hasAccess: false, message: "User not found" });
       }
 
-      // Check for active Pro membership (trial or paid)
-      if (user.proMembershipEndDate && user.proMembershipEndDate > new Date()) {
+      // Check for active Pro membership using consistent Pro status check
+      const isPro = isUserPro(user);
+      
+      if (isPro) {
         return res.json({ 
           hasAccess: true, 
           accessType: 'pro',
-          expiresAt: user.proMembershipEndDate,
+          expiresAt: user.proMembershipEndDate || undefined,
           message: "You have Pro membership access to all printables"
         });
       }
@@ -822,28 +841,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = user.claims.sub;
         const dbUser = await storage.getUser(userId);
         
-        // Check if user has active Pro membership using same logic as /api/auth/user
-        // Pro status is determined by subscription status OR future membership end date
-        const status = dbUser?.subscriptionStatus;
-        const hasActiveSubscription = status === 'trialing' || status === 'active' || status === 'past_due';
-        
-        // Also check membership end date as fallback
-        let hasFutureMembership = false;
-        if (dbUser?.proMembershipEndDate) {
-          const now = new Date();
-          const endDate = new Date(dbUser.proMembershipEndDate);
-          hasFutureMembership = endDate > now;
-        }
-        
-        // User is Pro if they have active subscription OR future membership date
-        isPro = hasActiveSubscription || hasFutureMembership;
+        // Use consistent Pro status check
+        isPro = dbUser ? isUserPro(dbUser) : false;
         
         // Debug logging to track Pro detection
         console.log(`[Printables] User ${userId} Pro check:`, {
-          subscriptionStatus: status,
+          subscriptionStatus: dbUser?.subscriptionStatus,
           proMembershipEndDate: dbUser?.proMembershipEndDate,
-          hasActiveSubscription,
-          hasFutureMembership,
           isPro
         });
       } catch (error) {
@@ -2956,9 +2960,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "User not found" });
       }
 
-      // Derive isPro from proMembershipEndDate
-      const now = new Date();
-      const isPro = user.proMembershipEndDate ? new Date(user.proMembershipEndDate) > now : false;
+      // Derive isPro using consistent Pro status check (checks both subscription status and membership date)
+      const isPro = isUserPro(user);
 
       // If not Pro, count ACTUAL trips to enforce limit (authoritative source of truth)
       // This prevents counter drift from manual DB inserts, tests, or race conditions
