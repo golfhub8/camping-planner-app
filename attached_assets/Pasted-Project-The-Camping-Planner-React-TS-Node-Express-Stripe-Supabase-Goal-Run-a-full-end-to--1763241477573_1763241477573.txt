@@ -1,0 +1,93 @@
+Project: The Camping Planner (React/TS + Node/Express + Stripe + Supabase)
+
+Goal: Run a full end-to-end “Final Launch Readiness” test on the live dev URL and repository, fix any failures as you go, and report what changed. Use Stripe TEST mode for purchases. When all checks pass, summarize results and remaining risks.
+
+Test from a completely fresh account:
+
+PHASE 1 — ACCOUNT + FREE LIMITS
+	1.	Create a brand-new user (unused email). Log in.
+Verify UI shows Free/Trial correctly.
+	2.	Create 5 trips with different locations (mix of Canada + US), valid dates.
+Verify: trips list renders, trip detail opens, weather loads, nearby hikes are truly local to the trip’s country/region (no Maine hikes when trip is in Canada).
+	3.	Attempt to create a 6th trip on Free.
+Expected: blocked with upgrade CTA. If not blocked, implement/enforce 5-trip limit for Free users.
+
+PHASE 2 — RECIPES (CUSTOM + EXTERNAL)
+4) Create 5 custom recipes (title, ingredients, instructions). Save and confirm they appear in My Recipes and can be added to trips.
+5) Save 5 suggested recipes from TheCampingPlanner.com and ensure parsing works:
+• Ingredients must come from the “Ingredients Checklist” table.
+• Instructions must be combined from “Home Prep Before the Trip” + “Cooking at Camp”.
+• No stray text or missing steps. If any recipe fails (“retry auto import”), fix the parser (selectors + fallback) so the official recipes import cleanly.
+
+PHASE 3 — ADD MEALS TO TRIP
+6) From a trip, click “Add Meal”.
+Expected behavior: redirect to /recipes?tripId=… (not a modal).
+On Recipes page, show “Back to Trip” at the top and an “Add to Trip” button on every card. Add 3 recipes. Return to the trip and verify meals appear without refresh.
+
+PHASE 4 — GROCERY LIST BUILDER
+7) Build a grocery list using the trip’s meals plus selected recipes.
+Requirements:
+• Selection state is unified: items picked in “Meals from your trips” are auto-checked in “Select Recipes” and vice versa.
+• Generated list includes ALL selected recipes’ ingredients.
+• Categorization: Pantry/Produce/Dairy/Meat/etc. Remove “Camping Gear” as a grocery category.
+• Specifically: elbow macaroni and bread crumbs must be under Pantry.
+• “Hide checked items” toggle works.
+8) Use the built-in share/email and send the grocery list to golfhubmedia@gmail.com via SMTP (hello@thecampingplanner.com on smtpout.secureserver.net:587). Verify email sends successfully and is readable (HTML or PDF; no corrupted attachments).
+
+PHASE 5 — PRO SUBSCRIPTION (STRIPE TEST)
+9) Upgrade this account to Pro using Stripe Checkout (TEST keys).
+Verify:
+• Redirect works and webhook processes checkout.session.completed.
+• DB updates user to Pro; Account page shows “Pro Member” (not “Pro Trial”).
+• Renewal date displays Stripe subscription.current_period_end (1 year from now). Do not compute +365 manually.
+• Header “Go Pro” button is replaced with Pro status.
+• Trip limit removed (create a 6th trip and confirm allowed).
+
+PHASE 6 — PREMIUM FEATURES UNLOCK
+10) Printables: all Pro printables/games must unlock and download cleanly.
+• PDFs open; no “Failed to load PDF document.” If serving PDFs, ensure binary streaming with correct headers and no JSON/text wrapping.
+11) Packing List: fully unlocked for Pro; remove “Unlock Full List” gating.
+
+PHASE 7 — CANCELLATION + REGATING
+12) Open Stripe Customer Portal, cancel the subscription (TEST mode).
+Verify:
+• Webhook customer.subscription.deleted downgrades user to Free.
+• Account page reflects Free/Trial, header reverts from Pro.
+• Pro printables and full packing lists are re-locked; free items remain accessible.
+• Free tier trip limit (5) enforced again.
+
+PHASE 8 — MOBILE OPTIMIZATION QUICK CHECK
+13) On a small viewport (≤390px):
+• No horizontal scroll; buttons ≥44px tap targets.
+• Bottom navigation works.
+• Add-meal redirect + “Back to Trip” are easy to use.
+• PDF downloads open in mobile viewer.
+• Email share opens native mail app.
+
+PHASE 9 — SUPPORT & FEEDBACK
+14) Visit /support:
+• “Report a Bug” and “Contact Us” open mailto to hello@thecampingplanner.com with prefilled subject/body including app version, URL, user agent, and logged-in email.
+• “Back to Account” works.
+
+PHASE 10 — SECURITY / PROD READINESS
+15) Verify:
+• HTTPS only; no exposed secrets; env vars used properly.
+• Stripe webhook uses express.raw for /api/stripe/webhook and validates signature with STRIPE_WEBHOOK_SECRET.
+• Live vs Test keys are clearly separated. No stale test webhook endpoints in Stripe Dash pointing to dead Replit URLs.
+• Error tracking (Sentry) and analytics pageview/event calls are not throwing errors in console.
+
+Fix & Implementation Guidelines:
+• If any test fails, fix the root cause in code immediately (frontend or backend) and re-run the affected phase.
+• For the recipe parser, add robust selectors and fallbacks for Ingredients Checklist table and the two instruction sections; decode HTML entities; preserve units and amounts.
+• For grocery selection, create a single shared selectedRecipeIds state that both top and bottom sections bind to.
+• For PDFs, serve from disk with correct Content-Type and Content-Disposition and send as binary; ensure files were uploaded as binary and have correct sizes.
+• For subscription state, always read/write from Stripe webhooks (checkout.session.completed, customer.subscription.updated, customer.subscription.deleted). Store subscription.id, status, and current_period_end. UI must derive Pro/Trial/Free from this state.
+• For Free gating, enforce the 5-trip limit at both UI and API levels (deny creation with clear message and return 403/422).
+• For hikes, ensure we no longer use any US-only demo data; use the new OpenStreetMap/OpenHiking integration and show “No nearby hikes” when none are returned rather than falling back to wrong regions.
+
+Deliverables:
+• A short changelog listing files touched and what was fixed.
+• Confirmation checklist with PASS/FAIL for each phase and screenshots for: trip creation limit, Add-to-Trip flow, grocery email in inbox, Pro account page with correct renewal date, unlocked printables/PDF opened, post-cancellation re-locking, and /support screen.
+• Note any remaining known issues with severity and proposed fixes.
+
+Use the existing code style and TypeScript types. Do not reduce accessibility or mobile usability. Re-run the end-to-end test after fixes and confirm everything passes.
