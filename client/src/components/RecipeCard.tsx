@@ -296,28 +296,36 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           )}
         </CardContent>
 
-        <CardFooter className="flex flex-col items-center justify-center gap-4">
-          <div className="flex items-center gap-2 flex-wrap justify-center">
-            {/* Add to Grocery button - only if ingredients available */}
-            {ingredients.length > 0 && (
-              <Button
-                variant="default"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setIngredientPickerOpen(true)}
-                data-testid={`button-add-to-grocery-${id}`}
-              >
-                <ShoppingCart className="h-4 w-4" />
-                Add to Grocery
+        <CardFooter className="flex flex-col items-center justify-center gap-3">
+          {/* View Recipe button - first row, larger */}
+          {source === "external" ? (
+            <Button 
+              variant="outline" 
+              size="default" 
+              className="gap-1.5 w-full"
+              onClick={onViewExternal}
+              data-testid={`button-view-recipe-${id}`}
+            >
+              <Eye className="h-4 w-4" />
+              View Recipe
+            </Button>
+          ) : (
+            <Link href={`/recipe/${id}`} data-testid={`link-view-recipe-${id}`} className="w-full">
+              <Button variant="outline" size="default" className="gap-1.5 w-full">
+                <Eye className="h-4 w-4" />
+                View Recipe
               </Button>
-            )}
-            
+            </Link>
+          )}
+          
+          {/* Second row - other action buttons */}
+          <div className="flex items-center gap-2 flex-wrap justify-center w-full">
             {/* Save to My Recipes button - only for external recipes */}
             {source === "external" && (
               <Button
                 variant="default"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 flex-1"
                 onClick={() => setSaveRecipeModalOpen(true)}
                 data-testid={`button-save-recipe-${id}`}
               >
@@ -331,13 +339,27 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 flex-1"
                 onClick={handleAddToTrip}
                 disabled={isAddingToTrip}
                 data-testid={`button-add-to-trip-${id}`}
               >
                 <Plus className="h-4 w-4" />
                 {fromTripId ? `Add to ${fromTripName}` : "Add to Trip"}
+              </Button>
+            )}
+            
+            {/* Add to Grocery button - only if ingredients available */}
+            {ingredients.length > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setIngredientPickerOpen(true)}
+                data-testid={`button-add-to-grocery-${id}`}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Add to Grocery
               </Button>
             )}
             
@@ -368,27 +390,6 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
                 <Trash2 className="h-4 w-4" />
                 Remove
               </Button>
-            )}
-            
-            {/* View button - opens modal for external recipes or links to internal recipe page */}
-            {source === "external" ? (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-1.5"
-                onClick={onViewExternal}
-                data-testid={`button-view-recipe-${id}`}
-              >
-                <Eye className="h-4 w-4" />
-                View Recipe
-              </Button>
-            ) : (
-              <Link href={`/recipe/${id}`} data-testid={`link-view-recipe-${id}`}>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Eye className="h-4 w-4" />
-                  View Recipe
-                </Button>
-              </Link>
             )}
           </div>
           
