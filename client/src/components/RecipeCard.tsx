@@ -300,7 +300,7 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
           {/* View Recipe button - first row, larger */}
           {source === "external" ? (
             <Button 
-              variant="outline" 
+              variant="default" 
               size="default" 
               className="gap-1.5 w-full"
               onClick={onViewExternal}
@@ -311,7 +311,7 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
             </Button>
           ) : (
             <Link href={`/recipe/${id}`} data-testid={`link-view-recipe-${id}`} className="w-full">
-              <Button variant="outline" size="default" className="gap-1.5 w-full">
+              <Button variant="default" size="default" className="gap-1.5 w-full">
                 <Eye className="h-4 w-4" />
                 View Recipe
               </Button>
@@ -337,7 +337,7 @@ export default function RecipeCard({ id, title, ingredients, createdAt, source =
             {/* Add to Trip button - show when trip context exists OR for external recipes */}
             {(fromTripId || source === "external") && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 className="gap-1.5 flex-1"
                 onClick={handleAddToTrip}
