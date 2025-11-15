@@ -178,6 +178,12 @@ export default function TripDetail() {
   // State for expanded meals and selected ingredients
   const [expandedMeals, setExpandedMeals] = useState<Set<number>>(new Set());
   const [selectedIngredients, setSelectedIngredients] = useState<Map<number, Set<string>>>(new Map());
+  
+  // State for weather forecast collapsible (collapsed by default on mobile, open on desktop)
+  const [weatherOpen, setWeatherOpen] = useState(typeof window !== 'undefined' && window.innerWidth >= 768);
+  
+  // State for active tab
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Fetch trip data
   const { data: trip, isLoading: tripLoading, error: tripError } = useQuery<Trip>({
@@ -466,7 +472,7 @@ export default function TripDetail() {
   };
 
   return (
-    <main className="container mx-auto px-6 md:px-10 py-12 space-y-8">
+    <main className="container mx-auto px-4 md:px-10 py-6 md:py-12 space-y-6 md:space-y-8">
         {/* Back Button and Actions */}
         <div className="flex items-center justify-between gap-4">
           <Button 
@@ -488,19 +494,19 @@ export default function TripDetail() {
         </div>
 
         {/* Trip Header */}
-        <div className="space-y-3">
-          <h1 className="text-5xl font-bold text-foreground" data-testid="text-trip-name">
+        <div className="space-y-2 md:space-y-3">
+          <h1 className="text-3xl md:text-5xl font-bold text-foreground" data-testid="text-trip-name">
             {trip.name}
           </h1>
           {trip.location && (
-            <div className="flex items-center gap-2 text-xl text-muted-foreground">
-              <MapPinIcon className="w-5 h-5" />
+            <div className="flex items-center gap-2 text-base md:text-xl text-muted-foreground">
+              <MapPinIcon className="w-4 md:w-5 h-4 md:h-5" />
               <span data-testid="text-trip-location">{trip.location}</span>
             </div>
           )}
           {trip.startDate && trip.endDate && (
-            <div className="flex items-center gap-2 text-lg text-muted-foreground">
-              <CalendarIcon className="w-5 h-5" />
+            <div className="flex items-center gap-2 text-sm md:text-lg text-muted-foreground">
+              <CalendarIcon className="w-4 md:w-5 h-4 md:h-5" />
               <span data-testid="text-trip-dates">
                 {format(new Date(trip.startDate), 'MMMM d, yyyy')} - {format(new Date(trip.endDate), 'MMMM d, yyyy')}
               </span>
@@ -508,8 +514,87 @@ export default function TripDetail() {
           )}
         </div>
 
-        {/* Weather & Hikes Section */}
-        {!lat || !lng ? (
+        {/* Tab Navigation */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="hikes" data-testid="tab-hikes">Hikes</TabsTrigger>
+            <TabsTrigger value="meals" data-testid="tab-meals">Meals</TabsTrigger>
+            <TabsTrigger value="packing" data-testid="tab-packing">Packing</TabsTrigger>
+            <TabsTrigger value="costs" data-testid="tab-costs">Costs</TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6"
+            data-testid="tabcontent-overview"
+          >
+            {/* Collaborators Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UsersIcon className="w-5 h-5" />
+                  Collaborators
+                </CardTitle>
+                <CardDescription>
+                  {peopleCount} {peopleCount === 1 ? 'person' : 'people'} on this trip
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Existing Collaborators */}
+                {trip.collaborators && trip.collaborators.length > 0 ? (
+                  <div className="flex flex-wrap gap-2" data-testid="list-collaborators">
+                    {trip.collaborators.map((collaborator, idx) => (
+                      <Badge key={idx} variant="secondary" data-testid={`badge-collaborator-${idx}`}>
+                        {collaborator}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No collaborators yet. Add one below!</p>
+                )}
+
+                <Separator />
+
+                {/* Add Collaborator Form - placeholder, will be moved from below */}
+                <Form {...collaboratorForm}>
+                  <form 
+                    onSubmit={collaboratorForm.handleSubmit((data) => addCollaboratorMutation.mutate(data))}
+                    className="space-y-3"
+                  >
+                    <FormField
+                      control={collaboratorForm.control}
+                      name="collaborator"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Add Collaborator</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Email or name"
+                              data-testid="input-add-collaborator"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button 
+                      type="submit"
+                      disabled={addCollaboratorMutation.isPending}
+                      data-testid="button-submit-collaborator"
+                    >
+                      {addCollaboratorMutation.isPending ? "Adding..." : "Add Collaborator"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Hikes Tab */}
+          <TabsContent value="hikes" className="space-y-6" data-testid="tabcontent-hikes">
+            {/* Weather & Hikes Section */}
+            {!lat || !lng ? (
           <Card data-testid="card-weather-hint">
             <CardContent className="py-4 flex items-start gap-3">
               <CloudSunIcon className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
@@ -546,7 +631,7 @@ export default function TripDetail() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {/* Current weather - full width */}
+            {/* Current weather - full width, always visible */}
             <CurrentWeather 
               weather={weather} 
               tempUnit={tempUnit} 
@@ -554,8 +639,34 @@ export default function TripDetail() {
               formatTemp={formatTemp} 
             />
             
-            {/* Forecast and Hikes - side by side on desktop */}
-            <div className="grid gap-4 lg:grid-cols-2">
+            {/* Collapsible forecast section for mobile */}
+            <Collapsible open={weatherOpen} onOpenChange={setWeatherOpen} className="md:hidden">
+              <CollapsibleTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-between"
+                  data-testid="button-toggle-forecast"
+                >
+                  <span className="flex items-center gap-2">
+                    <CloudRain className="h-4 w-4" />
+                    7-Day Forecast & Hiking
+                  </span>
+                  {weatherOpen ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4 space-y-4">
+                <WeatherForecast 
+                  weather={weather} 
+                  formatTemp={formatTemp} 
+                  tripStartDate={trip.startDate}
+                  tripEndDate={trip.endDate}
+                />
+                <NearbyHikes tripId={trip.id} location={trip.location} />
+              </CollapsibleContent>
+            </Collapsible>
+            
+            {/* Always visible on desktop - side by side */}
+            <div className="hidden md:grid gap-4 lg:grid-cols-2">
               <WeatherForecast 
                 weather={weather} 
                 formatTemp={formatTemp} 
@@ -1183,8 +1294,8 @@ export default function TripDetail() {
           </CardContent>
         </Card>
 
-        {/* Trip Packing List */}
-        <TripPackingList tripId={trip.id} />
+          </TabsContent>
+        </Tabs>
 
         {/* Share Grocery List Dialog */}
         <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
