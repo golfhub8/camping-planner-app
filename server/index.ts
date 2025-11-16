@@ -25,13 +25,20 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: false }));
 
 // Configure CORS to allow only specific origins
+const isDevelopment = app.get("env") === "development";
 const allowedOrigins = [
   'https://app.thecampingplanner.app',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'http://localhost:5000',
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
+    // In development, allow all origins for easier testing
+    if (isDevelopment) {
+      return callback(null, true);
+    }
+
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) {
       return callback(null, true);
@@ -98,7 +105,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -108,25 +115,23 @@ app.use((req, res, next) => {
     throw err;
   });
 
+  const PORT = process.env.PORT || 3000;
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    // In development, we need to create server first for Vite HMR
+    const { createServer } = await import("http");
+    const server = createServer(app);
     await setupVite(app, server);
+    server.listen(PORT, () => {
+      log(`serving on port ${PORT}`);
+    });
   } else {
     serveStatic(app);
+    app.listen(PORT, () => {
+      log(`serving on port ${PORT}`);
+    });
   }
-
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
 })();

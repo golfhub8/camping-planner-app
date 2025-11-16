@@ -1,5 +1,4 @@
 import express, { type Express } from "express";
-import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertRecipeSchema, generateGroceryListSchema, insertTripSchema, updateTripSchema, addCollaboratorSchema, addTripCostSchema, addMealSchema, createSharedGroceryListSchema, searchCampgroundsSchema, addCampingBasicSchema, addPackingItemSchema, updatePackingItemSchema, type GroceryItem, type GroceryCategory, type Recipe, type InsertRecipe, recipes } from "@shared/schema";
 import { z } from "zod";
@@ -642,7 +641,7 @@ function requirePrintableAccess(req: any, res: any, next: any) {
   });
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   // Initialize email service for sending subscription confirmations
   initializeEmailService();
   
@@ -4914,8 +4913,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ error: "Failed to get billing status" });
     }
   });
-
-  const httpServer = createServer(app);
-
-  return httpServer;
 }
