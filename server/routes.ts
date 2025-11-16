@@ -3790,6 +3790,127 @@ export async function registerRoutes(app: Express): Promise<void> {
     res.json({ ok: true });
   });
 
+  // POST /api/support/bug-report
+  // Submit a bug report or contact message
+  // Body: { name: string, email: string, message: string, screenshot?: string (base64) }
+  app.post("/api/support/bug-report", isAuthenticated, async (req: any, res) => {
+    try {
+      const { name, email, message, screenshot } = req.body;
+
+      if (!name || !email || !message) {
+        return res.status(400).json({ error: "Name, email, and message are required" });
+      }
+
+      const userId = req.user.claims.sub;
+      const userEmail = req.user.claims.email;
+
+      // Prepare email to send to support
+      const subject = `Bug Report from ${name} (${email})`;
+      
+      const htmlBody = `
+        <h2>New Bug Report / Contact Message</h2>
+        
+        <h3>User Information</h3>
+        <ul>
+          <li><strong>Name:</strong> ${name}</li>
+          <li><strong>Email:</strong> ${email}</li>
+          <li><strong>User ID:</strong> ${userId}</li>
+          <li><strong>Authenticated Email:</strong> ${userEmail}</li>
+        </ul>
+
+        <h3>Message</h3>
+        <p>${message.replace(/\n/g, '<br>')}</p>
+
+        ${screenshot ? '<h3>Screenshot</h3><p>Screenshot attached to this email.</p>' : ''}
+
+        <hr>
+        <p><small>Submitted at: ${new Date().toISOString()}</small></p>
+      `;
+
+      const textBody = `
+New Bug Report / Contact Message
+
+User Information:
+- Name: ${name}
+- Email: ${email}
+- User ID: ${userId}
+- Authenticated Email: ${userEmail}
+
+Message:
+${message}
+
+${screenshot ? 'Screenshot: Attached' : ''}
+
+---
+Submitted at: ${new Date().toISOString()}
+      `.trim();
+
+      // Prepare attachments if screenshot is provided
+      const { sendEmail } = await import('./emailService');
+      let attachments: Array<{ filename: string; content: string; encoding: string; contentType: string; }> | undefined;
+
+      if (screenshot) {
+        // Validate screenshot size (5MB limit)
+        const sizeInBytes = screenshot.length * 0.75; // Rough estimate for base64
+        if (sizeInBytes > 5 * 1024 * 1024) {
+          return res.status(400).json({ error: "Screenshot too large (max 5MB)" });
+        }
+
+        // Extract base64 data and mime type
+        // Support both data URL format and plain base64
+        const dataUrlMatches = screenshot.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        
+        if (dataUrlMatches && dataUrlMatches.length === 3) {
+          const mimeType = dataUrlMatches[1];
+          const base64Data = dataUrlMatches[2];
+          
+          // Validate it's an image type
+          if (!mimeType.startsWith('image/')) {
+            return res.status(400).json({ error: "Screenshot must be an image" });
+          }
+          
+          attachments = [{
+            filename: 'screenshot.png',
+            content: base64Data,
+            encoding: 'base64',
+            contentType: mimeType,
+          }];
+        } else {
+          // Try plain base64 (some browsers may omit data URL prefix)
+          // Assume PNG if no MIME type provided
+          try {
+            // Validate it's valid base64
+            Buffer.from(screenshot, 'base64');
+            attachments = [{
+              filename: 'screenshot.png',
+              content: screenshot,
+              encoding: 'base64',
+              contentType: 'image/png',
+            }];
+          } catch (e) {
+            console.warn(`[Support] Invalid screenshot format from ${email}`);
+            // Continue without attachment rather than failing
+          }
+        }
+      }
+
+      // Send email using the shared transporter
+      await sendEmail({
+        to: "hello@thecampingplanner.com",
+        subject,
+        text: textBody,
+        html: htmlBody,
+        attachments,
+      });
+
+      console.log(`[Support] Bug report received from ${name} (${email})`);
+      return res.json({ success: true, message: "Report submitted successfully" });
+    } catch (error) {
+      console.error("Bug report error:", error);
+      return res.status(500).json({ error: "Failed to submit report" });
+    }
+  });
+
   // POST /api/billing/create-checkout-session
   // Create a Stripe Checkout session for Pro Membership using Dashboard Price
   // Uses STRIPE_PRICE_ID environment variable (price_1SRnQBIEQH0jZmIb2XwrLR5v)

@@ -8,13 +8,19 @@ export async function sendEmail(options: {
   subject: string;
   text: string;
   html: string;
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    encoding: string;
+    contentType: string;
+  }>;
 }): Promise<void> {
   if (!transporter) {
     console.warn("[Email] Cannot send email - transporter not initialized");
-    return;
+    throw new Error("Email service not initialized");
   }
 
-  const { to, subject, text, html } = options;
+  const { to, subject, text, html, attachments } = options;
 
   try {
     await transporter.sendMail({
@@ -23,9 +29,10 @@ export async function sendEmail(options: {
       subject,
       text,
       html,
+      attachments,
     });
 
-    console.log(`[Email] Email sent to ${to}: ${subject}`);
+    console.log(`[Email] Email sent to ${to}: ${subject}${attachments ? ` (${attachments.length} attachment(s))` : ''}`);
   } catch (error) {
     console.error(`[Email] Failed to send email to ${to}:`, error);
     throw error;

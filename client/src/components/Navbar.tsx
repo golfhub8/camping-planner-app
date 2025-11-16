@@ -10,16 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, LogOut, User, CreditCard, Crown } from "lucide-react";
+import { Search, LogOut, User, CreditCard, Crown, Bug } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLogout } from "@/hooks/useLogout";
 import SubscribeButton from "./SubscribeButton";
+import BugReportModal from "./BugReportModal";
 import bannerImage from "@assets/The Camping Planner banner 1 (1)_1762580023779.jpg";
 
 export default function Navbar() {
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const { user } = useAuth();
   const { handleLogout } = useLogout();
 
@@ -126,6 +128,10 @@ export default function Navbar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setBugReportOpen(true)} className="flex items-center cursor-pointer" data-testid="menu-item-bug-report">
+                  <Bug className="mr-2 h-4 w-4" />
+                  <span>Report a Bug</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer" data-testid="menu-item-logout">
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Logout</span>
@@ -135,6 +141,8 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+
+      <BugReportModal open={bugReportOpen} onOpenChange={setBugReportOpen} />
     </header>
   );
 }

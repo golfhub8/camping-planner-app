@@ -22,6 +22,7 @@ The backend is an Express.js application with TypeScript, providing a REST API. 
 - **Weather Forecasting:** Client-side real-time weather forecasts from Open-Meteo API for trips with stored coordinates, captured via Mapbox Geocoding.
 - **Account & Subscription:** Account page for plan and subscription management, displaying free/trial/pro status and enabling Stripe billing portal access. The `/api/account/plan` endpoint uses Stripe as the source of truth for subscription data.
 - **Sharing:** Token-based public sharing for both recipes and grocery lists, with sanitized public viewing.
+- **Support & Bug Reporting:** Integrated bug report and contact form accessible from user dropdown menu in Navbar. Users can submit name, email, message, and optional screenshot (max 5MB). Submissions are sent via SMTP to hello@thecampingplanner.com with user context (ID, authenticated email) attached. Screenshot handling supports both data URL and plain base64 formats with server-side validation.
 
 ### System Design Choices
 - **Frontend State Management:** TanStack Query for state management, data fetching, optimistic updates, and caching. Secure logout clears client cache.
