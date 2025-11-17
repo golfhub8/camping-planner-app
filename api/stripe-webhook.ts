@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import getRawBody from 'raw-body';
-import { storage } from '../server/storage.js';
+import { storage } from '../server/storage';
 import {
   sendWelcomeToProEmail,
   sendProPaymentReceiptEmail,
@@ -10,7 +10,7 @@ import {
   sendTrialStartedEmail,
   sendCancellationEmail,
   sendAdminNewSignupNotification,
-} from '../server/emails.js';
+} from '../server/emails';
 
 // Use the same Stripe configuration as the main app
 const stripe = process.env.STRIPE_SECRET_KEY
