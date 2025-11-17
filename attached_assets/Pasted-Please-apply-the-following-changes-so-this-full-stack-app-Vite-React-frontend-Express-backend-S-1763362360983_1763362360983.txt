@@ -1,0 +1,156 @@
+Please apply the following changes so this full-stack app (Vite React frontend + Express backend + Stripe webhooks + Drizzle) runs on Vercel:
+
+1) Repo layout & build
+
+Goal: Vercel root = repo root (not /client), so we can have /api/* serverless functions alongside the frontend.
+
+In the repo root, create/update:
+
+vercel.json:
+
+{
+  "buildCommand": "npm --prefix client ci && npm --prefix client run build",
+  "outputDirectory": "client/dist",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/client/dist/index.html" }
+  ]
+}
+
+
+This builds the frontend from /client, serves it from client/dist, and keeps /api/* as serverless.
+
+Ensure client/vite.config.ts outputs to dist (default). If there’s a custom outDir, set:
+
+export default defineConfig({ plugins: [react()], build: { outDir: 'dist' }})
+
+2) Express → Serverless Functions
+
+Refactor the Express app so it exports the app instead of calling listen():
+
+In server/index.ts (or wherever the Express app is), do:
+
+import express from 'express';
+export const app = express();
+
+// existing middleware/routes here
+// DO NOT app.listen() in this file
+
+
+In api/server.ts (new file at repo root):
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import serverless from 'serverless-http';
+import { app } from '../server/index';
+
+const handler = serverless(app);
+
+export default async function (req: VercelRequest, res: VercelResponse) {
+  // Vercel Node function wrapper for Express
+  return handler(req as any, res as any);
+}
+
+
+This mounts your entire Express app under /api/server on Vercel.
+
+If you previously had app.listen(...) for local dev, move that into a dev-only file (e.g., server/dev.ts) that imports { app } and calls listen(); don’t run it in production.
+
+3) Stripe webhook (raw body)
+
+Create api/stripe-webhook.ts:
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import Stripe from 'stripe';
+import getRawBody from 'raw-body';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, { apiVersion: '2024-06-20' });
+
+export const config = {
+  api: { bodyParser: false } // ensure raw body
+};
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') { res.status(405).end(); return; }
+  const sig = req.headers['stripe-signature'] as string;
+  const buf = await getRawBody(req as any);
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET as string);
+  } catch (err: any) {
+    res.status(400).send(`Webhook Error: ${err.message}`);
+    return;
+  }
+  // TODO: handle event.type cases here
+  res.json({ received: true });
+}
+
+4) Database (Drizzle + Postgres)
+
+Ensure the DB client uses connection pooling for serverless (Neon/Supabase/Vercel Postgres are ideal). If using a traditional Postgres, set max low and reuse the pool module across invocations.
+
+Make sure all DB modules are import-safe in serverless (no long-lived listen() or blocking code).
+
+5) Auth (Replit Auth note)
+
+Replit OIDC won’t work on Vercel out-of-the-box. Leave current auth in place if it’s abstracted, otherwise stub it behind your own sessions/JWT. We can swap to Clerk/Auth0 later. For now, ensure auth middleware doesn’t assume Replit runtime.
+
+6) Emails (SMTP)
+
+Keep the SMTP client usage inside serverless functions or Express routes; ensure credentials are read from env vars.
+
+7) Package changes
+
+In repo root package.json, add dependencies used by functions:
+
+{
+  "dependencies": {
+    "serverless-http": "^3.2.0",
+    "raw-body": "^3.0.0"
+  }
+}
+
+
+(If a root package.json doesn’t exist, create one with at least those deps; Vercel installs root deps for /api.)
+
+8) Vercel settings (after pushing these changes)
+
+Root Directory: leave empty (repo root).
+
+Build Command: (leave to vercel.json) or set npm --prefix client ci && npm --prefix client run build.
+
+Output Directory: client/dist.
+
+Environment Variables: set in Vercel → Settings → Environment Variables:
+
+DATABASE_URL
+
+STRIPE_SECRET_KEY
+
+STRIPE_WEBHOOK_SECRET
+
+SMTP_HOST, SMTP_USER, SMTP_PASS, etc.
+
+Any other secrets your server uses.
+
+9) Routes
+
+Frontend served from client/dist.
+
+API endpoints:
+
+All Express routes available at /api/server/* (because we mounted the whole app there).
+
+Stripe webhook at /api/stripe-webhook.
+
+10) Test locally (optional)
+
+Keep a server/dev.ts that does:
+
+import { app } from './index';
+app.listen(5174, () => console.log('Dev API on 5174'));
+
+
+Run npm --prefix client run dev for Vite and ts-node server/dev.ts (or nodemon) for local API.
+
+Make these changes and show me the modified files (vercel.json, api/server.ts, api/stripe-webhook.ts, updated server/index.ts, updated client/vite.config.ts). Don’t remove any existing routes or logic—just adapt for Vercel Serverless.

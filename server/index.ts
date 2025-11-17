@@ -104,6 +104,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Initialize routes and middleware (wrapped in IIFE for top-level await)
 (async () => {
   await registerRoutes(app);
 
@@ -115,23 +116,29 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  const PORT = process.env.PORT || 3000;
+  // Only start the server if not running in Vercel serverless environment
+  if (!process.env.VERCEL) {
+    const PORT = process.env.PORT || 3000;
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    // In development, we need to create server first for Vite HMR
-    const { createServer } = await import("http");
-    const server = createServer(app);
-    await setupVite(app, server);
-    server.listen(PORT, () => {
-      log(`serving on port ${PORT}`);
-    });
-  } else {
-    serveStatic(app);
-    app.listen(PORT, () => {
-      log(`serving on port ${PORT}`);
-    });
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    if (app.get("env") === "development") {
+      // In development, we need to create server first for Vite HMR
+      const { createServer } = await import("http");
+      const server = createServer(app);
+      await setupVite(app, server);
+      server.listen(PORT, () => {
+        log(`serving on port ${PORT}`);
+      });
+    } else {
+      serveStatic(app);
+      app.listen(PORT, () => {
+        log(`serving on port ${PORT}`);
+      });
+    }
   }
 })();
+
+// Export the app for Vercel serverless functions
+export { app };
