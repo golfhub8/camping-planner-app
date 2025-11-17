@@ -1,7 +1,9 @@
 {
+  "buildCommand": "npm --prefix client ci && npm --prefix client run build",
+  "outputDirectory": "client/dist",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/(.*)", "destination": "/api/server/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

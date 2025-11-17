@@ -1,0 +1,73 @@
+Goal: My Vite React frontend is deployed on Vercel, but all /api/* routes return 404. Convert the existing Express backend to run on Vercel Serverless Functions and keep the SPA routing working.
+
+Please do the following EXACTLY:
+
+Export the Express app (no listen in prod)
+
+In server/index.ts (or the main Express file), ensure we export the Express app and do not call app.listen() in that file.
+
+import express from 'express';
+export const app = express();
+// existing middleware, routes (/auth/user, /login, etc.) stay the same
+// DO NOT call app.listen() here
+
+
+If we need a local dev server, create server/dev.ts that imports { app } and runs:
+
+app.listen(5174, () => console.log('API dev on 5174'));
+
+
+Create a Vercel function that mounts Express
+
+Add a new file api/server.ts at the repo root (same level as client/ and server/):
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import serverless from 'serverless-http';
+import { app } from '../server/index';
+
+const handler = serverless(app);
+
+export default async function(req: VercelRequest, res: VercelResponse) {
+  return handler(req as any, res as any);
+}
+
+
+Add "serverless-http": "^3.2.0" to the root package.json dependencies (create the file if it doesn’t exist).
+
+Stripe webhook (if present)
+
+If there is a Stripe webhook, add api/stripe-webhook.ts (using raw-body and your existing logic). If we already have a webhook route inside Express, leave it and it will be available at /api/server/....
+
+vercel.json rewrites (SPA + API)
+
+Ensure there is a vercel.json at the repo root with EXACTLY:
+
+{
+  "buildCommand": "npm --prefix client ci && npm --prefix client run build",
+  "outputDirectory": "client/dist",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/server/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+
+
+Notes:
+
+This keeps all backend routes under /api/server/* but preserves original paths: calling /api/auth/user will hit Express route /auth/user.
+
+The second rewrite serves the SPA for any non-API route (fixes /login 404).
+
+Vite output
+
+Make sure client/vite.config.ts outputs to dist (default). If there is a custom outDir, set:
+
+build: { outDir: 'dist' }
+
+
+Do NOT change business logic or route paths. The frontend should keep calling /api/login and /api/auth/user — after these changes they should resolve to Express.
+
+Show me the files you created/changed: server/index.ts, server/dev.ts (if added), api/server.ts, vercel.json, and any package.json changes.
+
+I will commit/push and redeploy on Vercel after you confirm.
