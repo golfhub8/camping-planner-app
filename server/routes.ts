@@ -648,6 +648,18 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Set up authentication middleware (Replit Auth integration)
   await setupAuth(app);
 
+  // Health Check / Ping Route
+  // GET /api/ping
+  // Simple endpoint to verify API is working
+  // Public route - no authentication required
+  app.get('/api/ping', (_req, res) => {
+    res.json({ 
+      status: 'ok', 
+      message: 'The Camping Planner API is running',
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Authentication Routes
   
   // GET /api/auth/user

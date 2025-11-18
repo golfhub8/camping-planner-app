@@ -1,0 +1,13 @@
+I’m deploying this project on Vercel. I want both the frontend and backend to live on Vercel in a classic “frontend + Vercel serverless functions” setup. The api folder in the repo should define my backend endpoints (for example /api/ping, /api/auth/user, /api/auth/login, /api/trips, etc.).
+
+Right now I’m getting errors when the app tries to log in or hit API routes on https://thecampingplanner.app. Please do the following:
+	1.	Scan the project and list all API routes that are actually implemented for Vercel – especially in the api/ folder and any serverless-function-style files. Tell me exactly which HTTP methods and paths exist (for example, GET /api/ping, POST /api/auth/login, GET /api/auth/user, etc.).
+	2.	Make sure there is a login endpoint implemented under a clear path like POST /api/auth/login (or similar). If it isn’t implemented yet, create a minimal login handler in the appropriate api/*.ts file that matches the rest of the auth system in this project (use the same user/session logic currently used on Replit).
+	3.	In the frontend (inside the client folder), update all API calls so they use relative paths that match the actual backend routes. For example, if the login route is POST /api/auth/login, then the frontend should call that exact path using fetch("/api/auth/login", ...) or using the apiUrl() helper with a base that assumes same-origin (no hard-coded Replit URLs).
+	4.	Remove any remaining hard-coded Replit .repl.co URLs or replit.com/@... URLs from the frontend code. All API calls should be relative to the current origin (the Vercel domain), e.g. /api/....
+	5.	Ensure the apiUrl helper in client/src/lib/api.ts is compatible with this: if VITE_API_BASE_URL is defined, it should prefix that; if not, it should just return the path unchanged so local dev and production on Vercel both work with relative /api/... calls.
+	6.	After making changes, verify in the code that:
+	•	A request to /api/ping will return a response when deployed on Vercel.
+	•	A request to /api/auth/user and the login route (e.g. /api/auth/login) are correctly wired and match what the frontend is calling.
+
+Do not change any domain or DNS settings; just align the frontend and backend routes so that everything works when hosted entirely on Vercel.
