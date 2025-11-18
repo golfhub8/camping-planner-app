@@ -185,7 +185,7 @@ export default function Subscribe() {
               
               {!user ? (
                 <Button 
-                  onClick={() => window.location.href = '/api/auth/login'}
+                  onClick={() => window.location.href = '/api/login'}
                   disabled={isLoadingUser} 
                   className="w-full"
                   data-testid="button-login"

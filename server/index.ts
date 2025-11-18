@@ -104,17 +104,39 @@ app.use((req, res, next) => {
   next();
 });
 
+// Initialize routes and error handling
+let routesInitialized = false;
+let initializationPromise: Promise<void> | null = null;
+
+async function initializeApp() {
+  if (routesInitialized) {
+    return;
+  }
+  
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+  
+  initializationPromise = (async () => {
+    await registerRoutes(app);
+
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+
+      res.status(status).json({ message });
+      throw err;
+    });
+    
+    routesInitialized = true;
+  })();
+  
+  return initializationPromise;
+}
+
 // Initialize routes and middleware (wrapped in IIFE for top-level await)
 (async () => {
-  await registerRoutes(app);
-
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
+  await initializeApp();
 
   // Only start the server if not running in Vercel serverless environment
   if (!process.env.VERCEL) {
@@ -140,5 +162,5 @@ app.use((req, res, next) => {
   }
 })();
 
-// Export the app for Vercel serverless functions
-export { app };
+// Export the app and initialization function for Vercel serverless functions
+export { app, initializeApp };
