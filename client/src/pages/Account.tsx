@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Separator } from "@/components/ui/separator";
 import { Calendar, CreditCard, Package, AlertCircle, Check, Mail, TrendingUp } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import SubscribeButton from "@/components/SubscribeButton";
@@ -66,7 +67,7 @@ export default function Account() {
       // Sync subscription status from Stripe with automatic retries
       const syncSubscription = async (attempt = 1, maxAttempts = 5) => {
         try {
-          const response = await fetch('/api/billing/sync-subscription', {
+          const response = await fetch(apiUrl('/api/billing/sync-subscription'), {
             method: 'POST',
             credentials: 'include',
           });
@@ -141,7 +142,7 @@ export default function Account() {
   const handleManageSubscription = async () => {
     try {
       // Create portal session on-demand
-      const response = await fetch("/api/billing/portal", {
+      const response = await fetch(apiUrl("/api/billing/portal"), {
         method: "GET",
         credentials: "include",
       });

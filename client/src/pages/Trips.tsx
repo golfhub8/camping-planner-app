@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTripSchema, type Trip, type InsertTrip } from "@shared/schema";
@@ -78,7 +79,7 @@ export default function Trips() {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           // Use fetch directly instead of apiRequest to handle 402 before throwing
-          const response = await fetch("/api/trips", {
+          const response = await fetch(apiUrl("/api/trips"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",

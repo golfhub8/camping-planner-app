@@ -1,0 +1,12 @@
+I need you to update the frontend so that it connects to the backend correctly when deployed to Vercel. Right now the frontend calls API routes like “/api/login”, which works on Replit but fails on Vercel. I need you to update the entire client codebase to use a configurable API base URL.
+
+Here is what I need you to do:
+	1.	Create a new file in the frontend at client/src/lib/api.ts. In that file, define a simple helper function that takes a relative API path (like /api/login) and attaches it to a base URL from an environment variable called VITE_API_BASE_URL. The logic must allow for both production and development. If VITE_API_BASE_URL is undefined, then the helper should return the path unchanged so that local development continues to work.
+	2.	The contents of client/src/lib/api.ts should be as follows (written here in plain text so you can implement it directly):
+Create a constant API_BASE equal to import.meta.env.VITE_API_BASE_URL, but if that is undefined, default to an empty string. Then export a function called apiUrl(path) that returns API_BASE + path.
+	3.	Next, update every fetch() or axios call in the entire frontend codebase that calls an endpoint starting with /api/… so that it uses the new apiUrl() helper. For example, change fetch(”/api/login”) to fetch(apiUrl(”/api/login”)). Do this for all routes, including /api/login, /api/register, /api/auth/user, /api/trips, /api/recipes, /api/grocery, /api/stripe/*, and any others you can find.
+	4.	Ensure all necessary imports are added at the top of each updated file using: import { apiUrl } from “@/lib/api”; (or the correct relative path depending on the project structure).
+	5.	Do not change anything in the backend. Only modify the frontend code inside client/ so that all API calls correctly use apiUrl().
+	6.	After making all changes, ensure the app still builds and works locally (when VITE_API_BASE_URL is undefined) and will use the full backend URL in production when Vercel provides VITE_API_BASE_URL.
+
+Please proceed and update all necessary files.

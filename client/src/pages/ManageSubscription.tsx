@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ManageSubscription() {
@@ -11,7 +12,7 @@ export default function ManageSubscription() {
   useEffect(() => {
     const redirectToPortal = async () => {
       try {
-        const response = await fetch("/api/billing/portal", {
+        const response = await fetch(apiUrl("/api/billing/portal"), {
           method: "GET",
           credentials: "include",
         });

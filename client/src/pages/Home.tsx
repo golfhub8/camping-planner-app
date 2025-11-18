@@ -1,6 +1,7 @@
 import { useRef, useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import RecipeCard from "@/components/RecipeCard";
 import RecipeForm from "@/components/RecipeForm";
 import EmptyState from "@/components/EmptyState";
@@ -59,7 +60,7 @@ export default function Home() {
   // Mutation for creating a new recipe
   const createRecipeMutation = useMutation({
     mutationFn: async (newRecipe: { title: string; ingredients: string[]; steps: string[] }) => {
-      const response = await fetch("/api/recipes", {
+      const response = await fetch(apiUrl("/api/recipes"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

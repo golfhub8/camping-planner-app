@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/api";
 import { ExternalLinkIcon } from "lucide-react";
 
 interface SubscribeButtonProps {
@@ -23,7 +24,7 @@ export default function SubscribeButton({
       setLoading(true);
       console.log("[SubscribeButton] Starting checkout session...");
       
-      const res = await fetch("/api/billing/create-checkout-session", {
+      const res = await fetch(apiUrl("/api/billing/create-checkout-session"), {
         method: "POST",
         credentials: "include",
         headers: {
