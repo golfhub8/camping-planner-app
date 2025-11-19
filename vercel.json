@@ -1,16 +1,17 @@
 {
-  "buildCommand": "npm install && cd client && npm run vercel-build",
-  "outputDirectory": "client/dist",
-  "installCommand": "npm install",
-  "framework": null,
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "client/dist"
+      }
     }
+  ],
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/api/.*", "dest": "/api" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
