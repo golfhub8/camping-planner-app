@@ -393,6 +393,8 @@
     "zod-validation-error": "^3.4.0"
   },
   "scripts": {
+    "dev": "cd client && npm run dev",
+    "vercel-build": "npm --prefix client run vercel-build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
