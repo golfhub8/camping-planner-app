@@ -1,0 +1,52 @@
+21:40:12.405 Running build in Washington, D.C., USA (East) – iad1
+21:40:12.406 Build machine configuration: 2 cores, 8 GB
+21:40:12.415 Cloning github.com/golfhub8/camping-planner-app1 (Branch: main, Commit: b7c7f5e)
+21:40:12.416 Skipping build cache, deployment was triggered without cache.
+21:40:13.793 Cloning completed: 1.377s
+21:40:14.231 Running "vercel build"
+21:40:14.624 Vercel CLI 48.10.3
+21:40:15.262 Running "install" command: `npm install`...
+21:40:20.777 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+21:40:20.838 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+21:40:26.729 
+21:40:26.730 added 607 packages, and audited 608 packages in 11s
+21:40:26.730 
+21:40:26.730 85 packages are looking for funding
+21:40:26.731   run `npm fund` for details
+21:40:26.763 
+21:40:26.764 9 vulnerabilities (3 low, 5 moderate, 1 high)
+21:40:26.764 
+21:40:26.764 To address issues that do not require attention, run:
+21:40:26.764   npm audit fix
+21:40:26.765 
+21:40:26.765 To address all issues (including breaking changes), run:
+21:40:26.765   npm audit fix --force
+21:40:26.765 
+21:40:26.765 Run `npm audit` for details.
+21:40:27.399 
+21:40:27.400 > rest-express@1.0.0 build
+21:40:27.400 > vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+21:40:27.400 
+21:40:27.652 [36mvite v5.4.20 [32mbuilding for production...[36m[39m
+21:40:27.701 transforming...
+21:40:29.089 
+21:40:29.089 A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+21:40:33.412 [32m✓[39m 2194 modules transformed.
+21:40:33.933 rendering chunks...
+21:40:33.945 computing gzip size...
+21:40:33.967 [2m../dist/public/[22m[32mindex.html                                                          [39m[1m[2m  2.01 kB[22m[1m[22m[2m │ gzip:   0.77 kB[22m
+21:40:33.967 [2m../dist/public/[22m[2massets/[22m[32mThe Camping Planner banner 1 (1)_1762580023779-CTQIPBW1.jpg  [39m[1m[2m 53.31 kB[22m[1m[22m
+21:40:33.968 [2m../dist/public/[22m[2massets/[22m[35mindex-WZSaJ9Ra.css                                           [39m[1m[2m 99.83 kB[22m[1m[22m[2m │ gzip:  15.30 kB[22m
+21:40:33.968 [2m../dist/public/[22m[2massets/[22m[36mindex-DCyTVTTB.js                                            [39m[1m[33m763.77 kB[39m[22m[2m │ gzip: 222.26 kB[22m
+21:40:33.968 [33m
+21:40:33.968 (!) Some chunks are larger than 500 kB after minification. Consider:
+21:40:33.968 - Using dynamic import() to code-split the application
+21:40:33.969 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+21:40:33.969 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+21:40:33.969 [32m✓ built in 6.29s[39m
+21:40:34.041 
+21:40:34.041   dist/index.js  217.1kb
+21:40:34.041 
+21:40:34.041 ⚡ Done in 20ms
+21:40:34.058 Error: No Output Directory named "dist" found after the Build completed. Configure the Output Directory in your Project Settings. Alternatively, configure vercel.json#outputDirectory.
+21:40:34.060 Learn More: https://vercel.link/missing-public-directory
