@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "workspace",
   "version": "1.0.0",
   "main": "postcss.config.js",
