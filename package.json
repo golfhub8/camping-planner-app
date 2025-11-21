@@ -398,8 +398,10 @@
   },
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "vercel-build": "npm --prefix client run vercel-build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "vercel-build": "npm --prefix client install && npm --prefix client run vercel-build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npm run vercel-build",
+    "start": "node api/index.js"
   },
   "keywords": [],
   "author": "",
