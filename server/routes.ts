@@ -1818,23 +1818,47 @@ export async function registerRoutes(app: Express): Promise<void> {
           }
           
           // Method 3: Look for bold/strong ingredients labels in paragraphs
-          if (!foundIngredients) {
+          // SAFETY: Only run if no ingredients found yet AND ingredients array is empty
+          if (!foundIngredients && ingredients.length === 0) {
             console.log('[Recipe Parser] Trying bold paragraph extraction (<strong> labels)');
             $('p strong, p b').each((_, elem) => {
-              if (foundIngredients) return;
+              if (foundIngredients || ingredients.length > 0) return;
               
               const labelText = $(elem).text().toLowerCase().trim();
               if (labelText.includes('ingredient')) {
                 console.log(`[Recipe Parser] Found bold ingredients label: "${$(elem).text().trim()}"`);
                 
-                // CRITICAL FIX: Check if a table follows this heading before looking for lists
+                // CRITICAL FIX: Check if a table IMMEDIATELY follows this heading
+                // Only skip if the table is the next sibling (not just anywhere later in the page)
                 // This prevents Method 3 from stealing lists that belong to other sections
-                // (e.g., "Home Prep" lists after "Ingredients Checklist" table)
                 const paragraph = $(elem).parent();
-                const hasTableAfter = paragraph.nextAll('.wp-block-table, table, figure.wp-block-table').first().length > 0;
                 
-                if (hasTableAfter) {
-                  console.log('[Recipe Parser] Skipping bold paragraph method - table found after heading (Method 1b should handle this)');
+                // Check only the immediate next element (or next few if there are empty paragraphs)
+                let hasImmediateTable = false;
+                let sibling = paragraph.next();
+                let checked = 0;
+                
+                while (sibling.length > 0 && checked < 3) {
+                  // Check if this sibling is a table or contains a table
+                  if (sibling.is('.wp-block-table, table, figure.wp-block-table') || 
+                      sibling.find('.wp-block-table, table').first().length > 0) {
+                    hasImmediateTable = true;
+                    break;
+                  }
+                  
+                  // Skip empty paragraphs or whitespace
+                  const text = sibling.text().trim();
+                  if (text.length > 0) {
+                    // Found non-empty content that's not a table, stop checking
+                    break;
+                  }
+                  
+                  sibling = sibling.next();
+                  checked++;
+                }
+                
+                if (hasImmediateTable) {
+                  console.log('[Recipe Parser] Skipping bold paragraph method - table immediately follows heading (Method 1b should handle this)');
                   return; // Skip this heading, let Method 1b handle it
                 }
                 
@@ -1842,18 +1866,35 @@ export async function registerRoutes(app: Express): Promise<void> {
                 let list = paragraph.find('ul, ol').first();
                 
                 if (list.length === 0) {
-                  // Try next siblings - but verify they contain ingredient-like content
+                  // Try next siblings - but verify they likely contain ingredient-like content
                   list = paragraph.nextAll('ul, ol').first();
                   
-                  // Validate this list contains ingredient-like items (has quantities)
-                  if (list.length > 0) {
-                    const firstItem = list.find('li').first().text().trim().toLowerCase();
-                    const hasQuantity = /\d|cup|tbsp|tsp|oz|lb|gram|kg|ml|teaspoon|tablespoon/.test(firstItem);
+                  if (list.length === 0) {
+                    return; // No list found at all
+                  }
+                  
+                  // Validate this list likely contains ingredients
+                  // Many ingredient lists have items without quantities (e.g., "Buns", "Lettuce")
+                  // so we use a lenient check: at least ONE item should have a quantity OR
+                  // items should be short phrases (typical ingredient format)
+                  const listItems = list.find('li');
+                  let hasAtLeastOneQuantity = false;
+                  let allItemsAreShort = true;
+                  
+                  listItems.slice(0, Math.min(5, listItems.length)).each((_, li) => {
+                    const text = $(li).text().trim().toLowerCase();
+                    const hasQuantity = /\d|cup|tbsp|tsp|oz|lb|gram|kg|ml|liter|teaspoon|tablespoon|ounce|pound/.test(text);
+                    if (hasQuantity) hasAtLeastOneQuantity = true;
                     
-                    if (!hasQuantity) {
-                      console.log('[Recipe Parser] Skipping list - does not appear to contain ingredients (no quantities found)');
-                      return; // Not an ingredient list, skip it
-                    }
+                    // Ingredient items are typically short phrases (< 100 chars)
+                    // Instruction steps are usually longer sentences
+                    if (text.length > 100) allItemsAreShort = false;
+                  });
+                  
+                  // Accept list if it has at least one quantity OR all items are short phrases
+                  if (!hasAtLeastOneQuantity && !allItemsAreShort) {
+                    console.log('[Recipe Parser] Skipping list - does not appear to contain ingredients (no quantities and items too long)');
+                    return; // Likely not an ingredient list
                   }
                 }
                 
