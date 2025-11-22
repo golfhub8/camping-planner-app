@@ -1826,18 +1826,40 @@ export async function registerRoutes(app: Express): Promise<void> {
               const labelText = $(elem).text().toLowerCase().trim();
               if (labelText.includes('ingredient')) {
                 console.log(`[Recipe Parser] Found bold ingredients label: "${$(elem).text().trim()}"`);
-                foundIngredients = true;
+                
+                // CRITICAL FIX: Check if a table follows this heading before looking for lists
+                // This prevents Method 3 from stealing lists that belong to other sections
+                // (e.g., "Home Prep" lists after "Ingredients Checklist" table)
+                const paragraph = $(elem).parent();
+                const hasTableAfter = paragraph.nextAll('.wp-block-table, table, figure.wp-block-table').first().length > 0;
+                
+                if (hasTableAfter) {
+                  console.log('[Recipe Parser] Skipping bold paragraph method - table found after heading (Method 1b should handle this)');
+                  return; // Skip this heading, let Method 1b handle it
+                }
                 
                 // Check if the list is within the same paragraph or the next element
-                const paragraph = $(elem).parent();
                 let list = paragraph.find('ul, ol').first();
                 
                 if (list.length === 0) {
-                  // Try next siblings
+                  // Try next siblings - but verify they contain ingredient-like content
                   list = paragraph.nextAll('ul, ol').first();
+                  
+                  // Validate this list contains ingredient-like items (has quantities)
+                  if (list.length > 0) {
+                    const firstItem = list.find('li').first().text().trim().toLowerCase();
+                    const hasQuantity = /\d|cup|tbsp|tsp|oz|lb|gram|kg|ml|teaspoon|tablespoon/.test(firstItem);
+                    
+                    if (!hasQuantity) {
+                      console.log('[Recipe Parser] Skipping list - does not appear to contain ingredients (no quantities found)');
+                      return; // Not an ingredient list, skip it
+                    }
+                  }
                 }
                 
                 if (list.length > 0) {
+                  console.log(`[Recipe Parser] Extracting ${list.find('li').length} ingredients from list`);
+                  foundIngredients = true;
                   list.find('li').each((_, li) => {
                     const text = $(li).text().trim();
                     if (text) {
