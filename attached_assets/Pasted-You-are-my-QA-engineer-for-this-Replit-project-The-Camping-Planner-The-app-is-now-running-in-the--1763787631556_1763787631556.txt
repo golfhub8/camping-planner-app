@@ -1,0 +1,52 @@
+You are my QA engineer for this Replit project (The Camping Planner). The app is now running in the Replit preview, but I want you to do a thorough end-to-end functional test as if you were a real user.
+
+Please do ALL of the following, in order, and keep detailed notes as you go:
+	1.	Launch the app in the preview and confirm it loads without console errors. Note any warnings or red errors you see in the browser console or server logs.
+	2.	User onboarding and profile:
+	•	Create a brand new user profile from scratch (do NOT reuse existing data).
+	•	Go through whatever signup/login/profile flow exists.
+	•	Confirm that the profile is saved correctly and persists across page refresh.
+	•	Try editing the profile (name, email, any preferences) and confirm the edits stick.
+	•	Note any broken validations, confusing errors, or fields that don’t save.
+	3.	Trips:
+	•	Create at least FIVE different trips:
+	•	Use different dates, locations, and options (car camping vs RV vs whatever the UI allows).
+	•	Add collaborators or family members if that feature exists.
+	•	For each trip, try:
+	•	Editing trip details (dates, location, people, etc.).
+	•	Adding and removing packing items / tasks / checklists.
+	•	Duplicating or deleting a trip (if supported).
+	•	Confirm that nothing breaks, the UI stays responsive, and no actions leave the app in a stuck/broken state.
+	4.	Meals and recipes:
+	•	Create several meals and assign them to different trips and days.
+	•	Use at least a couple of the built-in recipes and at least one custom recipe.
+	•	Verify that when you attach recipes, the ingredient checklist is correctly generated and displayed:
+	•	All ingredients from the recipe appear in the checklist.
+	•	Quantities and units look correct.
+	•	If you change a recipe or remove it, the checklist updates appropriately.
+	•	Report any missing ingredients, wrong quantities, or cases where the checklist doesn’t update.
+	5.	Subscription / membership / printables:
+	•	Walk through the subscription / upgrade flow as far as possible in this dev environment.
+	•	Confirm that:
+	•	Before subscribing, premium content (like printables) is appropriately locked or labelled.
+	•	After a successful “subscription” (or mocked success), the user’s membership state updates.
+	•	Premium printables and other member-only features become available.
+	•	Try accessing printables and premium features both BEFORE and AFTER subscription to make sure the gating logic is correct.
+	•	Note any cases where free users can access paid content or paid users are still blocked.
+	6.	General robustness:
+	•	Refresh the browser at key points (on a trip detail page, on a meal planner page, etc.) and confirm the app still works and reloads the correct state.
+	•	Try some “naughty” actions:
+	•	Leaving required fields blank.
+	•	Entering very long text in free-form fields.
+	•	Using unusual characters (commas, quotes, emojis) in trip names and recipe names.
+	•	Log any crashes, infinite spinners, or pages that fail to load.
+	7.	Final report:
+	•	When you’re done, write a clear QA report for me that includes:
+	•	A short overview of what you tested.
+	•	A numbered list of ALL bugs or issues you found.
+	•	For each bug: include exact steps to reproduce, what you expected to happen, what actually happened, and any relevant console/network error messages.
+	•	A note on whether the subscription flow and printables gating feel correct from a user perspective.
+	•	A note on whether the recipe → ingredient checklist flow is fully correct.
+	•	Where possible, suggest specific files/functions where the fix is likely needed (based on the current codebase).
+
+Do not change any business logic or big architectural pieces on your own. Your main job in this run is to thoroughly test and then report back issues and likely fix locations, not to refactor the whole project.
