@@ -1,0 +1,67 @@
+22:16:55.817 Running build in Washington, D.C., USA (East) – iad1
+22:16:55.817 Build machine configuration: 2 cores, 8 GB
+22:16:55.826 Cloning github.com/golfhub8/camping-planner-app1 (Branch: main, Commit: b7c7f5e)
+22:16:55.827 Skipping build cache, deployment was triggered without cache.
+22:16:57.311 Cloning completed: 1.485s
+22:16:57.690 Running "vercel build"
+22:16:58.084 Vercel CLI 48.10.5
+22:16:58.723 Running "install" command: `npm install `...
+22:17:04.704 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+22:17:04.742 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+22:17:11.067 
+22:17:11.068 added 607 packages, and audited 608 packages in 12s
+22:17:11.068 
+22:17:11.068 85 packages are looking for funding
+22:17:11.068   run `npm fund` for details
+22:17:11.098 
+22:17:11.098 9 vulnerabilities (3 low, 5 moderate, 1 high)
+22:17:11.099 
+22:17:11.099 To address issues that do not require attention, run:
+22:17:11.099   npm audit fix
+22:17:11.099 
+22:17:11.100 To address all issues (including breaking changes), run:
+22:17:11.100   npm audit fix --force
+22:17:11.100 
+22:17:11.100 Run `npm audit` for details.
+22:17:12.646 
+22:17:12.646 up to date, audited 608 packages in 1s
+22:17:12.646 
+22:17:12.646 85 packages are looking for funding
+22:17:12.646   run `npm fund` for details
+22:17:12.675 
+22:17:12.675 9 vulnerabilities (3 low, 5 moderate, 1 high)
+22:17:12.675 
+22:17:12.676 To address issues that do not require attention, run:
+22:17:12.676   npm audit fix
+22:17:12.676 
+22:17:12.676 To address all issues (including breaking changes), run:
+22:17:12.676   npm audit fix --force
+22:17:12.676 
+22:17:12.677 Run `npm audit` for details.
+22:17:12.807 
+22:17:12.808 > rest-express@1.0.0 build
+22:17:12.808 > vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+22:17:12.808 
+22:17:13.059 [36mvite v5.4.20 [32mbuilding for production...[36m[39m
+22:17:13.109 transforming...
+22:17:14.706 
+22:17:14.706 A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+22:17:19.504 [32m✓[39m 2194 modules transformed.
+22:17:20.024 rendering chunks...
+22:17:20.042 computing gzip size...
+22:17:20.080 [2m../dist/public/[22m[32mindex.html                                                          [39m[1m[2m  2.01 kB[22m[1m[22m[2m │ gzip:   0.77 kB[22m
+22:17:20.080 [2m../dist/public/[22m[2massets/[22m[32mThe Camping Planner banner 1 (1)_1762580023779-CTQIPBW1.jpg  [39m[1m[2m 53.31 kB[22m[1m[22m
+22:17:20.081 [2m../dist/public/[22m[2massets/[22m[35mindex-WZSaJ9Ra.css                                           [39m[1m[2m 99.83 kB[22m[1m[22m[2m │ gzip:  15.30 kB[22m
+22:17:20.081 [2m../dist/public/[22m[2massets/[22m[36mindex-DCyTVTTB.js                                            [39m[1m[33m763.77 kB[39m[22m[2m │ gzip: 222.26 kB[22m
+22:17:20.081 [32m✓ built in 7.00s[39m
+22:17:20.082 [33m
+22:17:20.082 (!) Some chunks are larger than 500 kB after minification. Consider:
+22:17:20.082 - Using dynamic import() to code-split the application
+22:17:20.082 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+22:17:20.083 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+22:17:20.335 
+22:17:20.335   dist/index.js  217.1kb
+22:17:20.335 
+22:17:20.335 ⚡ Done in 20ms
+22:17:20.353 Error: No Output Directory named "dist" found after the Build completed. Configure the Output Directory in your Project Settings. Alternatively, configure vercel.json#outputDirectory.
+22:17:20.353 Learn More: https://vercel.link/missing-public-directory
